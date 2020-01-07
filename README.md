@@ -4,6 +4,7 @@ A header-only library for rendering text in [SDL2](https://www.libsdl.org/) with
 
 ## Example Image:
 ![Example text test](example.png)
+
 Sample text from http://www.columbia.edu/~fdc/utf8/index.html
 
 ## Contact:
@@ -22,9 +23,12 @@ Liam Twigger - @SnapperTheTwig
 * Public Domain
 
 ## Performance:
-On a Intel i7-8750H
+On a Intel i7-8750H:
+
 Example image takes 0.7ms to render (~1400 FPS) if using texture (`renderTextToTexture`/`renderTextToObject`)
+
 Example image takes ~5ms to render (~200 FPS) if rendering directly (`drawText`)
+
 For text that lasts more than one frame you should cache it with either `renderTextToTexture` or `renderTextToObject`.
 
 
@@ -153,6 +157,8 @@ Thanks to the contribitors to both the SDL and STB projects!
 License
 =======
 Public Domain
+
 stb_truetype is Public Domain
+
 Noto Fonts are (C) Google and are released under the SIL Open Font License, Version 1.1. See https://www.google.com/get/noto/
 
