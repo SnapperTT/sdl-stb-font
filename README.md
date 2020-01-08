@@ -130,7 +130,7 @@ r.h = RTh;
 SDL_RenderCopy(mSdlRenderer , RT , NULL, &r); 
 ```
 
-Second way (same, but cleaner)
+Second way (same effect, but cleaner)
 ```c++
 // creating
 sdl_stb_prerendered_text prt;
@@ -139,12 +139,15 @@ fc.renderTextToObject(&prt, "Text");
 // Rendering
 prt.draw(mSdlRenderer, x, y);
 
+// Rendering in colour & alpha
+prt.drawWithColor(mSdlRenderer, x, y, 255, 185, 85, 255);
+
 // Cleanup
 prt.freeTexture();
 ```
 
 ## Print in Colours Other Than White
-Use `SDL_SetTextureColorMod` with a cached texture
+Use `SDL_SetTextureColorMod` with a cached texture. Or use `sdl_stb_prerendered_text::drawWithColor`.
 
 Contributing
 ============

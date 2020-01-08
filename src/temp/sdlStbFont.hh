@@ -3,6 +3,10 @@
 
 #ifndef LZZ_sdlStbFont_hh
 #define LZZ_sdlStbFont_hh
+// SdlStbFont example
+// By Liam Twigger - 2020
+// Public Domain
+
 struct SDL_Renderer;
 struct SDL_Texture;
 struct SDL_Surface;
@@ -28,7 +32,8 @@ struct sdl_stb_prerendered_text
   int height;
   sdl_stb_prerendered_text ();
   void freeTexture ();
-  void draw (SDL_Renderer * mRenderer, int x, int y);
+  void draw (SDL_Renderer * mRenderer, int const x, int const y);
+  void drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct sdl_stb_glyph
 {

@@ -170,7 +170,10 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 			
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
 			SDL_RenderClear(mSdlRenderer);
-			prt.draw(mSdlRenderer, 5, 5);
+			
+			//prt.draw(mSdlRenderer, 5, 5); // Render without colour modification
+			prt.drawWithColorMod(mSdlRenderer, 5, 5, 255, 185, 80, 255); // Render in orange
+			
 			
 			SDL_RenderPresent(mSdlRenderer);
 			

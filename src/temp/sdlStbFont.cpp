@@ -24,17 +24,25 @@ sdl_stb_prerendered_text::sdl_stb_prerendered_text ()
                                                                              {}
 void sdl_stb_prerendered_text::freeTexture ()
                             {
-		if (mSdlTexture) SDL_DestroyTexture(mSdlTexture);
+		if (mSdlTexture)
+			SDL_DestroyTexture(mSdlTexture);
 		mSdlTexture = NULL;
 		}
-void sdl_stb_prerendered_text::draw (SDL_Renderer * mRenderer, int x, int y)
-                                                           {
+void sdl_stb_prerendered_text::draw (SDL_Renderer * mRenderer, int const x, int const y)
+                                                                       {
 		SDL_Rect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
 		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		}
+void sdl_stb_prerendered_text::drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                            {
+		SDL_SetTextureColorMod(mSdlTexture, r, g, b);
+		if (a != 255)
+			SDL_SetTextureAlphaMod(mSdlTexture, a);
+		draw (mRenderer, x, y);
 		}
 sdl_stb_glyph::sdl_stb_glyph ()
   : mSdlTexture (0), mSdlSurface (0), advance (0), leftSideBearing (0), width (0), height (0), xOffset (0), yOffset (0)

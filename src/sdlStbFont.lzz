@@ -1,4 +1,8 @@
 #hdr
+// SdlStbFont example
+// By Liam Twigger - 2020
+// Public Domain
+
 struct SDL_Renderer;
 struct SDL_Texture;
 struct SDL_Surface;
@@ -44,17 +48,25 @@ struct sdl_stb_prerendered_text {
 	sdl_stb_prerendered_text () : mSdlTexture(NULL), width(0), height(0) {}
 	
 	void freeTexture () {
-		if (mSdlTexture) SDL_DestroyTexture(mSdlTexture);
+		if (mSdlTexture)
+			SDL_DestroyTexture(mSdlTexture);
 		mSdlTexture = NULL;
 		}
 		
-	void draw (SDL_Renderer * mRenderer, int x, int y) {
+	void draw (SDL_Renderer * mRenderer, const int x, const int y) {
 		SDL_Rect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
 		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		}
+		
+	void drawWithColorMod(SDL_Renderer * mRenderer, const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) {
+		SDL_SetTextureColorMod(mSdlTexture, r, g, b);
+		if (a != 255)
+			SDL_SetTextureAlphaMod(mSdlTexture, a);
+		draw (mRenderer, x, y);
 		}
 	}
 

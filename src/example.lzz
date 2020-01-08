@@ -1,4 +1,7 @@
 #hdr
+// SdlStbFont example
+// By Liam Twigger - 2020
+// Public Domain
 #define SDL_STB_FONT_IMPL
 #end
 
@@ -188,7 +191,10 @@ CJK Variants: 判 与 海 直 約 返 次 今 ";
 			
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
 			SDL_RenderClear(mSdlRenderer);
-			prt.draw(mSdlRenderer, 5, 5);
+			
+			//prt.draw(mSdlRenderer, 5, 5); // Render without colour modification
+			prt.drawWithColorMod(mSdlRenderer, 5, 5, 255, 185, 80, 255); // Render in orange
+			
 			
 			SDL_RenderPresent(mSdlRenderer);
 			
