@@ -118,7 +118,6 @@ public:
 
 #include <SDL2/SDL.h>
 
-#include <iostream> // cout
 #define LZZ_INLINE inline
 sdl_stb_prerendered_text::sdl_stb_prerendered_text ()
   : mSdlTexture (NULL), width (0), height (0)
@@ -385,12 +384,6 @@ void sdl_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const code
 			return;
 			}
 		if (isDrawing) {
-			
-			if (codepoint > 2000 && codepoint < 3000)
-			std::cout << "codepoint " << codepoint << std::endl;
-			
-		//2350 2376 2306 32 2325 2366 2305 2330 32 2326 2366 32 2360 2325 2340 2366 32 2361 2370 2305 44 32 2350 2369 2333 2375 32 2313 2360 32 2360 2375 32 2325 2379 2312 32 2346 2368 2337 2366 32 2344 2361 2368 2306 32 2361 2379 2340 2368 46
-		
 			SDL_Rect r;
 			r.x = x + G->xOffset;
 			r.y = y + G->yOffset + baseline;
