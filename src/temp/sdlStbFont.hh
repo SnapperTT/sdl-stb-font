@@ -73,7 +73,7 @@ public:
   void clearGlyphs ();
   void bindRenderer (SDL_Renderer * _mRenderer);
   void setFaceSize (int const _faceSize);
-  void getScaledRowSize () const;
+  int getScaledRowSize () const;
   void loadFont (char const * ttf_buffer, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
   void genGlyph (uint32_t const codepoint, sdl_stb_glyph * gOut);

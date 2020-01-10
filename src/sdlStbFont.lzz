@@ -158,7 +158,7 @@ public:
 	void setFaceSize(const int _faceSize) { faceSize = _faceSize; }
 	
 	/// The size between rows, in the same coordinates as whatever you set faceSize as
-	void getScaledRowSize () const { return scale * rowSize; }
+	int getScaledRowSize () const { return scale * rowSize; }
 	
 	/// Loads the primary font
 	/// Also computes font properties (
