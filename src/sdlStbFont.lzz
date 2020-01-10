@@ -157,6 +157,9 @@ public:
 	/// Sets the face size. Must be called BEFORE loading a font!
 	void setFaceSize(const int _faceSize) { faceSize = _faceSize; }
 	
+	/// The size between rows, in the same coordinates as whatever you set faceSize as
+	void getScaledRowSize () const { return scale * rowSize; }
+	
 	/// Loads the primary font
 	/// Also computes font properties (
 	void loadFont (const char * ttf_buffer, int index = 0) {

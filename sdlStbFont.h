@@ -74,6 +74,7 @@ public:
   void clearGlyphs ();
   void bindRenderer (SDL_Renderer * _mRenderer);
   void setFaceSize (int const _faceSize);
+  void getScaledRowSize () const;
   void loadFont (char const * ttf_buffer, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
   void genGlyph (uint32_t const codepoint, sdl_stb_glyph * gOut);
@@ -204,6 +205,8 @@ void sdl_stb_font_cache::bindRenderer (SDL_Renderer * _mRenderer)
 		}
 void sdl_stb_font_cache::setFaceSize (int const _faceSize)
                                               { faceSize = _faceSize; }
+void sdl_stb_font_cache::getScaledRowSize () const
+                                       { return scale * rowSize; }
 void sdl_stb_font_cache::loadFont (char const * ttf_buffer, int index)
                                                                {
 		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
