@@ -385,9 +385,15 @@ public:
 		
 		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
 		SDL_SetRenderTarget(mRenderer, RT);
+		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
+		// Fill RT with blank pixels. SDL_RenderClear will leave artefacts in SDL Software mode
+		SDL_Rect r;
+		r.x = 0; r.y = 0;
+		r.w = width; r.h = height;
+		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
+		
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_BLEND);
-		SDL_RenderClear(mRenderer);
 		drawText(0, 0, c, maxLen);
 		SDL_SetRenderTarget(mRenderer, NULL);
 		
