@@ -21,9 +21,33 @@ struct SDL_Surface;
 	#include "stb_truetype.h"
 	////////////////////////////////////////
 #endif
-	
+
+// Defines
+#ifndef SSF_MAP
+	#include <map>
+	#define SSF_MAP std::map
+#endif
+#ifndef SSF_VECTOR
+	#include <vector>
+	#define SSF_VECTOR std::vector
+#endif
+#ifndef SSF_STRING
+	#include <string>
+	#define SSF_STRING std::string
+#endif
+
+// new and delete macros
+// all calls in this library are done with "foo * f = SSF_NEW(f)"
+// implement your custom allocator by defining SSF_NEW and SSF_DEL
+#ifndef SSF_NEW
+	#define SSF_NEW(X) new X
+#endif
+#ifndef SSF_DEL
+	#define SSF_DEL(X) delete X
+#endif
+
+
 #include <cstdint>
-#include <map>
 #define LZZ_INLINE inline
 struct sdl_stb_prerendered_text
 {
@@ -34,6 +58,13 @@ struct sdl_stb_prerendered_text
   void freeTexture ();
   void draw (SDL_Renderer * mRenderer, int const x, int const y);
   void drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+};
+struct sdl_stb_memory
+{
+  char * data;
+  bool ownsData;
+  sdl_stb_memory ();
+  ~ sdl_stb_memory ();
 };
 struct sdl_stb_glyph
 {
@@ -50,6 +81,7 @@ struct sdl_stb_glyph
 struct sdl_stb_font_list
 {
   stbtt_fontinfo mFont;
+  sdl_stb_memory mMemory;
   sdl_stb_font_list * next;
   sdl_stb_font_list ();
   ~ sdl_stb_font_list ();
@@ -67,7 +99,7 @@ public:
   int rowSize;
   float scale;
   int faceSize;
-  std::map <uint32_t, sdl_stb_glyph> mGlyphs;
+  SSF_MAP <uint32_t, sdl_stb_glyph> mGlyphs;
   sdl_stb_font_cache ();
   ~ sdl_stb_font_cache ();
   void clearGlyphs ();
@@ -75,7 +107,9 @@ public:
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
   void loadFont (char const * ttf_buffer, int index = 0);
+  void loadFontManaged (char * ttf_buffer, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
+  void addFontManaged (char * ttf_buffer, int index = 0);
   void genGlyph (uint32_t const codepoint, sdl_stb_glyph * gOut);
   sdl_stb_glyph * getGlyph (uint32_t const codepoint);
   sdl_stb_glyph * getGenGlyph (uint32_t const codepoint);
@@ -83,19 +117,19 @@ public:
   int utf8_charsize (char const * c);
   uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
   void drawText (int const x, int const y, char const * c, uint32_t const maxLen = -1);
-  void drawText (int const x, int const y, std::string const & str);
+  void drawText (int const x, int const y, SSF_STRING const & str);
   void getTextSize (int & w, int & h, char const * c, uint32_t const maxLen = -1);
-  void getTextSize (int & w, int & h, std::string const & str);
-  int getNumberOfRows (std::string const & str);
-  int getTextHeight (std::string const & str);
+  void getTextSize (int & w, int & h, SSF_STRING const & str);
+  int getNumberOfRows (SSF_STRING const & str);
+  int getTextHeight (SSF_STRING const & str);
   void processString (int const x, int const y, char const * c, uint32_t const maxLen, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL);
   bool isTofu (sdl_stb_glyph * G);
   sdl_stb_glyph * getGlyphOrTofu (uint32_t const codepoint);
   void processCodepoint (int & x, int & y, uint32_t const codepoint, bool isDrawing);
   SDL_Texture * renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
-  SDL_Texture * renderTextToTexture (std::string const & str, int * widthOut = NULL, int * heightOut = NULL);
+  SDL_Texture * renderTextToTexture (SSF_STRING const & str, int * widthOut = NULL, int * heightOut = NULL);
   void renderTextToObject (sdl_stb_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
-  void renderTextToObject (sdl_stb_prerendered_text * textOut, std::string const & str);
+  void renderTextToObject (sdl_stb_prerendered_text * textOut, SSF_STRING const & str);
 };
 #undef LZZ_INLINE
 #endif

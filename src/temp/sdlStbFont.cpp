@@ -44,6 +44,16 @@ void sdl_stb_prerendered_text::drawWithColorMod (SDL_Renderer * mRenderer, int c
 			SDL_SetTextureAlphaMod(mSdlTexture, a);
 		draw (mRenderer, x, y);
 		}
+sdl_stb_memory::sdl_stb_memory ()
+  : data (NULL), ownsData (false)
+                                                        {}
+sdl_stb_memory::~ sdl_stb_memory ()
+                           {
+		if (ownsData) {
+			SSF_DEL(data);
+			data = NULL;
+			}
+		}
 sdl_stb_glyph::sdl_stb_glyph ()
   : mSdlTexture (0), mSdlSurface (0), advance (0), leftSideBearing (0), width (0), height (0), xOffset (0), yOffset (0)
                                                                                                                                        {}
@@ -109,14 +119,33 @@ void sdl_stb_font_cache::loadFont (char const * ttf_buffer, int index)
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
 		}
+void sdl_stb_font_cache::loadFontManaged (char * ttf_buffer, int index)
+                                                                {
+		mFont.mMemory.data = ttf_buffer;
+		mFont.mMemory.ownsData = true;
+		
+		loadFont(mFont.mMemory.data, index);
+		}
 void sdl_stb_font_cache::addFont (char const * ttf_buffer, int index)
                                                               {
-		sdl_stb_font_list * n = new sdl_stb_font_list;
+		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
 		sdl_stb_font_list * w = &mFont;
 		while (w->next)
 			w = w->next;
 		
 		stbtt_InitFont(&n->mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
+		w->next = n;
+		}
+void sdl_stb_font_cache::addFontManaged (char * ttf_buffer, int index)
+                                                               {
+		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
+		sdl_stb_font_list * w = &mFont;
+		while (w->next)
+			w = w->next;
+		
+		n->mMemory.data = ttf_buffer;
+		n->mMemory.ownsData = true;
+		stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,index));
 		w->next = n;
 		}
 void sdl_stb_font_cache::genGlyph (uint32_t const codepoint, sdl_stb_glyph * gOut)
@@ -209,27 +238,27 @@ void sdl_stb_font_cache::drawText (int const x, int const y, char const * c, uin
                                                                                             {
 		processString(x, y, c, maxLen, true);
 		}
-void sdl_stb_font_cache::drawText (int const x, int const y, std::string const & str)
-                                                                          {
+void sdl_stb_font_cache::drawText (int const x, int const y, SSF_STRING const & str)
+                                                                         {
 		drawText(x,y,str.data(),str.size());
 		}
 void sdl_stb_font_cache::getTextSize (int & w, int & h, char const * c, uint32_t const maxLen)
                                                                                         {
 		processString(0, 0, c, maxLen, false, &w, &h);
 		}
-void sdl_stb_font_cache::getTextSize (int & w, int & h, std::string const & str)
-                                                                     {
+void sdl_stb_font_cache::getTextSize (int & w, int & h, SSF_STRING const & str)
+                                                                    {
 		processString(0, 0, str.data(), str.size(), false, &w, &h);
 		}
-int sdl_stb_font_cache::getNumberOfRows (std::string const & str)
-                                                      {
+int sdl_stb_font_cache::getNumberOfRows (SSF_STRING const & str)
+                                                     {
 		int n = 1;
 		for (const char c : str)
 			if (c == '\n') n++;
 		return n;
 		}
-int sdl_stb_font_cache::getTextHeight (std::string const & str)
-                                                    {
+int sdl_stb_font_cache::getTextHeight (SSF_STRING const & str)
+                                                   {
 		return scale*rowSize*getNumberOfRows(str);
 		}
 void sdl_stb_font_cache::processString (int const x, int const y, char const * c, uint32_t const maxLen, bool const isDrawing, int * const widthOut, int * const heightOut)
@@ -327,16 +356,16 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t 
 		*heightOut = height;
 		return RT;
 		}
-SDL_Texture * sdl_stb_font_cache::renderTextToTexture (std::string const & str, int * widthOut, int * heightOut)
-                                                                                                                   {
+SDL_Texture * sdl_stb_font_cache::renderTextToTexture (SSF_STRING const & str, int * widthOut, int * heightOut)
+                                                                                                                  {
 		return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
 		}
 void sdl_stb_font_cache::renderTextToObject (sdl_stb_prerendered_text * textOut, char const * c, uint32_t const maxLen)
                                                                                                                  {
 		textOut->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
 		}
-void sdl_stb_font_cache::renderTextToObject (sdl_stb_prerendered_text * textOut, std::string const & str)
-                                                                                              {
+void sdl_stb_font_cache::renderTextToObject (sdl_stb_prerendered_text * textOut, SSF_STRING const & str)
+                                                                                             {
 		textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
 #undef LZZ_INLINE

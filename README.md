@@ -20,6 +20,7 @@ Liam Twigger - @SnapperTheTwig
 * Fallback fonts support - can support many languages at once!
 * Only ~300 lines of code
 * No dependencies apart from STB_Truetype, SDL and standard libraries
+* Automatic or manual memory management
 * Public Domain
 
 ## Performance:
@@ -34,6 +35,15 @@ For text that lasts more than one frame you should cache it with either `renderT
 
 How Do I?
 =========
+
+* [Load Fonts and Draw Text?](#load-fonts-and-draw-text)
+* [Get Font Metrics](#get-font-metrics)
+* [Use Fallback Fonts (For Multilinugal Support)](#use-fallback-fonts-for-multilinugal-support)
+* [Get the Size of Text](#get-the-size-of-text)
+* [Manage Memory](#manage-memory)
+* [Caching Results in a Texture](#caching-results-in-a-texture)
+* [Print in Colours Other Than White](#print-in-colours-other-than-white)
+
 
 ## Load Fonts and Draw Text?
 ```c++
@@ -100,17 +110,35 @@ etc
 
 ```
 
+First font loaded must be with "loadFont".
+
 Note that all fonts have to be loaded before any drawing functions are called. If a glyph is not found in the first font then the second font will be searched, etc.
 
 ## Get the Size of Text
-
 ```c++
-
 int w, h;
 fc.getTextSize(w, h, "Text");
 
 h = fc.getTextHeight("Text"); // Faster, if only height is needed
 int nRows = fc.getTextRows("Text \n More text"); // Returns the number of rows of text - here it's 2
+```
+
+## Manage Memory
+Automatic Management:
+```c++
+char * mFontData = loadFontFromFileSomehow("path/to/file.ttf");
+fc.loadFontManaged(mFontData);
+// fc now owns mFontData and will free it when fc is destroyed
+// Also addFontManaged is worked
+```
+
+
+Manual Management:
+```c++
+char * mFontData = loadFontFromFileSomehow("path/to/file.ttf");
+fc.loadFont(mFontData);
+// You will have to free mFontData when you are done with it
+// fc does not copy mFontData internally
 ```
 
 ## Caching Results in a Texture

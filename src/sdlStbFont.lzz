@@ -17,9 +17,33 @@ struct SDL_Surface;
 	#include "stb_truetype.h"
 	////////////////////////////////////////
 #endif
-	
+
+// Defines
+#ifndef SSF_MAP
+	#include <map>
+	#define SSF_MAP std::map
+#endif
+#ifndef SSF_VECTOR
+	#include <vector>
+	#define SSF_VECTOR std::vector
+#endif
+#ifndef SSF_STRING
+	#include <string>
+	#define SSF_STRING std::string
+#endif
+
+// new and delete macros
+// all calls in this library are done with "foo * f = SSF_NEW(f)"
+// implement your custom allocator by defining SSF_NEW and SSF_DEL
+#ifndef SSF_NEW
+	#define SSF_NEW(X) new X
+#endif
+#ifndef SSF_DEL
+	#define SSF_DEL(X) delete X
+#endif
+
+
 #include <cstdint>
-#include <map>
 #end
 
 #src
@@ -41,6 +65,9 @@ struct SDL_Surface;
 
 #end
 
+
+
+/// Prerended cached text
 struct sdl_stb_prerendered_text {
 	SDL_Texture * mSdlTexture;
 	int width, height;
@@ -68,7 +95,21 @@ struct sdl_stb_prerendered_text {
 			SDL_SetTextureAlphaMod(mSdlTexture, a);
 		draw (mRenderer, x, y);
 		}
-	}
+	};
+	
+/// Memory
+struct sdl_stb_memory {
+	char * data;
+	bool ownsData;
+	
+	sdl_stb_memory () : data(NULL), ownsData(false) {}
+	~sdl_stb_memory () {
+		if (ownsData) {
+			SSF_DEL(data);
+			data = NULL;
+			}
+		}
+	};
 
 /// A glyph
 struct sdl_stb_glyph {
@@ -80,11 +121,12 @@ struct sdl_stb_glyph {
 	int xOffset, yOffset;
 	
 	sdl_stb_glyph () : mSdlTexture(0), mSdlSurface(0), advance(0), leftSideBearing(0), width(0), height(0), xOffset(0), yOffset(0) {}
-	}
+	};
 
 /// Linked list of fonts. This is for font fallback purposes
 struct sdl_stb_font_list {
 	stbtt_fontinfo mFont;
+	sdl_stb_memory mMemory;
 	sdl_stb_font_list * next;
 	
 	sdl_stb_font_list() : next(NULL) {}
@@ -109,8 +151,7 @@ struct sdl_stb_font_list {
 			working = working->next;
 			}
 		}
-	
-	}
+	};
 
 /// Cache of a font
 class sdl_stb_font_cache {
@@ -127,7 +168,7 @@ public:
 	// The face size in pixels
 	int faceSize;
 	
-	std::map<uint32_t, sdl_stb_glyph> mGlyphs;
+	SSF_MAP<uint32_t, sdl_stb_glyph> mGlyphs;
 	
 	sdl_stb_font_cache () : mRenderer(NULL), ascent(0), descent(0), lineGap(0), rowSize(0), faceSize(20), scale(1.f) {}
 	~sdl_stb_font_cache () {
@@ -161,7 +202,8 @@ public:
 	int getScaledRowSize () const { return scale * rowSize; }
 	
 	/// Loads the primary font
-	/// Also computes font properties (
+	/// Also computes font properties (ascent/decent/basline/scale/rowSize/etc)
+	/// ttf_buffer must be null terminated
 	void loadFont (const char * ttf_buffer, int index = 0) {
 		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
 		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
@@ -170,10 +212,24 @@ public:
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
 		}
+	
+	/// Does the dame as loadFont, but transfers ownership of the memory to here
+	/// ttf_buffer must be null terminated
+	/// ttf_buffer will be deallocated when this class is destroyed
+	/// Example usage:
+	/// char * f = loadFileToCharArr("path/to/file");
+	/// mSdl_stb_font_cache.loadFontManaged (f);
+	void loadFontManaged (char * ttf_buffer, int index = 0) {
+		mFont.mMemory.data = ttf_buffer;
+		mFont.mMemory.ownsData = true;
+		
+		loadFont(mFont.mMemory.data, index);
+		}
 		
 	/// Loads a fallback font. If a glyph is not found in a primary font it'll fallback to one of these
+	/// ttf_buffer must be null terminated
 	void addFont (const char * ttf_buffer, int index = 0) {
-		sdl_stb_font_list * n = new sdl_stb_font_list;
+		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
 		sdl_stb_font_list * w = &mFont;
 		while (w->next)
 			w = w->next;
@@ -182,6 +238,24 @@ public:
 		w->next = n;
 		}
 	
+	/// Same as addFont, but transfers ownership of the memory to here
+	/// ttf_buffer will be deallocated when this class is destroyed
+	/// ttf_buffer must be null terminated
+	/// Example usage:
+	/// char * f = loadFileToCharArr("path/to/file");
+	/// mSdl_stb_font_cache.loadFontManaged (f);
+	void addFontManaged (char * ttf_buffer, int index = 0) {
+		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
+		sdl_stb_font_list * w = &mFont;
+		while (w->next)
+			w = w->next;
+		
+		n->mMemory.data = ttf_buffer;
+		n->mMemory.ownsData = true;
+		stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,index));
+		w->next = n;
+		}
+		
 	/// For a given codepoint, generate a texture (if required) and populate the
 	/// details of the glyph (width, height, etc) in gOut	
 	void genGlyph (const uint32_t codepoint, sdl_stb_glyph * gOut) {
@@ -279,7 +353,7 @@ public:
 		processString(x, y, c, maxLen, true);
 		}
 	
-	void drawText (const int x, const int y, const std::string & str) {
+	void drawText (const int x, const int y, const SSF_STRING & str) {
 		drawText(x,y,str.data(),str.size());
 		}
 	
@@ -288,12 +362,12 @@ public:
 		processString(0, 0, c, maxLen, false, &w, &h);
 		}
 		
-	void getTextSize (int & w, int & h, const std::string & str) {
+	void getTextSize (int & w, int & h, const SSF_STRING & str) {
 		processString(0, 0, str.data(), str.size(), false, &w, &h);
 		}
 	
 	/// Returns the number of rows (newlines + 1) a string has here
-	int getNumberOfRows (const std::string & str) {
+	int getNumberOfRows (const SSF_STRING & str) {
 		int n = 1;
 		for (const char c : str)
 			if (c == '\n') n++;
@@ -301,7 +375,7 @@ public:
 		}
 
 	/// Returns the height of string. This is much faster than getTextSize(), but only returns the height
-	int getTextHeight (const std::string & str) {
+	int getTextHeight (const SSF_STRING & str) {
 		return scale*rowSize*getNumberOfRows(str);
 		}
 		
@@ -402,7 +476,7 @@ public:
 		return RT;
 		}
 	
-	SDL_Texture * renderTextToTexture (const std::string & str, int * widthOut = NULL, int * heightOut = NULL) {
+	SDL_Texture * renderTextToTexture (const SSF_STRING & str, int * widthOut = NULL, int * heightOut = NULL) {
 		return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
 		}
 	
@@ -410,7 +484,7 @@ public:
 	void renderTextToObject (sdl_stb_prerendered_text * textOut, const char * c, const uint32_t maxLen = -1) {
 		textOut->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
 		}
-	void renderTextToObject (sdl_stb_prerendered_text * textOut, const std::string & str) {
+	void renderTextToObject (sdl_stb_prerendered_text * textOut, const SSF_STRING & str) {
 		textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
 	

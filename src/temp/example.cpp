@@ -11,12 +11,12 @@
 #include "sdlStbFont.h"
 
 /// Opens a file and returns a string of the raw data
-void readFileRaw (const std::string & fullPath, std::string & output) {
-	std::ifstream fs(fullPath.c_str(), std::ios::in | std::ios::binary);
+char * readFileRaw (const char * fullPath) {
+	std::ifstream fs(fullPath, std::ios::in | std::ios::binary);
 	
 	if (!fs.is_open()) {
 		std::cout << "readFileRaw: " << fullPath << " -- " << "WARNING: Could not open file." << std::endl;
-		return;
+		return NULL;
 		}
 	else {
 		std::cout << "Opened! " << fullPath << std::endl;
@@ -26,9 +26,10 @@ void readFileRaw (const std::string & fullPath, std::string & output) {
 	const size_t LEN = fs.tellg();
 	fs.seekg (0, std::ios::beg);
 	
-	output.resize(LEN);
-	fs.read(&output[0], LEN);
+	char * r = SSF_NEW(char[LEN]);
+	fs.read(r, LEN);
 	fs.close();
+	return r;
 	}
 
 
@@ -44,32 +45,24 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 	sdl_stb_font_cache fc;
 	fc.faceSize = 24;
 	
-		std::string notoSans;
-		std::string notoSansArmenian;
-		std::string notoSansGeorgian;
-		std::string notoSansHebrew;
-		//std::string notoSansHindi;
-		std::string notoSansArabic;
-		std::string notoSansCJK;
-		readFileRaw("fonts/NotoSans-Regular.ttf", notoSans);
-		readFileRaw("fonts/NotoSansArmenian-Regular.ttf", notoSansArmenian);
-		readFileRaw("fonts/NotoSansGeorgian-Regular.ttf", notoSansGeorgian);
-		readFileRaw("fonts/NotoSansHebrew-Regular.ttf", notoSansHebrew);
-		//readFileRaw("fonts/NotoSansDevanagari-Regular.ttf", notoSansHindi);
-		readFileRaw("fonts/NotoSansArabic-Regular.ttf", notoSansArabic);
-		readFileRaw("fonts/NotoSansCJKjp-Regular.otf", notoSansCJK);
+	{
+		char * notoSans = readFileRaw("fonts/NotoSans-Regular.ttf");
+		char * notoSansArmenian = readFileRaw("fonts/NotoSansArmenian-Regular.ttf");
+		char * notoSansGeorgian = readFileRaw("fonts/NotoSansGeorgian-Regular.ttf");
+		char * notoSansHebrew   = readFileRaw("fonts/NotoSansHebrew-Regular.ttf");
+		//char * notoSansHindi = readFileRaw("fonts/NotoSansDevanagari-Regular.ttf", notoSansHindi);
+		char * notoSansArabic = readFileRaw("fonts/NotoSansArabic-Regular.ttf");
+		char * notoSansCJK    = readFileRaw("fonts/NotoSansCJKjp-Regular.otf");
 		
-		fc.loadFont(notoSans.c_str());
-		fc.addFont(notoSansArmenian.c_str());
-		fc.addFont(notoSansGeorgian.c_str());
-		fc.addFont(notoSansHebrew.c_str());
-		//fc.addFont(notoSansHindi.c_str());
-		fc.addFont(notoSansArabic.c_str());
-		fc.addFont(notoSansCJK.c_str());
+		fc.loadFontManaged(notoSans);
+		fc.addFontManaged(notoSansArmenian);
+		fc.addFontManaged(notoSansGeorgian);
+		fc.addFontManaged(notoSansHebrew);
+		//fc.addFontManaged(notoSansHindi);
+		fc.addFontManaged(notoSansArabic);
+		fc.addFontManaged(notoSansCJK);
+	}
 		
-		
-
-	
 	// Setup the SDL window & renderer
 	int windowWidth = 800;
 	int windowHeight = 1000;
