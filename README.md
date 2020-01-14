@@ -134,6 +134,7 @@ char * mFontData = loadFontFromFileSomehow("path/to/file.ttf");
 fc.loadFont(mFontData);
 // You will have to free mFontData when you are done with it
 // fc does not copy mFontData internally
+// using fc after free'ing mFontData will result in undefined behaviour
 ```
 
 
