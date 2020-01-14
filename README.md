@@ -11,6 +11,7 @@ Sample text from http://www.columbia.edu/~fdc/utf8/index.html
 Liam Twigger - @SnapperTheTwig
 
 ## Features:
+* Single header library - no build system required. Just include and go!
 * Runs in pure SDL - no OpenGL required (though it does work with OpenGL) 
 * Simple text rendering - `fc.drawText(x, y, string)`
 * Rendering to a texture - `fc.renderTextToTexture(string, &widthOut, &heightOut)`
@@ -36,6 +37,7 @@ For text that lasts more than one frame you should cache it with either `renderT
 How Do I?
 =========
 
+* [Use This Library?](#use-this-library)
 * [Load Fonts and Draw Text?](#load-fonts-and-draw-text)
 * [Get Font Metrics](#get-font-metrics)
 * [Use Fallback Fonts (For Multilinugal Support)](#use-fallback-fonts-for-multilinugal-support)
@@ -44,6 +46,21 @@ How Do I?
 * [Caching Results in a Texture](#caching-results-in-a-texture)
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
 
+## Use This Library?
+This is a header only library - no build system required
+
+In any header:
+```c++
+#include "external/sdlStbFont/sdlStbFont.h"
+```
+
+In *ONE* .cpp:
+```c++
+#define SDL_STB_FONT_IMPL
+#include "external/sdlStbFont/sdlStbFont.h"
+```
+
+This library has a dependency on [STB_Truetype](https://github.com/nothings/stb). It will automatically include this. If you do not want it automatically included, use `#define STB_TRUETYPE_INCLUDE_HANDLED`, and handle the including of stb_truetype.h yourself. 
 
 ## Load Fonts and Draw Text?
 ```c++
