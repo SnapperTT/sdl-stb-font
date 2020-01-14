@@ -74,8 +74,11 @@ fc.drawText(5, 5, "Hello world!");
 SDL_RenderPresent(mSdlRenderer);
 
 // fc will clean itself up when it falls out of scope
-
+delete[] ttfFontFromMemory; // You must manually remove the char buff when done
+// if you want auto management use fc.loadFontManaged(), which will transfer
+// ownership of ttfFontFromMemory to fc and be freed when done.
 ```
+
 
 ## Get Font Metrics
  
@@ -124,14 +127,6 @@ int nRows = fc.getTextRows("Text \n More text"); // Returns the number of rows o
 ```
 
 ## Manage Memory
-Automatic Management:
-```c++
-char * mFontData = loadFontFromFileSomehow("path/to/file.ttf");
-fc.loadFontManaged(mFontData);
-// fc now owns mFontData and will free it when fc is destroyed
-// Also addFontManaged is worked
-```
-
 
 Manual Management:
 ```c++
@@ -140,6 +135,20 @@ fc.loadFont(mFontData);
 // You will have to free mFontData when you are done with it
 // fc does not copy mFontData internally
 ```
+
+
+Automatic Management:
+```c++
+filep * file = openFile("path/to/file");
+sdl_stb_memory mFontData;
+mFontData.alloc(file_size);
+fread(file, &mFontData.data);
+fc.loadFontManaged(mFontData);
+// fc now owns mFontData's contents and will free it when fc is destroyed
+// You can safely let mFontData fall out of scope
+// Also addFontManaged is avaliable for adding fallback fonts
+```
+
 
 ## Caching Results in a Texture
 First way:

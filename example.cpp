@@ -29,12 +29,12 @@
 #include "sdlStbFont.h"
 
 /// Opens a file and returns a string of the raw data
-char * readFileRaw (const char * fullPath) {
-	std::ifstream fs(fullPath, std::ios::in | std::ios::binary);
+void readFileRaw (const std::string & fullPath, std::string & output) {
+	std::ifstream fs(fullPath.c_str(), std::ios::in | std::ios::binary);
 	
 	if (!fs.is_open()) {
 		std::cout << "readFileRaw: " << fullPath << " -- " << "WARNING: Could not open file." << std::endl;
-		return NULL;
+		return;
 		}
 	else {
 		std::cout << "Opened! " << fullPath << std::endl;
@@ -44,10 +44,30 @@ char * readFileRaw (const char * fullPath) {
 	const size_t LEN = fs.tellg();
 	fs.seekg (0, std::ios::beg);
 	
-	char * r = SSF_NEW(char[LEN]);
-	fs.read(r, LEN);
+	output.resize(LEN);
+	fs.read(&output[0], LEN);
 	fs.close();
-	return r;
+	}
+
+/// Opens a file and stores it in a stb_memory for automatic management
+void readFileRaw_toMemory (const std::string & fullPath, sdl_stb_memory & mem) {
+	std::ifstream fs(fullPath.c_str(), std::ios::in | std::ios::binary);
+	
+	if (!fs.is_open()) {
+		std::cout << "readFileRaw: " << fullPath << " -- " << "WARNING: Could not open file." << std::endl;
+		return;
+		}
+	else {
+		std::cout << "Opened! " << fullPath << std::endl;
+		}
+				
+	fs.seekg (0, std::ios::end);
+	const size_t LEN = fs.tellg();
+	fs.seekg (0, std::ios::beg);
+	
+	mem.alloc(LEN);
+	fs.read(mem.data, LEN);
+	fs.close();
 	}
 
 
@@ -63,14 +83,39 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 	sdl_stb_font_cache fc;
 	fc.faceSize = 24;
 	
+	// Ways to load font data:
+	// 1. Load a file into some container (such as a std::string)
+	//		loadFileRaw("fonts/NotoSans-Regular.ttf, notoSansBuffer);
+	//		fc.loadFont(notoSansBuffer.c_str());
+	// You'll have to manage the lifetime of notoSansBuffer
+	// if notoSansBuffer is destroyed then fc will perform undefined
+	// behaviour
+	//
+	// 2. Load the file into a sdl_stb_memory and let SdlStbFont manage it
+	//		sdl_stb_memory notoSansMem;
+	// 		readFileRaw_toMemory("fonts/NotoSans-Regular.ttf, notoSansMem);
+	//		fc.loadFont(notoSansMem);
+	//	fc will now own the contents of notoSansMem and you can safely
+	//  let it drop out of scope
+	//
+	
 	{
-		char * notoSans = readFileRaw("fonts/NotoSans-Regular.ttf");
-		char * notoSansArmenian = readFileRaw("fonts/NotoSansArmenian-Regular.ttf");
-		char * notoSansGeorgian = readFileRaw("fonts/NotoSansGeorgian-Regular.ttf");
-		char * notoSansHebrew   = readFileRaw("fonts/NotoSansHebrew-Regular.ttf");
-		//char * notoSansHindi = readFileRaw("fonts/NotoSansDevanagari-Regular.ttf", notoSansHindi);
-		char * notoSansArabic = readFileRaw("fonts/NotoSansArabic-Regular.ttf");
-		char * notoSansCJK    = readFileRaw("fonts/NotoSansCJKjp-Regular.otf");
+		
+		sdl_stb_memory notoSans;
+		sdl_stb_memory notoSansArmenian;
+		sdl_stb_memory notoSansGeorgian;
+		sdl_stb_memory notoSansHebrew;
+		//sdl_stb_memory notoSansHindi;
+		sdl_stb_memory notoSansArabic;
+		sdl_stb_memory notoSansCJK;
+		
+		readFileRaw_toMemory("fonts/NotoSans-Regular.ttf", notoSans);
+		readFileRaw_toMemory("fonts/NotoSansArmenian-Regular.ttf", notoSansArmenian);
+		readFileRaw_toMemory("fonts/NotoSansGeorgian-Regular.ttf", notoSansGeorgian);
+		readFileRaw_toMemory("fonts/NotoSansHebrew-Regular.ttf", notoSansHebrew);
+		//readFileRaw_toMemory("fonts/NotoSansDevanagari-Regular.ttf", notoSansHindi);
+		readFileRaw_toMemory("fonts/NotoSansArabic-Regular.ttf", notoSansArabic);
+		readFileRaw_toMemory("fonts/NotoSansCJKjp-Regular.otf", notoSansCJK);
 		
 		fc.loadFontManaged(notoSans);
 		fc.addFontManaged(notoSansArmenian);

@@ -43,8 +43,14 @@ struct SDL_Surface;
 #ifndef SSF_NEW
 	#define SSF_NEW(X) new X
 #endif
+#ifndef SSF_NEW_ARR
+	#define SSF_NEW_ARR(X,S) new X[S]
+#endif
 #ifndef SSF_DEL
 	#define SSF_DEL(X) delete X
+#endif
+#ifndef SSF_DEL_ARR
+	#define SSF_DEL_ARR(X) delete[] X
 #endif
 
 
@@ -64,6 +70,8 @@ struct sdl_stb_memory
 {
   char * data;
   bool ownsData;
+  void alloc (size_t const size);
+  void transferTo (sdl_stb_memory & destination);
   sdl_stb_memory ();
   ~ sdl_stb_memory ();
 };
@@ -108,9 +116,9 @@ public:
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
   void loadFont (char const * ttf_buffer, int index = 0);
-  void loadFontManaged (char * ttf_buffer, int index = 0);
+  void loadFontManaged (sdl_stb_memory & memory, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
-  void addFontManaged (char * ttf_buffer, int index = 0);
+  void addFontManaged (sdl_stb_memory & memory, int index = 0);
   void genGlyph (uint32_t const codepoint, sdl_stb_glyph * gOut);
   sdl_stb_glyph * getGlyph (uint32_t const codepoint);
   sdl_stb_glyph * getGenGlyph (uint32_t const codepoint);
@@ -185,13 +193,24 @@ void sdl_stb_prerendered_text::drawWithColorMod (SDL_Renderer * mRenderer, int c
 			SDL_SetTextureAlphaMod(mSdlTexture, a);
 		draw (mRenderer, x, y);
 		}
+void sdl_stb_memory::alloc (size_t const size)
+                                      {
+		data = SSF_NEW_ARR(char, size);
+		ownsData = true;
+		}
+void sdl_stb_memory::transferTo (sdl_stb_memory & destination)
+                                                      {
+		destination.data = data;
+		destination.ownsData = destination.data;
+		ownsData = false;
+		}
 sdl_stb_memory::sdl_stb_memory ()
   : data (NULL), ownsData (false)
                                                         {}
 sdl_stb_memory::~ sdl_stb_memory ()
                            {
 		if (ownsData) {
-			SSF_DEL(data);
+			SSF_DEL_ARR(data);
 			data = NULL;
 			}
 		}
@@ -260,11 +279,9 @@ void sdl_stb_font_cache::loadFont (char const * ttf_buffer, int index)
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
 		}
-void sdl_stb_font_cache::loadFontManaged (char * ttf_buffer, int index)
-                                                                {
-		mFont.mMemory.data = ttf_buffer;
-		mFont.mMemory.ownsData = true;
-		
+void sdl_stb_font_cache::loadFontManaged (sdl_stb_memory & memory, int index)
+                                                                      {
+		memory.transferTo(mFont.mMemory);
 		loadFont(mFont.mMemory.data, index);
 		}
 void sdl_stb_font_cache::addFont (char const * ttf_buffer, int index)
@@ -277,15 +294,14 @@ void sdl_stb_font_cache::addFont (char const * ttf_buffer, int index)
 		stbtt_InitFont(&n->mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
 		w->next = n;
 		}
-void sdl_stb_font_cache::addFontManaged (char * ttf_buffer, int index)
-                                                               {
+void sdl_stb_font_cache::addFontManaged (sdl_stb_memory & memory, int index)
+                                                                     {
 		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
 		sdl_stb_font_list * w = &mFont;
 		while (w->next)
 			w = w->next;
 		
-		n->mMemory.data = ttf_buffer;
-		n->mMemory.ownsData = true;
+		memory.transferTo(n->mMemory);
 		stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,index));
 		w->next = n;
 		}

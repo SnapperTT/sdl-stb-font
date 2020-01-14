@@ -44,13 +44,24 @@ void sdl_stb_prerendered_text::drawWithColorMod (SDL_Renderer * mRenderer, int c
 			SDL_SetTextureAlphaMod(mSdlTexture, a);
 		draw (mRenderer, x, y);
 		}
+void sdl_stb_memory::alloc (size_t const size)
+                                      {
+		data = SSF_NEW_ARR(char, size);
+		ownsData = true;
+		}
+void sdl_stb_memory::transferTo (sdl_stb_memory & destination)
+                                                      {
+		destination.data = data;
+		destination.ownsData = destination.data;
+		ownsData = false;
+		}
 sdl_stb_memory::sdl_stb_memory ()
   : data (NULL), ownsData (false)
                                                         {}
 sdl_stb_memory::~ sdl_stb_memory ()
                            {
 		if (ownsData) {
-			SSF_DEL(data);
+			SSF_DEL_ARR(data);
 			data = NULL;
 			}
 		}
@@ -119,11 +130,9 @@ void sdl_stb_font_cache::loadFont (char const * ttf_buffer, int index)
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
 		}
-void sdl_stb_font_cache::loadFontManaged (char * ttf_buffer, int index)
-                                                                {
-		mFont.mMemory.data = ttf_buffer;
-		mFont.mMemory.ownsData = true;
-		
+void sdl_stb_font_cache::loadFontManaged (sdl_stb_memory & memory, int index)
+                                                                      {
+		memory.transferTo(mFont.mMemory);
 		loadFont(mFont.mMemory.data, index);
 		}
 void sdl_stb_font_cache::addFont (char const * ttf_buffer, int index)
@@ -136,15 +145,14 @@ void sdl_stb_font_cache::addFont (char const * ttf_buffer, int index)
 		stbtt_InitFont(&n->mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
 		w->next = n;
 		}
-void sdl_stb_font_cache::addFontManaged (char * ttf_buffer, int index)
-                                                               {
+void sdl_stb_font_cache::addFontManaged (sdl_stb_memory & memory, int index)
+                                                                     {
 		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
 		sdl_stb_font_list * w = &mFont;
 		while (w->next)
 			w = w->next;
 		
-		n->mMemory.data = ttf_buffer;
-		n->mMemory.ownsData = true;
+		memory.transferTo(n->mMemory);
 		stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,index));
 		w->next = n;
 		}

@@ -42,8 +42,14 @@ struct SDL_Surface;
 #ifndef SSF_NEW
 	#define SSF_NEW(X) new X
 #endif
+#ifndef SSF_NEW_ARR
+	#define SSF_NEW_ARR(X,S) new X[S]
+#endif
 #ifndef SSF_DEL
 	#define SSF_DEL(X) delete X
+#endif
+#ifndef SSF_DEL_ARR
+	#define SSF_DEL_ARR(X) delete[] X
 #endif
 
 
@@ -63,6 +69,8 @@ struct sdl_stb_memory
 {
   char * data;
   bool ownsData;
+  void alloc (size_t const size);
+  void transferTo (sdl_stb_memory & destination);
   sdl_stb_memory ();
   ~ sdl_stb_memory ();
 };
@@ -107,9 +115,9 @@ public:
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
   void loadFont (char const * ttf_buffer, int index = 0);
-  void loadFontManaged (char * ttf_buffer, int index = 0);
+  void loadFontManaged (sdl_stb_memory & memory, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
-  void addFontManaged (char * ttf_buffer, int index = 0);
+  void addFontManaged (sdl_stb_memory & memory, int index = 0);
   void genGlyph (uint32_t const codepoint, sdl_stb_glyph * gOut);
   sdl_stb_glyph * getGlyph (uint32_t const codepoint);
   sdl_stb_glyph * getGenGlyph (uint32_t const codepoint);

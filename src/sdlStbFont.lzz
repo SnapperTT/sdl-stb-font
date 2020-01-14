@@ -38,8 +38,14 @@ struct SDL_Surface;
 #ifndef SSF_NEW
 	#define SSF_NEW(X) new X
 #endif
+#ifndef SSF_NEW_ARR
+	#define SSF_NEW_ARR(X,S) new X[S]
+#endif
 #ifndef SSF_DEL
 	#define SSF_DEL(X) delete X
+#endif
+#ifndef SSF_DEL_ARR
+	#define SSF_DEL_ARR(X) delete[] X
 #endif
 
 
@@ -97,15 +103,26 @@ struct sdl_stb_prerendered_text {
 		}
 	};
 	
-/// Memory
+/// Memory management
 struct sdl_stb_memory {
 	char * data;
 	bool ownsData;
 	
+	void alloc(const size_t size) {
+		data = SSF_NEW_ARR(char, size);
+		ownsData = true;
+		}
+		
+	void transferTo(sdl_stb_memory & destination) {
+		destination.data = data;
+		destination.ownsData = destination.data;
+		ownsData = false;
+		}
+	
 	sdl_stb_memory () : data(NULL), ownsData(false) {}
 	~sdl_stb_memory () {
 		if (ownsData) {
-			SSF_DEL(data);
+			SSF_DEL_ARR(data);
 			data = NULL;
 			}
 		}
@@ -217,12 +234,14 @@ public:
 	/// ttf_buffer must be null terminated
 	/// ttf_buffer will be deallocated when this class is destroyed
 	/// Example usage:
-	/// char * f = loadFileToCharArr("path/to/file");
-	/// mSdl_stb_font_cache.loadFontManaged (f);
-	void loadFontManaged (char * ttf_buffer, int index = 0) {
-		mFont.mMemory.data = ttf_buffer;
-		mFont.mMemory.ownsData = true;
-		
+	/// filep * file = openFile("path/to/file");
+	/// sdl_stb_memory mem;
+	/// mem.alloc(file_size);
+	/// fread(file, &mem.data);
+	/// mSdl_stb_font_cache.loadFontManaged (mem);
+	/// You can safely let mem drop out of scope
+	void loadFontManaged (sdl_stb_memory & memory, int index = 0) {
+		memory.transferTo(mFont.mMemory);
 		loadFont(mFont.mMemory.data, index);
 		}
 		
@@ -242,16 +261,19 @@ public:
 	/// ttf_buffer will be deallocated when this class is destroyed
 	/// ttf_buffer must be null terminated
 	/// Example usage:
-	/// char * f = loadFileToCharArr("path/to/file");
-	/// mSdl_stb_font_cache.loadFontManaged (f);
-	void addFontManaged (char * ttf_buffer, int index = 0) {
+	/// filep * file = openFile("path/to/file");
+	/// sdl_stb_memory mem;
+	/// mem.alloc(file_size);
+	/// fread(file, &mem.data);
+	/// mSdl_stb_font_cache.loadFontManaged (mem);
+	/// You can safely let mem drop out of scope
+	void addFontManaged (sdl_stb_memory & memory, int index = 0) {
 		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
 		sdl_stb_font_list * w = &mFont;
 		while (w->next)
 			w = w->next;
 		
-		n->mMemory.data = ttf_buffer;
-		n->mMemory.ownsData = true;
+		memory.transferTo(n->mMemory);
 		stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,index));
 		w->next = n;
 		}
