@@ -242,8 +242,8 @@ void sdl_stb_font_list::fetchFontForCodepoint (uint32_t const codepoint, stbtt_f
 			}
 		}
 sdl_stb_font_cache::sdl_stb_font_cache ()
-  : mRenderer (NULL), ascent (0), descent (0), lineGap (0), rowSize (0), faceSize (20), scale (1.f)
-                                                                                                                         {}
+  : mRenderer (NULL), ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), scale (1.f), faceSize (20)
+                                                                                                                                      {}
 sdl_stb_font_cache::~ sdl_stb_font_cache ()
                                {
 		clearGlyphs();
