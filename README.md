@@ -16,6 +16,7 @@ Liam Twigger - @SnapperTheTwig
 * Simple text rendering - `fc.drawText(x, y, string)`
 * Rendering to a texture - `fc.renderTextToTexture(string, &widthOut, &heightOut)`
 * Rendering to a texture object - see examples
+* Can convert mouse location to caret location in string (strings without newlines only)
 * UTF-8 support
 * Handles newlines
 * Fallback fonts support - can support many languages at once!
@@ -45,6 +46,7 @@ How Do I?
 * [Manage Memory](#manage-memory)
 * [Caching Results in a Texture](#caching-results-in-a-texture)
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
+* [Get Where in a String a User has Clicked](#get-where-in-a-string-a-user-has-clicked)
 
 ## Use This Library?
 This is a header only library - no build system required
@@ -203,6 +205,12 @@ prt.freeTexture();
 
 ## Print in Colours Other Than White
 Use `SDL_SetTextureColorMod` with a cached texture. Or use `sdl_stb_prerendered_text::drawWithColor`.
+
+## Get Where in a String a User has Clicked 
+Use `getCaretPos(text, relativeMouseX, relativeMouseY)`
+
+Note that this only currently supports carret lookup in strings without newlines - if you attempt this with a multiline string then it may return an incorrect value. 
+
 
 Contributing
 ============

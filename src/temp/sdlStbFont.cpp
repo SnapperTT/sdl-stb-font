@@ -269,8 +269,8 @@ int sdl_stb_font_cache::getTextHeight (SSF_STRING const & str)
                                                    {
 		return scale*rowSize*getNumberOfRows(str);
 		}
-void sdl_stb_font_cache::processString (int const x, int const y, char const * c, uint32_t const maxLen, bool const isDrawing, int * const widthOut, int * const heightOut)
-                                                                                                                                                                             {
+void sdl_stb_font_cache::processString (int const x, int const y, char const * c, uint32_t const maxLen, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const threshX, int const * const threshY, int * const caretPosition)
+                                                                                                                                                                                                                                                                                   {
 		// Scan through function and extract the glyphs
 		uint32_t seek = 0;
 		uint32_t uCharLast = 0;
@@ -279,7 +279,14 @@ void sdl_stb_font_cache::processString (int const x, int const y, char const * c
 		int yy = y;
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
+		
+		const bool lookupCaret = caretPosition && threshX && threshY;
+		if (lookupCaret) {
+			*caretPosition = -1;
+			}
+		
 		while (uChar && seek <= maxLen) {
+			int xxl = xx;
 			if (uChar == '\n') {
 				if (widthOut)
 					if (*widthOut < xx) *widthOut = xx;
@@ -290,6 +297,18 @@ void sdl_stb_font_cache::processString (int const x, int const y, char const * c
 				xx += scale*getKerningAdvance(uCharLast, uChar);
 				processCodepoint(xx, yy, uChar, isDrawing);
 				}
+			
+			if (lookupCaret) {
+				const int dx = xx - x;
+				if (xx > *threshX && xxl <= *threshX ) {
+					if (*threshX > xxl + (xx - xxl)/2)
+						*caretPosition = seek; // right half of char
+					else
+						*caretPosition = seek-1; // left half of char
+					return;
+					}
+				}
+				
 			uCharLast = uChar;
 			uChar = utf8_read(c + seek, seek, maxLen);
 			}
@@ -302,6 +321,12 @@ void sdl_stb_font_cache::processString (int const x, int const y, char const * c
 			*heightOut += scale*rowSize;
 			*heightOut -= y;
 			}
+		}
+int sdl_stb_font_cache::getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY)
+                                                                                          {
+		int caretPosition = -1;
+		processString(0,0, str.data(), str.length(), false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		return caretPosition;
 		}
 bool sdl_stb_font_cache::isTofu (sdl_stb_glyph * G)
                                         {

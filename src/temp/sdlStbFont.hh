@@ -130,7 +130,8 @@ public:
   void getTextSize (int & w, int & h, SSF_STRING const & str);
   int getNumberOfRows (SSF_STRING const & str);
   int getTextHeight (SSF_STRING const & str);
-  void processString (int const x, int const y, char const * c, uint32_t const maxLen, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL);
+  void processString (int const x, int const y, char const * c, uint32_t const maxLen, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL);
+  int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY);
   bool isTofu (sdl_stb_glyph * G);
   sdl_stb_glyph * getGlyphOrTofu (uint32_t const codepoint);
   void processCodepoint (int & x, int & y, uint32_t const codepoint, bool isDrawing);

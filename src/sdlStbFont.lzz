@@ -401,7 +401,7 @@ public:
 		return scale*rowSize*getNumberOfRows(str);
 		}
 		
-	void processString (const int x, const int y, const char* c, const uint32_t maxLen, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL) {
+	void processString (const int x, const int y, const char* c, const uint32_t maxLen, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL) {
 		// Scan through function and extract the glyphs
 		uint32_t seek = 0;
 		uint32_t uCharLast = 0;
@@ -410,7 +410,14 @@ public:
 		int yy = y;
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
+		
+		const bool lookupCaret = caretPosition && threshX && threshY;
+		if (lookupCaret) {
+			*caretPosition = -1;
+			}
+		
 		while (uChar && seek <= maxLen) {
+			int xxl = xx;
 			if (uChar == '\n') {
 				if (widthOut)
 					if (*widthOut < xx) *widthOut = xx;
@@ -421,6 +428,18 @@ public:
 				xx += scale*getKerningAdvance(uCharLast, uChar);
 				processCodepoint(xx, yy, uChar, isDrawing);
 				}
+			
+			if (lookupCaret) {
+				const int dx = xx - x;
+				if (xx > *threshX && xxl <= *threshX ) {
+					if (*threshX > xxl + (xx - xxl)/2)
+						*caretPosition = seek; // right half of char
+					else
+						*caretPosition = seek-1; // left half of char
+					return;
+					}
+				}
+				
 			uCharLast = uChar;
 			uChar = utf8_read(c + seek, seek, maxLen);
 			}
@@ -433,6 +452,15 @@ public:
 			*heightOut += scale*rowSize;
 			*heightOut -= y;
 			}
+		}
+	
+	/// Returns the position in the string where a click happend
+	/// MouseX and MouseY are relative to whatever draw position of this string you are using
+	/// Currently only suppors single row strings
+	int getCaretPos(const SSF_STRING & str, const int relMouseX, const int relMouseY) {
+		int caretPosition = -1;
+		processString(0,0, str.data(), str.length(), false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		return caretPosition;
 		}
 	
 	bool isTofu (sdl_stb_glyph * G) {
