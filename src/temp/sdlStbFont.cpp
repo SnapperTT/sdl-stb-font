@@ -299,7 +299,7 @@ void sdl_stb_font_cache::processString (int const x, int const y, char const * c
 				}
 			
 			if (lookupCaret) {
-				const int dx = xx - x;
+				//const int dx = xx - x;
 				if (xx > *threshX && xxl <= *threshX ) {
 					if (*threshX > xxl + (xx - xxl)/2)
 						*caretPosition = seek; // right half of char

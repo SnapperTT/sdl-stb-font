@@ -430,7 +430,7 @@ public:
 				}
 			
 			if (lookupCaret) {
-				const int dx = xx - x;
+				//const int dx = xx - x;
 				if (xx > *threshX && xxl <= *threshX ) {
 					if (*threshX > xxl + (xx - xxl)/2)
 						*caretPosition = seek; // right half of char
