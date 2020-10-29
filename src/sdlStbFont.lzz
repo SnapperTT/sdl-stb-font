@@ -378,7 +378,16 @@ public:
 	void drawText (const int x, const int y, const SSF_STRING & str) {
 		drawText(x,y,str.data(),str.size());
 		}
+
+	/// These overloads return the width and height of the drawn string
+	void drawText(const int x, const int y, int & widthOut, int & heightOut, const char * c, const uint32_t maxLen = -1) {
+		processString(x, y, c, maxLen, true, &widthOut, &heightOut);
+		}
 	
+	void drawText (const int x, const int y, const SSF_STRING & str, int & widthOut, int & heightOut) {
+		drawText(x,y,widthOut, heightOut, str.data(),str.size());
+		}
+
 	/// Gets the size of a string (width and height)
 	void getTextSize (int & w, int & h, const char * c, const uint32_t maxLen = -1) {
 		processString(0, 0, c, maxLen, false, &w, &h);

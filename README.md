@@ -28,7 +28,7 @@ Liam Twigger - @SnapperTheTwig
 ## Performance:
 On a Intel i7-8750H:
 
-Example image takes 0.7ms to render (~1400 FPS) if using texture (`renderTextToTexture`/`renderTextToObject`)
+Example image takes 0.7ms to render (~1400 FPS) if using texture (`renderTextToTexture`/`renderTextToObject`). The speed will be the maximum that SDL2 lets you flip a texture at
 
 Example image takes ~5ms to render (~200 FPS) if rendering directly (`drawText`)
 
@@ -96,6 +96,12 @@ SDL_RenderPresent(mSdlRenderer);
 delete[] ttfFontFromMemory; // You must manually remove the char buff when done
 // if you want auto management use fc.loadFontManaged(), which will transfer
 // ownership of ttfFontFromMemory to fc and be freed when done.
+```
+
+You can also get the width and height of a rendered string:
+```
+fc.drawText(5, 5, widthOut, heightOut, "Hello world!");
+// Draws "hello world" and sets widthOut and heightOut to the size of the string
 ```
 
 

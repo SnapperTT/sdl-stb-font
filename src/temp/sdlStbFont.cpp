@@ -250,6 +250,14 @@ void sdl_stb_font_cache::drawText (int const x, int const y, SSF_STRING const & 
                                                                          {
 		drawText(x,y,str.data(),str.size());
 		}
+void sdl_stb_font_cache::drawText (int const x, int const y, int & widthOut, int & heightOut, char const * c, uint32_t const maxLen)
+                                                                                                                             {
+		processString(x, y, c, maxLen, true, &widthOut, &heightOut);
+		}
+void sdl_stb_font_cache::drawText (int const x, int const y, SSF_STRING const & str, int & widthOut, int & heightOut)
+                                                                                                          {
+		drawText(x,y,widthOut, heightOut, str.data(),str.size());
+		}
 void sdl_stb_font_cache::getTextSize (int & w, int & h, char const * c, uint32_t const maxLen)
                                                                                         {
 		processString(0, 0, c, maxLen, false, &w, &h);

@@ -126,6 +126,8 @@ public:
   uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
   void drawText (int const x, int const y, char const * c, uint32_t const maxLen = -1);
   void drawText (int const x, int const y, SSF_STRING const & str);
+  void drawText (int const x, int const y, int & widthOut, int & heightOut, char const * c, uint32_t const maxLen = -1);
+  void drawText (int const x, int const y, SSF_STRING const & str, int & widthOut, int & heightOut);
   void getTextSize (int & w, int & h, char const * c, uint32_t const maxLen = -1);
   void getTextSize (int & w, int & h, SSF_STRING const & str);
   int getNumberOfRows (SSF_STRING const & str);
