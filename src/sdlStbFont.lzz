@@ -32,6 +32,10 @@ struct SDL_Surface;
 	#define SSF_STRING std::string
 #endif
 
+// move semantics - makes lzz happy
+#define SSF_STRING_MS SSF_STRING&&
+#define sdl_stb_formated_text_item_MS sdl_stb_formated_text_item&&
+
 // new and delete macros
 // all calls in this library are done with "foo * f = SSF_NEW(f)"
 // implement your custom allocator by defining SSF_NEW and SSF_DEL
@@ -50,6 +54,8 @@ struct SDL_Surface;
 
 
 #include <cstdint>
+
+struct sdl_stb_formatted_text;
 #end
 
 #src
@@ -71,8 +77,84 @@ struct SDL_Surface;
 
 #end
 
+/// Formatted text
+struct sdl_stb_format_callback {
+	virtual void callbackOnDraw(const sdl_stb_formatted_text & text, int index, int x, int y, int xOffsetInitial, int xOffsetAfter, int segmentWidth, int segmentHeight) {}
+	};
+	
+struct sdl_stb_format_reset {};
+struct sdl_stb_format {
+	uint8_t r,g,b,a;
+	uint8_t format;
+	static const uint8_t FORMAT_NONE 		  = 0 << 0;
+	static const uint8_t FORMAT_BOLD 		  = 1 << 0;
+	static const uint8_t FORMAT_ITALIC 		  = 1 << 1;
+	static const uint8_t FORMAT_UNDERLINE 	  = 1 << 2;
+	static const uint8_t FORMAT_STRIKETHROUGH = 1 << 3;
+	static const uint8_t FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS = 1 << 7;
+	
+	sdl_stb_format() : r(255), g(255), b(255), a(255), format(0) {}
+	sdl_stb_format(const uint8_t _format, const uint8_t _r = 255, const uint8_t _g = 255, const uint8_t _b = 255, const uint8_t _a = 255)
+					: r(_r), g(_g), b(_b), a(_a), format(_format) {}
+	
+	void combine(const sdl_stb_format & other) {
+		format |= other.format;
+		r = 255*((r/255.0)*(other.r/255.0));
+		g = 255*((g/255.0)*(other.g/255.0));
+		b = 255*((b/255.0)*(other.b/255.0));
+		a = 255*((a/255.0)*(other.a/255.0));
+		}
+	
+	// Constants and "constants"
+	static sdl_stb_format COLOR(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sdl_stb_format(_r,_g,_b,_a); }
+	static sdl_stb_format COLOUR(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sdl_stb_format(_r,_g,_b,_a); }
+	
+	static const sdl_stb_format bold = sdl_stb_format(FORMAT_BOLD);
+	static const sdl_stb_format itallic = sdl_stb_format(FORMAT_ITALIC);
+	static const sdl_stb_format underline = sdl_stb_format(FORMAT_UNDERLINE);
+	static const sdl_stb_format strikethrough = sdl_stb_format(FORMAT_STRIKETHROUGH);
+	// If you don't like the colours, extend this class and define your own
+	static const sdl_stb_format red 	= sdl_stb_format(FORMAT_NONE,255,  0,  0,255);
+	static const sdl_stb_format green	= sdl_stb_format(FORMAT_NONE,  0,255,  0,255);
+	static const sdl_stb_format blue 	= sdl_stb_format(FORMAT_NONE,  0,  0,255,255);
+	static const sdl_stb_format yellow 	= sdl_stb_format(FORMAT_NONE,255,255,  0,255);
+	static const sdl_stb_format black 	= sdl_stb_format(FORMAT_NONE,  0,  0,  0,255);
+	static const sdl_stb_format white	= sdl_stb_format(FORMAT_NONE,255,255,255,255);
+	static const sdl_stb_format magenta	= sdl_stb_format(FORMAT_NONE,255,  0,255,255);
+	static const sdl_stb_format cyan	= sdl_stb_format(FORMAT_NONE,  0,255,255,255);
+	static const sdl_stb_format grey	= sdl_stb_format(FORMAT_NONE,128,128,128,255);
+	
+	static const sdl_stb_format_reset reset;
+	};
+	
+struct sdl_stb_formated_text_item {
+	SSF_STRING text;
+	sdl_stb_format format;
+	sdl_stb_format_callback * callback;
+	sdl_stb_formated_text_item () : callback(0) {}
+	sdl_stb_formated_text_item (const SSF_STRING & _text, const sdl_stb_format & _format)	: text(_text), format(_format), callback(0) {}
+	sdl_stb_formated_text_item (SSF_STRING_MS _text, const sdl_stb_format & _format) 		: text(_text), format(_format), callback(0) {}
+	sdl_stb_formated_text_item& setCallback(sdl_stb_format_callback* _cb) { callback = _cb; return *this; }
+	};
+	
+struct sdl_stb_formatted_text {
+	SSF_VECTOR<sdl_stb_formated_text_item> mItems;
+	sdl_stb_format activeFormat;
+	
+	sdl_stb_formatted_text(){}
+	sdl_stb_formatted_text(const SSF_STRING & text) { *this << text; }
+	sdl_stb_formatted_text(SSF_STRING_MS text) 	{ *this << text; }
+	sdl_stb_formatted_text(const char * text) 		{ *this << text; }
+	sdl_stb_formatted_text& operator << (const SSF_STRING & text) { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); return *this; }
+	sdl_stb_formatted_text& operator << (SSF_STRING_MS text) { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); return *this;  }
+	sdl_stb_formatted_text& operator << (const char * text) { mItems.push_back(sdl_stb_formated_text_item(SSF_STRING(text), activeFormat)); return *this;  }
+	sdl_stb_formatted_text& operator << (const sdl_stb_format & format) { activeFormat.combine(format); return *this; }
+	sdl_stb_formatted_text& operator << (const sdl_stb_format_reset & reset) { activeFormat = sdl_stb_format(); return *this; }
+	sdl_stb_formatted_text& operator << (const sdl_stb_formated_text_item & obj) { mItems.push_back(obj); return *this; }
+	sdl_stb_formatted_text& operator << (sdl_stb_formated_text_item_MS obj) { mItems.push_back(obj); return *this; }
+	};
 
-
+	
 /// Prerended cached text
 struct sdl_stb_prerendered_text {
 	SDL_Texture * mSdlTexture;
@@ -144,15 +226,17 @@ struct sdl_stb_glyph {
 struct sdl_stb_font_list {
 	stbtt_fontinfo mFont;
 	sdl_stb_memory mMemory;
+	uint8_t format;			// Value is one of sdl_stb_format::FORMAT_*
+	SSF_VECTOR<sdl_stb_font_list*> mFormatedVariants;	// Variants for bold, italic, etc
 	sdl_stb_font_list * next;
-	
-	sdl_stb_font_list() : next(NULL) {}
+		
+	sdl_stb_font_list() : format(0), next(NULL) {}
 	~sdl_stb_font_list() {
 		if (next) delete next;
 		}
 	
 	/// Finds the font with the code point for 
-	void fetchFontForCodepoint(const uint32_t codepoint, stbtt_fontinfo ** mFontOut, int * indexOut) {
+	void fetchFontForCodepoint(const uint32_t codepoint, const uint8_t format, stbtt_fontinfo ** mFontOut, int * indexOut) {
 		sdl_stb_font_list * working = this;
 		
 		*mFontOut = NULL;
@@ -161,6 +245,40 @@ struct sdl_stb_font_list {
 		while (working) {
 			int index = stbtt_FindGlyphIndex(&(working->mFont), codepoint);
 			if (index) {
+				// Check for format in the variants
+				if (format) {
+					int bestBitsCount = 0;
+					sdl_stb_font_list * bestMatch = NULL;
+					sdl_stb_font_list * bestMatch2 = NULL;
+					for (sdl_stb_font_list * f : mFormatedVariants) {
+						uint8_t mask = (format & f->format);
+						if (mask) {
+							int nBits = 0;
+							for (int i = 0; i < 7; ++i)
+								if (mask & (1 << i)) nBits++;
+							if (nBits > bestBitsCount) {
+								bestBitsCount = nBits;
+								bestMatch2 = bestMatch;
+								bestMatch = f;
+								}
+							}
+						}
+					
+					if (bestMatch) {
+						int index2 = stbtt_FindGlyphIndex(&(bestMatch->mFont), codepoint);
+						*mFontOut = &(working->mFont);
+						*indexOut = index2;
+						return;
+						}
+					if (bestMatch2) {
+						int index2 = stbtt_FindGlyphIndex(&(bestMatch2->mFont), codepoint);
+						*mFontOut = &(working->mFont);
+						*indexOut = index2;
+						return;
+						}
+					}
+				
+				// Format not found/no format
 				*mFontOut = &(working->mFont);
 				*indexOut = index;
 				return;
@@ -185,7 +303,7 @@ public:
 	// The face size in pixels
 	int faceSize;
 	
-	SSF_MAP<uint32_t, sdl_stb_glyph> mGlyphs;
+	SSF_MAP<uint64_t, sdl_stb_glyph> mGlyphs;
 	
 	sdl_stb_font_cache () : mRenderer(NULL), ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), scale(1.f), faceSize(20) {}
 	~sdl_stb_font_cache () {
@@ -248,15 +366,11 @@ public:
 	/// Loads a fallback font. If a glyph is not found in a primary font it'll fallback to one of these
 	/// ttf_buffer must be null terminated
 	void addFont (const char * ttf_buffer, int index = 0) {
-		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
-		sdl_stb_font_list * w = &mFont;
-		while (w->next)
-			w = w->next;
-		
-		stbtt_InitFont(&n->mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
-		w->next = n;
+		addFontWrap afw(ttf_buffer);
+		afw.index = index;
+		addFont_worker(afw, false);
 		}
-	
+		
 	/// Same as addFont, but transfers ownership of the memory to here
 	/// ttf_buffer will be deallocated when this class is destroyed
 	/// ttf_buffer must be null terminated
@@ -268,23 +382,66 @@ public:
 	/// mSdl_stb_font_cache.loadFontManaged (mem);
 	/// You can safely let mem drop out of scope
 	void addFontManaged (sdl_stb_memory & memory, int index = 0) {
+		addFontWrap afw(NULL);
+		afw.memory = &memory;
+		afw.index = index;
+		addFont_worker(afw, false);
+		}
+	
+	/// Adds a format variant to the last loaded font
+	/// Use this to add Bold, Italic, etc
+	/// FormatMask is one of sdl_stb_format::FORMAT_*
+	void addFormatFont (uint8_t formatMask, const char * ttf_buffer, int index = 0) {
+		addFontWrap afw(ttf_buffer);
+		afw.index = index;
+		addFont_worker(afw, true, formatMask);
+		}
+	
+	void addFormatFontManaged (uint8_t formatMask, sdl_stb_memory & memory, int index = 0) {
+		addFontWrap afw(NULL);
+		afw.memory = &memory;
+		afw.index = index;
+		addFont_worker(afw, true, formatMask);
+		}
+		
+		
+protected:
+	struct addFontWrap {
+		const char * ttf_buffer;
+		sdl_stb_memory * memory;
+		int index;
+		addFontWrap (const char * c) : ttf_buffer(c), memory(NULL), index(0) {}
+		};
+		
+	void addFont_worker(addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0) { 
 		sdl_stb_font_list * n = SSF_NEW(sdl_stb_font_list);
 		sdl_stb_font_list * w = &mFont;
 		while (w->next)
 			w = w->next;
+		n->format = formatMask;
 		
-		memory.transferTo(n->mMemory);
-		stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,index));
-		w->next = n;
+		if (fwm.memory) {
+			sdl_stb_memory & memory = *(fwm.memory);
+			memory.transferTo(n->mMemory);
+			stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,fwm.index));
+			}
+		else {
+			stbtt_InitFont(&n->mFont, (const unsigned char *) fwm.ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) fwm.ttf_buffer,fwm.index));
+			}
+		if (isFormatVariant)
+			w->mFormatedVariants.push_back(n);
+		else
+			w->next = n;
 		}
-		
+public:
+
 	/// For a given codepoint, generate a texture (if required) and populate the
 	/// details of the glyph (width, height, etc) in gOut	
-	void genGlyph (const uint32_t codepoint, sdl_stb_glyph * gOut) {
+	void genGlyph (const uint32_t codepoint, const uint8_t format, sdl_stb_glyph * gOut) {
 		// Fetch font and index - existance check for glyph in font
 		stbtt_fontinfo * mFontContaining;
 		int mIndex;
-		mFont.fetchFontForCodepoint(codepoint, &mFontContaining, &mIndex);
+		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex);
 		
 		if (!mIndex)
 			return;
@@ -320,21 +477,22 @@ public:
 		
 		}
 	
-	sdl_stb_glyph * getGlyph(const uint32_t codepoint) {
-		auto it = mGlyphs.find(codepoint);
+	sdl_stb_glyph * getGlyph(const uint64_t target) {
+		auto it = mGlyphs.find(target);
 		if (it == mGlyphs.end())
 			return NULL;
 		return &((*it).second);
 		}
 	
 	/// Looks up a glyph, generating it if it does not exist yet
-	sdl_stb_glyph * getGenGlyph(const uint32_t codepoint) {
-		sdl_stb_glyph * r = getGlyph(codepoint);
+	sdl_stb_glyph * getGenGlyph(const uint32_t codepoint, const uint8_t format) {
+		uint64_t target = codepoint | (uint64_t(format) << 32);
+		sdl_stb_glyph * r = getGlyph(target);
 		if (r) return r;
 		sdl_stb_glyph g;
-		genGlyph(codepoint, &g);
-		mGlyphs[codepoint] = g;
-		return getGlyph(codepoint);
+		genGlyph(codepoint, format, &g);
+		mGlyphs[target] = g;
+		return getGlyph(target);
 		}
 		
 	int getKerningAdvance(const uint32_t cp1, const uint32_t cp2) {
@@ -371,30 +529,43 @@ public:
 	
 	/// Draws a c string at position x, y
 	/// maxLen should be set if you want to use non-zero terminated strings
-	void drawText(const int x, const int y, const char * c, const uint32_t maxLen = -1) {
-		processString(x, y, c, maxLen, true);
+	/// Returns the x coordinate of the caret at the end of the string
+	/// (If you draw a 100 width string at x=5 this will return 105.
+	/// If there is a newline at the end this will return 5) 
+	int drawText(const int x, const int y, const char * c, const uint32_t maxLen = -1) {
+		return processString(x, y, c, maxLen, NULL, true);
 		}
 	
-	void drawText (const int x, const int y, const SSF_STRING & str) {
-		drawText(x,y,str.data(),str.size());
+	int drawText (const int x, const int y, const SSF_STRING & str) {
+		return drawText(x,y,str.data(),str.size());
 		}
 
 	/// These overloads return the width and height of the drawn string
-	void drawText(const int x, const int y, int & widthOut, int & heightOut, const char * c, const uint32_t maxLen = -1) {
-		processString(x, y, c, maxLen, true, &widthOut, &heightOut);
+	int drawText(const int x, const int y, int & widthOut, int & heightOut, const char * c, const uint32_t maxLen = -1) {
+		return processString(x, y, c, maxLen, NULL, true, &widthOut, &heightOut);
 		}
 	
-	void drawText (const int x, const int y, const SSF_STRING & str, int & widthOut, int & heightOut) {
-		drawText(x,y,widthOut, heightOut, str.data(),str.size());
-		}
-
-	/// Gets the size of a string (width and height)
-	void getTextSize (int & w, int & h, const char * c, const uint32_t maxLen = -1) {
-		processString(0, 0, c, maxLen, false, &w, &h);
+	int drawText (const int x, const int y, const SSF_STRING & str, int & widthOut, int & heightOut) {
+		return drawText(x,y,widthOut, heightOut, str.data(),str.size());
 		}
 		
-	void getTextSize (int & w, int & h, const SSF_STRING & str) {
-		processString(0, 0, str.data(), str.size(), false, &w, &h);
+	int drawText(const sdl_stb_formatted_text & text, int x, int y) {
+		int dummyWidth, dummyHeight;
+		return drawText(text, x, y, dummyWidth, dummyHeight);
+		}
+		
+	int drawText(const sdl_stb_formatted_text & text, int x, int y, int & widthOut, int & heightOut) {
+		int dummyWidth, dummyHeight;
+		return processFormatted(text, x, y, true, &dummyWidth, &dummyHeight);
+		}
+	
+	/// Gets the size of a string (width and height). Returns the x position of the caret at the end of the string
+	int getTextSize (int & w, int & h, const char * c, const uint32_t maxLen = -1) {
+		return processString(0, 0, c, maxLen, NULL, false, &w, &h);
+		}
+		
+	int getTextSize (int & w, int & h, const SSF_STRING & str) {
+		return processString(0, 0, str.data(), str.size(), NULL, false, &w, &h);
 		}
 	
 	/// Returns the number of rows (newlines + 1) a string has here
@@ -410,15 +581,17 @@ public:
 		return scale*rowSize*getNumberOfRows(str);
 		}
 		
-	void processString (const int x, const int y, const char* c, const uint32_t maxLen, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL) {
+	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sdl_stb_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		// Scan through function and extract the glyphs
+		// returns the x position at the end
 		uint32_t seek = 0;
 		uint32_t uCharLast = 0;
 		uint32_t uChar = utf8_read(c, seek, maxLen);
-		int xx = x;
+		int xx = x + initialXOffset;
 		int yy = y;
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
+		bool hasNewlined = false;
 		
 		const bool lookupCaret = caretPosition && threshX && threshY;
 		if (lookupCaret) {
@@ -430,12 +603,13 @@ public:
 			if (uChar == '\n') {
 				if (widthOut)
 					if (*widthOut < xx) *widthOut = xx;
+				hasNewlined = true;
 				xx = x;
 				yy += scale*rowSize;
 				}
 			else {
 				xx += scale*getKerningAdvance(uCharLast, uChar);
-				processCodepoint(xx, yy, uChar, isDrawing);
+				processCodepoint(xx, yy, uChar, format, isDrawing);
 				}
 			
 			if (lookupCaret) {
@@ -445,7 +619,7 @@ public:
 						*caretPosition = seek; // right half of char
 					else
 						*caretPosition = seek-1; // left half of char
-					return;
+					return xx;
 					}
 				}
 				
@@ -461,14 +635,43 @@ public:
 			*heightOut += scale*rowSize;
 			*heightOut -= y;
 			}
+		return xx;
 		}
+
+	int processFormatted(const sdl_stb_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+		int xOffset = initialXOffset;
+		
+		if (widthOut) *widthOut = 0;
+		if (heightOut) *heightOut = 0;
+		
+		for (unsigned int i = 0; i < text.mItems.size(); ++i) {
+			const sdl_stb_formated_text_item & ssfti = text.mItems[i];
+			
+			bool isDrawingWorking = isDrawing;
+			if (ssfti.callback && isDrawingWorking)
+				isDrawingWorking = (ssfti.format.format & sdl_stb_format::FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS);
+			
+			int widthWorking, heightWorking;
+			
+			int xOffsetBefore = xOffset;
+			xOffset = processString(x,y, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			xOffset -= x;
+			if (widthOut) *widthOut = *widthOut > widthWorking ? *widthOut : widthWorking;
+			if (heightOut) *heightOut = *heightOut > heightWorking ? *heightOut : heightWorking;
+			
+			if (ssfti.callback)
+				ssfti.callback->callbackOnDraw(text, i, x, y, xOffsetBefore, xOffset, widthWorking, heightWorking);
+			}
+		return xOffset + x;
+		}
+	
 	
 	/// Returns the position in the string where a click happend
 	/// MouseX and MouseY are relative to whatever draw position of this string you are using
 	/// Currently only suppors single row strings
 	int getCaretPos(const SSF_STRING & str, const int relMouseX, const int relMouseY) {
 		int caretPosition = -1;
-		processString(0,0, str.data(), str.length(), false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		processString(0,0, str.data(), str.length(), NULL, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
 	
@@ -479,22 +682,30 @@ public:
 		}
 	
 	/// Returns either a glyph with a valid texture, or a tofu glyph with a valid texture or NULL
-	sdl_stb_glyph * getGlyphOrTofu (const uint32_t codepoint) {
-		sdl_stb_glyph * G = getGenGlyph(codepoint);
+	sdl_stb_glyph * getGlyphOrTofu (const uint32_t codepoint, const uint8_t format) {
+		sdl_stb_glyph * G = getGenGlyph(codepoint, format);
 		if (!isTofu(G)) return G;
 		
-		G = getGenGlyph((uint32_t) 0xFFFD); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
+		G = getGenGlyph((uint32_t) 0xFFFD, format); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
 		if (!isTofu(G)) return G;
 			
-		 G = getGenGlyph((uint32_t) '?');
+		G = getGenGlyph((uint32_t) '?', format);
 		if (!isTofu(G)) return G;
+		
+		if (format)
+			return getGlyphOrTofu(codepoint, 0);
+		
 		return NULL;
 		}
 	
-	void processCodepoint (int & x, int & y, const uint32_t codepoint, bool isDrawing) {
+	void processCodepoint (int & x, int & y, const uint32_t codepoint, const sdl_stb_format * const format, bool isDrawing) {
 		// Draws the character, advances x & y to the next position
 		// NOTE: KErning
-		sdl_stb_glyph * G = getGlyphOrTofu(codepoint);
+		uint8_t formatCode = 0;
+		if (format)
+			formatCode = format->format;
+			
+		sdl_stb_glyph * G = getGlyphOrTofu(codepoint, formatCode);
 		if (!G) {
 			x += faceSize/2;
 			return;
@@ -505,8 +716,12 @@ public:
 			r.y = y + G->yOffset + baseline;
 			r.w = G->width;
 			r.h = G->height;
-			if (G->mSdlTexture)
+			
+			if (G->mSdlTexture) {
+				if (format)
+					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, format->a);
 				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				}
 			}
 		x += scale*G->advance;
 		}

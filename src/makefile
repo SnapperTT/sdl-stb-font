@@ -34,4 +34,6 @@ $(OUTPUTDIR)%.h: $(TEMPDIR)%.cpp $(TEMPDIR)%.hh
 	echo '#endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_$(subst /,_,$(subst \\,_,$*))' >> $@
 	echo '#endif //SDL_STB_FONT_IMPL_IMPL' >> $@
 	sed -i '/#include ".*\.hh"/d' $@ 
+	sed -i -e "s/__NOEXCEPT)/) noexcept/g" $@
+	sed -i -e "s/__NOEXCEPTDEFAULT)/) noexcept = default/g" $@
 
