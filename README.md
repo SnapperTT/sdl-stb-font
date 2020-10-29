@@ -53,13 +53,13 @@ This is a header only library - no build system required
 
 In any header:
 ```c++
-#include "external/sdlStbFont/sdlStbFont.h"
+#include "path/to/sdlStbFont/sdlStbFont.h"
 ```
 
 In *ONE* .cpp:
 ```c++
 #define SDL_STB_FONT_IMPL
-#include "external/sdlStbFont/sdlStbFont.h"
+#include "path/to/sdlStbFont/sdlStbFont.h"
 ```
 
 This library has a dependency on [STB_Truetype](https://github.com/nothings/stb). It will automatically include this. If you do not want it automatically included, use `#define STB_TRUETYPE_INCLUDE_HANDLED`, and handle the including of stb_truetype.h yourself. 
