@@ -52,8 +52,8 @@ How Do I?
 * [Get Where in a String a User has Clicked](#get-where-in-a-string-a-user-has-clicked)
 
 Formatted Text:
-* [Print Formatted Text?](#print_formatted_text)
-* [Load Bold/Italic Font Variants?](#load_bold_italic_font_variants)
+* [Print Formatted Text?](#print-formatted-text)
+* [Load Bold/Italic Font Variants?](#load-bold-italic_font-variants)
 * [Limitations](#limitations)
 
 
