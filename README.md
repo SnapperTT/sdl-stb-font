@@ -7,6 +7,8 @@ A header-only library for rendering text in [SDL2](https://www.libsdl.org/) with
 
 Sample text from http://www.columbia.edu/~fdc/utf8/index.html
 
+![Example formatting](example2.png)
+
 ## Contact:
 Liam Twigger - @SnapperTheTwig
 
@@ -15,12 +17,13 @@ Liam Twigger - @SnapperTheTwig
 * Runs in pure SDL - no OpenGL required (though it does work with OpenGL) 
 * Simple text rendering - `fc.drawText(x, y, string)`
 * Rendering to a texture - `fc.renderTextToTexture(string, &widthOut, &heightOut)`
+* Formated text (if you have the fonts!). See the formatting section near the end
 * Rendering to a texture object - see examples
 * Can convert mouse location to caret location in string (strings without newlines only)
 * UTF-8 support
 * Handles newlines
 * Fallback fonts support - can support many languages at once!
-* Only ~300 lines of code
+* Only ~1000 lines of code
 * No dependencies apart from STB_Truetype, SDL and standard libraries
 * Automatic or manual memory management
 * Public Domain
@@ -28,7 +31,7 @@ Liam Twigger - @SnapperTheTwig
 ## Performance:
 On a Intel i7-8750H:
 
-Example image takes 0.7ms to render (~1400 FPS) if using texture (`renderTextToTexture`/`renderTextToObject`). The speed will be the maximum that SDL2 lets you flip a texture at
+Example image takes 0.7ms to render (~1400 FPS) if using texture (`renderTextToTexture`/`renderTextToObject`). The speed will be the maximum that SDL2 lets you flip a texture at.
 
 Example image takes ~5ms to render (~200 FPS) if rendering directly (`drawText`)
 
@@ -47,6 +50,12 @@ How Do I?
 * [Caching Results in a Texture](#caching-results-in-a-texture)
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
 * [Get Where in a String a User has Clicked](#get-where-in-a-string-a-user-has-clicked)
+
+Formatted Text:
+* [Print Formatted Text?](#print_formatted_text)
+* [Load Bold/Italic Font Variants?](#load_bold_italic_font_variants)
+* [Limitations](#limitations)
+
 
 ## Use This Library?
 This is a header only library - no build system required
@@ -217,6 +226,51 @@ Use `getCaretPos(text, relativeMouseX, relativeMouseY)`
 
 Note that this only currently supports carret lookup in strings without newlines - if you attempt this with a multiline string then it may return an incorrect value. 
 
+Formatted Text
+==============
+
+## Print Formatted Text?
+
+![Example formatting](example2.png)
+
+First create a `sdl_stb_formatted_text`. The above example was created with:
+```
+sdl_stb_formatted_text formattedText;
+formattedText << sdl_stb_format::black << "Plain text "
+	<< sdl_stb_format::bold << "bold text "
+	<< sdl_stb_format::italic << "italic text\n"
+	<< sdl_stb_format::underline << sdl_stb_format::green << "underline text "
+	<< sdl_stb_format::strikethrough << "strikethrough text\n"
+	<< sdl_stb_format::red << sdl_stb_format::bold << "red bold "
+	<< sdl_stb_format::bold << "not red bold "
+	<< sdl_stb_format::red << "red not bold\n"
+	<< sdl_stb_format::bold << sdl_stb_format::italic << sdl_stb_format::colour(255,127,50) << "custom colour";
+```
+You can combine formatting options with the `<<` operator. Formatting is reset after a string is inserted.
+
+Then you can render using the same functions used for simple strings (`drawText(x, y, formattedText)`, etc). That includes rendering to texture with `renderTextToObject`.
+Everything that you can do with a simple string you should be able to do with the same-named function (`getTextSize`, `getNumRows`, `getCaretPos`, etc)
+
+## Load Bold/Italic Font Variants?
+For Bold/Italic variants to work you must load a Bold/Italic variant of the font. For Bold+Italic you must load a Bold+Italic variant of the font! Underlines and Strikethroughs are generated automatically by this library.
+
+To load a variant use `addFormatFont` or `addFormatFontManaged` after loading a base font. This also should be done for fallback fonts (for multilingual support) if you care about those fonts being availiable in bold/italic.
+
+```
+fc.loadFontManaged(notoSans);	// First font - loadFont
+	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD, notoSansBold);
+	fc.addFormatFontManaged(sdl_stb_format::FORMAT_ITALIC, notoSansItalic);
+	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD | sdl_stb_format::FORMAT_ITALIC, notoSansBoldItalic);
+fc.addFontManaged(notoSansArmenian);	// Fallback fonts - addFont
+	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD, notoSansArmenianBold);
+	fc.addFormatFontManaged(sdl_stb_format::FORMAT_ITALIC, notoSansArmenianItalic);
+	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD | sdl_stb_format::FORMAT_ITALIC, notoSansArmenianBoldItalic);
+```
+
+## Limitations
+If you request a Bold or Italic string and there isn't a Bold or Italic variant availiable the regular variant will be used. If you request a Bold+Italic string and there is only one loaded (but not the combination) the last loaded variant will be used - so if you request Bold+Italic and you have loaded Bold then Italic (but not Bold+Italic) then Italic will be rendered.
+
+The library will draw Underline and Strikethrough variants itself, you do not need to provide these.
 
 Contributing
 ============

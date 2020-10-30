@@ -36,9 +36,6 @@ struct SDL_Surface;
 	#define SSF_STRING std::string
 #endif
 
-// move semantics - makes lzz happy
-#define SSF_STRING_MS SSF_STRING&&
-#define sdl_stb_formated_text_item_MS sdl_stb_formated_text_item&&
 
 // new and delete macros
 // all calls in this library are done with "foo * f = SSF_NEW(f)"
@@ -59,6 +56,16 @@ struct SDL_Surface;
 
 #include <cstdint>
 
+// move semantics - makes lzz happy
+#define SSF_STRING_MS SSF_STRING&&
+#define sdl_stb_formated_text_item_MS sdl_stb_formated_text_item&&
+
+// misc
+#ifdef INT32_MIN
+	#define SSF_INT_MIN  INT32_MIN
+#else
+	#define SSF_INT_MIN 0x8000000;
+#endif
 struct sdl_stb_formatted_text;
 #define LZZ_INLINE inline
 struct sdl_stb_format_callback
@@ -84,10 +91,10 @@ struct sdl_stb_format
   sdl_stb_format ();
   sdl_stb_format (uint8_t const _format, uint8_t const _r = 255, uint8_t const _g = 255, uint8_t const _b = 255, uint8_t const _a = 255);
   void combine (sdl_stb_format const & other);
-  static sdl_stb_format COLOR (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
-  static sdl_stb_format COLOUR (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
+  static sdl_stb_format color (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
+  static sdl_stb_format colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
   static sdl_stb_format const bold;
-  static sdl_stb_format const itallic;
+  static sdl_stb_format const italic;
   static sdl_stb_format const underline;
   static sdl_stb_format const strikethrough;
   static sdl_stb_format const red;
@@ -119,6 +126,7 @@ struct sdl_stb_formatted_text
   sdl_stb_formatted_text (SSF_STRING const & text);
   sdl_stb_formatted_text (SSF_STRING_MS text);
   sdl_stb_formatted_text (char const * text);
+  void resetFormat ();
   sdl_stb_formatted_text & operator << (SSF_STRING const & text);
   sdl_stb_formatted_text & operator << (SSF_STRING_MS text);
   sdl_stb_formatted_text & operator << (char const * text);
@@ -180,6 +188,10 @@ public:
   int baseline;
   int rowSize;
   float scale;
+  float underlineThickness;
+  float strikethroughThickness;
+  float underlinePosition;
+  float strikethroughPosition;
   int faceSize;
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
   sdl_stb_font_cache ();
@@ -214,22 +226,31 @@ public:
   int drawText (int const x, int const y, SSF_STRING const & str);
   int drawText (int const x, int const y, int & widthOut, int & heightOut, char const * c, uint32_t const maxLen = -1);
   int drawText (int const x, int const y, SSF_STRING const & str, int & widthOut, int & heightOut);
-  int drawText (sdl_stb_formatted_text const & text, int x, int y);
-  int drawText (sdl_stb_formatted_text const & text, int x, int y, int & widthOut, int & heightOut);
+  int drawText (int const x, int const y, sdl_stb_formatted_text const & text);
+  int drawText (int const x, int const y, sdl_stb_formatted_text const & text, int & widthOut, int & heightOut);
   int getTextSize (int & w, int & h, char const * c, uint32_t const maxLen = -1);
   int getTextSize (int & w, int & h, SSF_STRING const & str);
+  int getTextSize (int & w, int & h, sdl_stb_formatted_text const & str);
   int getNumberOfRows (SSF_STRING const & str);
+  int getNumberOfRows (sdl_stb_formatted_text const & str);
   int getTextHeight (SSF_STRING const & str);
+  int getTextHeight (sdl_stb_formatted_text const & str);
   int processString (int const x, int const y, char const * c, uint32_t const maxLen, sdl_stb_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int processFormatted (sdl_stb_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY);
+  int getCaretPos (sdl_stb_formatted_text const & str, int const relMouseX, int const relMouseY);
   bool isTofu (sdl_stb_glyph * G);
   sdl_stb_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
-  void processCodepoint (int & x, int & y, uint32_t const codepoint, sdl_stb_format const * const format, bool isDrawing);
+  void processCodepoint (int & x, int & y, uint32_t const codepoint, sdl_stb_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
   SDL_Texture * renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
+  SDL_Texture * renderTextToTexture (sdl_stb_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
+protected:
+  SDL_Texture * renderTextToTexture_worker (sdl_stb_formatted_text const * formatted, char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
+public:
   SDL_Texture * renderTextToTexture (SSF_STRING const & str, int * widthOut = NULL, int * heightOut = NULL);
   void renderTextToObject (sdl_stb_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
   void renderTextToObject (sdl_stb_prerendered_text * textOut, SSF_STRING const & str);
+  void renderTextToObject (sdl_stb_prerendered_text * textOut, sdl_stb_formatted_text const & str);
 };
 #undef LZZ_INLINE
 #endif

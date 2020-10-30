@@ -32,9 +32,6 @@ struct SDL_Surface;
 	#define SSF_STRING std::string
 #endif
 
-// move semantics - makes lzz happy
-#define SSF_STRING_MS SSF_STRING&&
-#define sdl_stb_formated_text_item_MS sdl_stb_formated_text_item&&
 
 // new and delete macros
 // all calls in this library are done with "foo * f = SSF_NEW(f)"
@@ -55,6 +52,16 @@ struct SDL_Surface;
 
 #include <cstdint>
 
+// move semantics - makes lzz happy
+#define SSF_STRING_MS SSF_STRING&&
+#define sdl_stb_formated_text_item_MS sdl_stb_formated_text_item&&
+
+// misc
+#ifdef INT32_MIN
+	#define SSF_INT_MIN  INT32_MIN
+#else
+	#define SSF_INT_MIN 0x8000000;
+#endif
 struct sdl_stb_formatted_text;
 #end
 
@@ -106,11 +113,11 @@ struct sdl_stb_format {
 		}
 	
 	// Constants and "constants"
-	static sdl_stb_format COLOR(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sdl_stb_format(_r,_g,_b,_a); }
-	static sdl_stb_format COLOUR(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sdl_stb_format(_r,_g,_b,_a); }
+	static sdl_stb_format color(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sdl_stb_format(_r,_g,_b,_a); }
+	static sdl_stb_format colour(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sdl_stb_format(_r,_g,_b,_a); }
 	
 	static const sdl_stb_format bold = sdl_stb_format(FORMAT_BOLD);
-	static const sdl_stb_format itallic = sdl_stb_format(FORMAT_ITALIC);
+	static const sdl_stb_format italic = sdl_stb_format(FORMAT_ITALIC);
 	static const sdl_stb_format underline = sdl_stb_format(FORMAT_UNDERLINE);
 	static const sdl_stb_format strikethrough = sdl_stb_format(FORMAT_STRIKETHROUGH);
 	// If you don't like the colours, extend this class and define your own
@@ -143,15 +150,16 @@ struct sdl_stb_formatted_text {
 	
 	sdl_stb_formatted_text(){}
 	sdl_stb_formatted_text(const SSF_STRING & text) { *this << text; }
-	sdl_stb_formatted_text(SSF_STRING_MS text) 	{ *this << text; }
+	sdl_stb_formatted_text(SSF_STRING_MS text) 		{ *this << text; }
 	sdl_stb_formatted_text(const char * text) 		{ *this << text; }
-	sdl_stb_formatted_text& operator << (const SSF_STRING & text) { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); return *this; }
-	sdl_stb_formatted_text& operator << (SSF_STRING_MS text) { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); return *this;  }
-	sdl_stb_formatted_text& operator << (const char * text) { mItems.push_back(sdl_stb_formated_text_item(SSF_STRING(text), activeFormat)); return *this;  }
-	sdl_stb_formatted_text& operator << (const sdl_stb_format & format) { activeFormat.combine(format); return *this; }
-	sdl_stb_formatted_text& operator << (const sdl_stb_format_reset & reset) { activeFormat = sdl_stb_format(); return *this; }
+	void resetFormat() { activeFormat = sdl_stb_format(); }
+	sdl_stb_formatted_text& operator << (const SSF_STRING & text) 	{ mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); resetFormat(); return *this; }
+	sdl_stb_formatted_text& operator << (SSF_STRING_MS text) 		{ mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); resetFormat(); return *this;  }
+	sdl_stb_formatted_text& operator << (const char * text) 		{ mItems.push_back(sdl_stb_formated_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
+	sdl_stb_formatted_text& operator << (const sdl_stb_format & format) 		{ activeFormat.combine(format); return *this; }
+	sdl_stb_formatted_text& operator << (const sdl_stb_format_reset & reset) 	{ resetFormat(); return *this; }
 	sdl_stb_formatted_text& operator << (const sdl_stb_formated_text_item & obj) { mItems.push_back(obj); return *this; }
-	sdl_stb_formatted_text& operator << (sdl_stb_formated_text_item_MS obj) { mItems.push_back(obj); return *this; }
+	sdl_stb_formatted_text& operator << (sdl_stb_formated_text_item_MS obj) 	{ mItems.push_back(obj); return *this; }
 	};
 
 	
@@ -232,6 +240,8 @@ struct sdl_stb_font_list {
 		
 	sdl_stb_font_list() : format(0), next(NULL) {}
 	~sdl_stb_font_list() {
+		for (sdl_stb_font_list * fl : mFormatedVariants)
+			delete fl;
 		if (next) delete next;
 		}
 	
@@ -266,13 +276,13 @@ struct sdl_stb_font_list {
 					
 					if (bestMatch) {
 						int index2 = stbtt_FindGlyphIndex(&(bestMatch->mFont), codepoint);
-						*mFontOut = &(working->mFont);
+						*mFontOut = &(bestMatch->mFont);
 						*indexOut = index2;
 						return;
 						}
 					if (bestMatch2) {
 						int index2 = stbtt_FindGlyphIndex(&(bestMatch2->mFont), codepoint);
-						*mFontOut = &(working->mFont);
+						*mFontOut = &(bestMatch2->mFont);
 						*indexOut = index2;
 						return;
 						}
@@ -300,12 +310,17 @@ public:
 	int baseline;
 	int rowSize;
 	float scale;
+	float underlineThickness;
+	float strikethroughThickness;
+	float underlinePosition;
+	float strikethroughPosition;
 	// The face size in pixels
 	int faceSize;
 	
 	SSF_MAP<uint64_t, sdl_stb_glyph> mGlyphs;
 	
-	sdl_stb_font_cache () : mRenderer(NULL), ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), scale(1.f), faceSize(20) {}
+	sdl_stb_font_cache () : mRenderer(NULL), ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), scale(1.f), faceSize(20),
+		underlineThickness(1.0), strikethroughThickness(1.0), underlinePosition(0.0), strikethroughPosition(0.0) {}
 	~sdl_stb_font_cache () {
 		clearGlyphs();
 		}
@@ -346,6 +361,12 @@ public:
 		scale = stbtt_ScaleForPixelHeight(&mFont.mFont, faceSize);
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
+		
+		strikethroughThickness = faceSize/20.0;
+		if (strikethroughThickness < 1) strikethroughThickness = 1;
+		strikethroughPosition = baseline * 0.75 - strikethroughThickness/2;
+		underlineThickness = strikethroughThickness;
+		underlinePosition = baseline + underlineThickness;
 		}
 	
 	/// Does the dame as loadFont, but transfers ownership of the memory to here
@@ -549,14 +570,13 @@ public:
 		return drawText(x,y,widthOut, heightOut, str.data(),str.size());
 		}
 		
-	int drawText(const sdl_stb_formatted_text & text, int x, int y) {
+	int drawText(const int x, const int y, const sdl_stb_formatted_text & text) {
 		int dummyWidth, dummyHeight;
-		return drawText(text, x, y, dummyWidth, dummyHeight);
+		return drawText(x, y, text, dummyWidth, dummyHeight);
 		}
 		
-	int drawText(const sdl_stb_formatted_text & text, int x, int y, int & widthOut, int & heightOut) {
-		int dummyWidth, dummyHeight;
-		return processFormatted(text, x, y, true, &dummyWidth, &dummyHeight);
+	int drawText(const int x, const int y, const sdl_stb_formatted_text & text, int & widthOut, int & heightOut) {
+		return processFormatted(text, x, y, true, &widthOut, &heightOut);
 		}
 	
 	/// Gets the size of a string (width and height). Returns the x position of the caret at the end of the string
@@ -567,6 +587,9 @@ public:
 	int getTextSize (int & w, int & h, const SSF_STRING & str) {
 		return processString(0, 0, str.data(), str.size(), NULL, false, &w, &h);
 		}
+	int getTextSize (int & w, int & h, const sdl_stb_formatted_text & str) {
+		return processFormatted(str, 0, 0, false, &w, &h);
+		}
 	
 	/// Returns the number of rows (newlines + 1) a string has here
 	int getNumberOfRows (const SSF_STRING & str) {
@@ -575,9 +598,20 @@ public:
 			if (c == '\n') n++;
 		return n;
 		}
+	int getNumberOfRows (const sdl_stb_formatted_text & str) {
+		int n = 1;
+		for (const sdl_stb_formated_text_item & item : str.mItems) {
+			for (const char c : item.text)
+				if (c == '\n') n++;
+			}
+		return n;
+		}
 
 	/// Returns the height of string. This is much faster than getTextSize(), but only returns the height
 	int getTextHeight (const SSF_STRING & str) {
+		return scale*rowSize*getNumberOfRows(str);
+		}
+	int getTextHeight (const sdl_stb_formatted_text & str) {
 		return scale*rowSize*getNumberOfRows(str);
 		}
 		
@@ -588,6 +622,7 @@ public:
 		uint32_t uCharLast = 0;
 		uint32_t uChar = utf8_read(c, seek, maxLen);
 		int xx = x + initialXOffset;
+		int overdraw = SSF_INT_MIN;
 		int yy = y;
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
@@ -606,10 +641,12 @@ public:
 				hasNewlined = true;
 				xx = x;
 				yy += scale*rowSize;
+				overdraw = SSF_INT_MIN;
 				}
 			else {
-				xx += scale*getKerningAdvance(uCharLast, uChar);
-				processCodepoint(xx, yy, uChar, format, isDrawing);
+				int dx = scale*getKerningAdvance(uCharLast, uChar);
+				xx += dx;
+				processCodepoint(xx, yy, uChar, format, isDrawing, dx, overdraw);
 				}
 			
 			if (lookupCaret) {
@@ -640,6 +677,7 @@ public:
 
 	int processFormatted(const sdl_stb_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		int xOffset = initialXOffset;
+		int yOffset = 0;
 		
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
@@ -654,9 +692,13 @@ public:
 			int widthWorking, heightWorking;
 			
 			int xOffsetBefore = xOffset;
-			xOffset = processString(x,y, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			
 			xOffset -= x;
+			yOffset += heightWorking - scale*rowSize;
 			if (widthOut) *widthOut = *widthOut > widthWorking ? *widthOut : widthWorking;
+			
+			heightWorking = yOffset + scale*rowSize;
 			if (heightOut) *heightOut = *heightOut > heightWorking ? *heightOut : heightWorking;
 			
 			if (ssfti.callback)
@@ -672,6 +714,11 @@ public:
 	int getCaretPos(const SSF_STRING & str, const int relMouseX, const int relMouseY) {
 		int caretPosition = -1;
 		processString(0,0, str.data(), str.length(), NULL, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		return caretPosition;
+		}
+	int getCaretPos(const sdl_stb_formatted_text & str, const int relMouseX, const int relMouseY) {
+		int caretPosition = -1;
+		processFormatted(str, 0,0, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
 	
@@ -698,7 +745,7 @@ public:
 		return NULL;
 		}
 	
-	void processCodepoint (int & x, int & y, const uint32_t codepoint, const sdl_stb_format * const format, bool isDrawing) {
+	void processCodepoint (int & x, int & y, const uint32_t codepoint, const sdl_stb_format * const format, bool isDrawing, int kerningAdv, int & overdraw) {
 		// Draws the character, advances x & y to the next position
 		// NOTE: KErning
 		uint8_t formatCode = 0;
@@ -718,9 +765,54 @@ public:
 			r.h = G->height;
 			
 			if (G->mSdlTexture) {
-				if (format)
-					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, format->a);
-				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				if (format) {
+					int charAdv = kerningAdv + G->xOffset;
+					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+					uint8_t cr,cg,cb,ca;
+					if (isColoured || formatCode) {
+						SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
+						SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
+						// Remove bleeding pixels
+						SDL_Rect r2;
+						r2.x = r.x; r2.y = r.y;
+						r2.w = r.w; r2.h = r.h;
+						if (r2.x < overdraw) {
+							int dx = overdraw - r2.x;
+							r2.x += dx;
+							r2.w -= dx;
+							}
+						overdraw = r.x + r.w;
+						SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+						}
+					if (formatCode)
+						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
+					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+					
+					if (formatCode & sdl_stb_format::FORMAT_STRIKETHROUGH) {
+						SDL_Rect r2;
+						r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
+						if (r2.h < 1) r2.h = 1;
+						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
+						SDL_RenderFillRect (mRenderer, &r2);
+						}
+					if (formatCode & sdl_stb_format::FORMAT_UNDERLINE) {
+						SDL_Rect r2;
+						r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
+						if (r2.h < 1) r2.h = 1;
+						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
+						SDL_RenderFillRect (mRenderer, &r2);
+						}
+					
+					if (isColoured || formatCode) {
+						SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
+						SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
+						}
+					}
+				else {
+					overdraw = SSF_INT_MIN;
+					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+					}
 				}
 			}
 		x += scale*G->advance;
@@ -728,8 +820,18 @@ public:
 		
 	/// Creates a SDL_Texture of a suitable size and renders an entire string to it
 	SDL_Texture * renderTextToTexture (const char * c, const uint32_t maxLen = -1, int * widthOut = NULL, int * heightOut = NULL) {
+		return renderTextToTexture_worker(NULL, c, maxLen, widthOut, heightOut);
+		}
+	SDL_Texture * renderTextToTexture (const sdl_stb_formatted_text & formatted, int * widthOut = NULL, int * heightOut = NULL) {
+		return renderTextToTexture_worker(&formatted, NULL, -1, widthOut, heightOut);
+		}
+protected:
+	SDL_Texture * renderTextToTexture_worker (const sdl_stb_formatted_text * formatted, const char * c, const uint32_t maxLen = -1, int * widthOut = NULL, int * heightOut = NULL) {
 		int width, height;
-		getTextSize(width, height, c, maxLen);
+		if (formatted)
+			getTextSize(width, height, *formatted);
+		else
+			getTextSize(width, height, c, maxLen);
 		
 		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
 		SDL_SetRenderTarget(mRenderer, RT);
@@ -742,14 +844,18 @@ public:
 		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
 		
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_BLEND);
-		drawText(0, 0, c, maxLen);
+		if (formatted)
+			drawText(0, 0, *formatted);
+		else
+			drawText(0, 0, c, maxLen);
+		
 		SDL_SetRenderTarget(mRenderer, NULL);
 		
 		*widthOut = width;
 		*heightOut = height;
 		return RT;
 		}
-	
+public:
 	SDL_Texture * renderTextToTexture (const SSF_STRING & str, int * widthOut = NULL, int * heightOut = NULL) {
 		return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
 		}
@@ -759,6 +865,9 @@ public:
 		textOut->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
 		}
 	void renderTextToObject (sdl_stb_prerendered_text * textOut, const SSF_STRING & str) {
+		textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+	void renderTextToObject (sdl_stb_prerendered_text * textOut, const sdl_stb_formatted_text & str) {
 		textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
 	

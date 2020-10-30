@@ -80,6 +80,17 @@ int main(int argc, char**argv) {
 // 
 const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol: €.\nGreek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\nÍslenska / Icelandic: Ég get etið gler án þess að meiða mig.\nPolish: Mogę jeść szkło, i mi nie szkodzi.\nRomanian: Pot să mănânc sticlă și ea nu mă rănește.\nUkrainian: Я можу їсти шкло, й воно мені не пошкодить.\nArmenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\nGeorgian: მინას ვჭამ და არა მტკივა.\nHebrew: אני יכול לאכול זכוכית וזה לא מזיק לי.\nArabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\nChinese: 我能吞下玻璃而不伤身体。\nChinese (Traditional): 我能吞下玻璃而不傷身體。 \nJapanese: 私はガラスを食べられます。それは私を傷つけません。\nKorean: 률로 정한다. 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다\nCJK Variants: 判 与 海 直 約 返 次 今 ";
 
+sdl_stb_formatted_text formattedText;
+formattedText << sdl_stb_format::black << "Plain text "
+	<< sdl_stb_format::bold << "bold text "
+	<< sdl_stb_format::italic << "italic text\n"
+	<< sdl_stb_format::underline << sdl_stb_format::green << "underline text "
+	<< sdl_stb_format::strikethrough << "strikethrough text\n"
+	<< sdl_stb_format::red << sdl_stb_format::bold << "red bold "
+	<< sdl_stb_format::bold << "not red bold "
+	<< sdl_stb_format::red << "red not bold\n"
+	<< sdl_stb_format::bold << sdl_stb_format::italic << sdl_stb_format::colour(255,127,50) << "custom colour";
+					
 	sdl_stb_font_cache fc;
 	fc.faceSize = 24;
 	
@@ -102,6 +113,10 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 	{
 		
 		sdl_stb_memory notoSans;
+			sdl_stb_memory notoSansBold;
+			sdl_stb_memory notoSansItalic;
+			sdl_stb_memory notoSansBoldItalic;
+		
 		sdl_stb_memory notoSansArmenian;
 		sdl_stb_memory notoSansGeorgian;
 		sdl_stb_memory notoSansHebrew;
@@ -110,6 +125,9 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 		sdl_stb_memory notoSansCJK;
 		
 		readFileRaw_toMemory("fonts/NotoSans-Regular.ttf", notoSans);
+			readFileRaw_toMemory("fonts/NotoSans-Bold.ttf", notoSansBold);
+			readFileRaw_toMemory("fonts/NotoSans-Italic.ttf", notoSansItalic);
+			readFileRaw_toMemory("fonts/NotoSans-BoldItalic.ttf", notoSansBoldItalic);
 		readFileRaw_toMemory("fonts/NotoSansArmenian-Regular.ttf", notoSansArmenian);
 		readFileRaw_toMemory("fonts/NotoSansGeorgian-Regular.ttf", notoSansGeorgian);
 		readFileRaw_toMemory("fonts/NotoSansHebrew-Regular.ttf", notoSansHebrew);
@@ -118,6 +136,9 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 		readFileRaw_toMemory("fonts/NotoSansCJKjp-Regular.otf", notoSansCJK);
 		
 		fc.loadFontManaged(notoSans);
+			fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD, notoSansBold);
+			fc.addFormatFontManaged(sdl_stb_format::FORMAT_ITALIC, notoSansItalic);
+			fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD | sdl_stb_format::FORMAT_ITALIC, notoSansBoldItalic);
 		fc.addFontManaged(notoSansArmenian);
 		fc.addFontManaged(notoSansGeorgian);
 		fc.addFontManaged(notoSansHebrew);
@@ -125,6 +146,7 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 		fc.addFontManaged(notoSansArabic);
 		fc.addFontManaged(notoSansCJK);
 	}
+	
 		
 	// Setup the SDL window & renderer
 	int windowWidth = 800;
@@ -141,6 +163,7 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 	uint64_t LAST = 0;
 	
 	// Rendering test
+	// Set this to something else to print
 	int test = 3;
 	
 	if (test == 1) {
@@ -155,10 +178,10 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 					}
 				}
 			
-			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
+			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255); // Grey background to test glyph artefacts
 			SDL_RenderClear(mSdlRenderer);
 			
-			fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum); // Renders the loremIpsum string and stores in the texture
+			fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum); // Renders the loremIpsum string and stores the glyphs in textures
    
 			SDL_RenderPresent(mSdlRenderer);
 			
@@ -243,6 +266,68 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 			
 		// Cleanup. The object doesn't have a destructor to prevent accidental destruction of internal texture
 		prt.freeTexture();	
+		}
+	if (test == 4) {
+		// Test formatted text - direct printing
+		for (int i = 0;; ++i) {
+			SDL_Event ev;
+			while (SDL_PollEvent(&ev)) {
+				switch (ev.type) {
+					case SDL_QUIT:
+						return 1;
+						break;
+					}
+				}
+			
+			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
+			SDL_RenderClear(mSdlRenderer);
+			
+			fc.drawText(5, 5, formattedText);
+			fc.drawText(5, 5 + fc.faceSize * 5, "Normal text after");	// Test that state is not mutated
+   
+			SDL_RenderPresent(mSdlRenderer);
+			
+			if (i % 100 == 0) {
+				LAST = NOW;
+				NOW = SDL_GetPerformanceCounter();
+				const double deltaTime = (double)((NOW - LAST)*1000 / (double)SDL_GetPerformanceFrequency() ) / 100.0;
+				std::cout << "Method 4 - 100 Frames Average - Frametime: " << deltaTime << "ms \t FPS: " << (1000.0/deltaTime) << std::endl;
+				}
+			}
+		}
+	if (test == 5) {
+		// Formatted text to render target
+		sdl_stb_prerendered_text prt;
+		fc.renderTextToObject(&prt, formattedText); 
+		
+		sdl_stb_prerendered_text prt2;
+		fc.renderTextToObject(&prt2, "Normal text after"); // Render normal text to test that colors/style is not messed up
+		
+		for (int i = 0;; ++i) {
+			SDL_Event ev;
+			while (SDL_PollEvent(&ev)) {
+				switch (ev.type) {
+					case SDL_QUIT:
+						return 1;
+						break;
+					}
+				}
+			
+			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
+			SDL_RenderClear(mSdlRenderer);
+			
+			prt.draw(mSdlRenderer, 5, 5);
+			prt2.draw(mSdlRenderer, 5, 5 + fc.faceSize * 5); 
+			
+			SDL_RenderPresent(mSdlRenderer);
+			
+			if (i % 100 == 0) {
+				LAST = NOW;
+				NOW = SDL_GetPerformanceCounter();
+				const double deltaTime = (double)((NOW - LAST)*1000 / (double)SDL_GetPerformanceFrequency() ) / 100.0;
+				std::cout << "Method 5 - 100 Frames Average - Frametime: " << deltaTime << "ms \t FPS: " << (1000.0/deltaTime) << std::endl;
+				}
+			}
 		}
 		
 	// Cleanup - just let fc fall out of scope

@@ -41,12 +41,12 @@ void sdl_stb_format::combine (sdl_stb_format const & other)
 		b = 255*((b/255.0)*(other.b/255.0));
 		a = 255*((a/255.0)*(other.a/255.0));
 		}
-sdl_stb_format sdl_stb_format::COLOR (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
+sdl_stb_format sdl_stb_format::color (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
                                                                                                                   { return sdl_stb_format(_r,_g,_b,_a); }
-sdl_stb_format sdl_stb_format::COLOUR (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
+sdl_stb_format sdl_stb_format::colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
                                                                                                                    { return sdl_stb_format(_r,_g,_b,_a); }
 sdl_stb_format const sdl_stb_format::bold = sdl_stb_format(FORMAT_BOLD);
-sdl_stb_format const sdl_stb_format::itallic = sdl_stb_format(FORMAT_ITALIC);
+sdl_stb_format const sdl_stb_format::italic = sdl_stb_format(FORMAT_ITALIC);
 sdl_stb_format const sdl_stb_format::underline = sdl_stb_format(FORMAT_UNDERLINE);
 sdl_stb_format const sdl_stb_format::strikethrough = sdl_stb_format(FORMAT_STRIKETHROUGH);
 sdl_stb_format const sdl_stb_format::red = sdl_stb_format(FORMAT_NONE,255,  0,  0,255);
@@ -75,23 +75,25 @@ sdl_stb_formatted_text::sdl_stb_formatted_text ()
 sdl_stb_formatted_text::sdl_stb_formatted_text (SSF_STRING const & text)
                                                         { *this << text; }
 sdl_stb_formatted_text::sdl_stb_formatted_text (SSF_STRING_MS text)
-                                                        { *this << text; }
+                                                                { *this << text; }
 sdl_stb_formatted_text::sdl_stb_formatted_text (char const * text)
                                                                 { *this << text; }
+void sdl_stb_formatted_text::resetFormat ()
+                           { activeFormat = sdl_stb_format(); }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (SSF_STRING const & text)
-                                                                      { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); return *this; }
+                                                                        { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); resetFormat(); return *this; }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (SSF_STRING_MS text)
-                                                                 { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); return *this;  }
+                                                                                { mItems.push_back(sdl_stb_formated_text_item(text, activeFormat)); resetFormat(); return *this;  }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (char const * text)
-                                                                { mItems.push_back(sdl_stb_formated_text_item(SSF_STRING(text), activeFormat)); return *this;  }
+                                                                                { mItems.push_back(sdl_stb_formated_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (sdl_stb_format const & format)
-                                                                            { activeFormat.combine(format); return *this; }
+                                                                                        { activeFormat.combine(format); return *this; }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (sdl_stb_format_reset const & reset)
-                                                                                 { activeFormat = sdl_stb_format(); return *this; }
+                                                                                        { resetFormat(); return *this; }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (sdl_stb_formated_text_item const & obj)
                                                                                      { mItems.push_back(obj); return *this; }
 sdl_stb_formatted_text & sdl_stb_formatted_text::operator << (sdl_stb_formated_text_item_MS obj)
-                                                                                { mItems.push_back(obj); return *this; }
+                                                                                        { mItems.push_back(obj); return *this; }
 sdl_stb_prerendered_text::sdl_stb_prerendered_text ()
   : mSdlTexture (NULL), width (0), height (0)
                                                                              {}
@@ -146,6 +148,8 @@ sdl_stb_font_list::sdl_stb_font_list ()
                                                     {}
 sdl_stb_font_list::~ sdl_stb_font_list ()
                              {
+		for (sdl_stb_font_list * fl : mFormatedVariants)
+			delete fl;
 		if (next) delete next;
 		}
 void sdl_stb_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t const format, stbtt_fontinfo * * mFontOut, int * indexOut)
@@ -179,13 +183,13 @@ void sdl_stb_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 					
 					if (bestMatch) {
 						int index2 = stbtt_FindGlyphIndex(&(bestMatch->mFont), codepoint);
-						*mFontOut = &(working->mFont);
+						*mFontOut = &(bestMatch->mFont);
 						*indexOut = index2;
 						return;
 						}
 					if (bestMatch2) {
 						int index2 = stbtt_FindGlyphIndex(&(bestMatch2->mFont), codepoint);
-						*mFontOut = &(working->mFont);
+						*mFontOut = &(bestMatch2->mFont);
 						*indexOut = index2;
 						return;
 						}
@@ -200,8 +204,8 @@ void sdl_stb_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 			}
 		}
 sdl_stb_font_cache::sdl_stb_font_cache ()
-  : mRenderer (NULL), ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), scale (1.f), faceSize (20)
-                                                                                                                                      {}
+  : mRenderer (NULL), ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), scale (1.f), faceSize (20), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0)
+                                                                                                                         {}
 sdl_stb_font_cache::~ sdl_stb_font_cache ()
                                {
 		clearGlyphs();
@@ -236,6 +240,12 @@ void sdl_stb_font_cache::loadFont (char const * ttf_buffer, int index)
 		scale = stbtt_ScaleForPixelHeight(&mFont.mFont, faceSize);
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
+		
+		strikethroughThickness = faceSize/20.0;
+		if (strikethroughThickness < 1) strikethroughThickness = 1;
+		strikethroughPosition = baseline * 0.75 - strikethroughThickness/2;
+		underlineThickness = strikethroughThickness;
+		underlinePosition = baseline + underlineThickness;
 		}
 void sdl_stb_font_cache::loadFontManaged (sdl_stb_memory & memory, int index)
                                                                       {
@@ -395,15 +405,14 @@ int sdl_stb_font_cache::drawText (int const x, int const y, SSF_STRING const & s
                                                                                                          {
 		return drawText(x,y,widthOut, heightOut, str.data(),str.size());
 		}
-int sdl_stb_font_cache::drawText (sdl_stb_formatted_text const & text, int x, int y)
-                                                                        {
+int sdl_stb_font_cache::drawText (int const x, int const y, sdl_stb_formatted_text const & text)
+                                                                                    {
 		int dummyWidth, dummyHeight;
-		return drawText(text, x, y, dummyWidth, dummyHeight);
+		return drawText(x, y, text, dummyWidth, dummyHeight);
 		}
-int sdl_stb_font_cache::drawText (sdl_stb_formatted_text const & text, int x, int y, int & widthOut, int & heightOut)
-                                                                                                         {
-		int dummyWidth, dummyHeight;
-		return processFormatted(text, x, y, true, &dummyWidth, &dummyHeight);
+int sdl_stb_font_cache::drawText (int const x, int const y, sdl_stb_formatted_text const & text, int & widthOut, int & heightOut)
+                                                                                                                     {
+		return processFormatted(text, x, y, true, &widthOut, &heightOut);
 		}
 int sdl_stb_font_cache::getTextSize (int & w, int & h, char const * c, uint32_t const maxLen)
                                                                                        {
@@ -413,6 +422,10 @@ int sdl_stb_font_cache::getTextSize (int & w, int & h, SSF_STRING const & str)
                                                                    {
 		return processString(0, 0, str.data(), str.size(), NULL, false, &w, &h);
 		}
+int sdl_stb_font_cache::getTextSize (int & w, int & h, sdl_stb_formatted_text const & str)
+                                                                               {
+		return processFormatted(str, 0, 0, false, &w, &h);
+		}
 int sdl_stb_font_cache::getNumberOfRows (SSF_STRING const & str)
                                                      {
 		int n = 1;
@@ -420,8 +433,21 @@ int sdl_stb_font_cache::getNumberOfRows (SSF_STRING const & str)
 			if (c == '\n') n++;
 		return n;
 		}
+int sdl_stb_font_cache::getNumberOfRows (sdl_stb_formatted_text const & str)
+                                                                 {
+		int n = 1;
+		for (const sdl_stb_formated_text_item & item : str.mItems) {
+			for (const char c : item.text)
+				if (c == '\n') n++;
+			}
+		return n;
+		}
 int sdl_stb_font_cache::getTextHeight (SSF_STRING const & str)
                                                    {
+		return scale*rowSize*getNumberOfRows(str);
+		}
+int sdl_stb_font_cache::getTextHeight (sdl_stb_formatted_text const & str)
+                                                               {
 		return scale*rowSize*getNumberOfRows(str);
 		}
 int sdl_stb_font_cache::processString (int const x, int const y, char const * c, uint32_t const maxLen, sdl_stb_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
@@ -432,6 +458,7 @@ int sdl_stb_font_cache::processString (int const x, int const y, char const * c,
 		uint32_t uCharLast = 0;
 		uint32_t uChar = utf8_read(c, seek, maxLen);
 		int xx = x + initialXOffset;
+		int overdraw = SSF_INT_MIN;
 		int yy = y;
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
@@ -450,10 +477,12 @@ int sdl_stb_font_cache::processString (int const x, int const y, char const * c,
 				hasNewlined = true;
 				xx = x;
 				yy += scale*rowSize;
+				overdraw = SSF_INT_MIN;
 				}
 			else {
-				xx += scale*getKerningAdvance(uCharLast, uChar);
-				processCodepoint(xx, yy, uChar, format, isDrawing);
+				int dx = scale*getKerningAdvance(uCharLast, uChar);
+				xx += dx;
+				processCodepoint(xx, yy, uChar, format, isDrawing, dx, overdraw);
 				}
 			
 			if (lookupCaret) {
@@ -484,6 +513,7 @@ int sdl_stb_font_cache::processString (int const x, int const y, char const * c,
 int sdl_stb_font_cache::processFormatted (sdl_stb_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
                                                                                                                                                                                                                                                                                                {
 		int xOffset = initialXOffset;
+		int yOffset = 0;
 		
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
@@ -498,9 +528,13 @@ int sdl_stb_font_cache::processFormatted (sdl_stb_formatted_text const & text, i
 			int widthWorking, heightWorking;
 			
 			int xOffsetBefore = xOffset;
-			xOffset = processString(x,y, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			
 			xOffset -= x;
+			yOffset += heightWorking - scale*rowSize;
 			if (widthOut) *widthOut = *widthOut > widthWorking ? *widthOut : widthWorking;
+			
+			heightWorking = yOffset + scale*rowSize;
 			if (heightOut) *heightOut = *heightOut > heightWorking ? *heightOut : heightWorking;
 			
 			if (ssfti.callback)
@@ -512,6 +546,12 @@ int sdl_stb_font_cache::getCaretPos (SSF_STRING const & str, int const relMouseX
                                                                                           {
 		int caretPosition = -1;
 		processString(0,0, str.data(), str.length(), NULL, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		return caretPosition;
+		}
+int sdl_stb_font_cache::getCaretPos (sdl_stb_formatted_text const & str, int const relMouseX, int const relMouseY)
+                                                                                                      {
+		int caretPosition = -1;
+		processFormatted(str, 0,0, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
 bool sdl_stb_font_cache::isTofu (sdl_stb_glyph * G)
@@ -536,8 +576,8 @@ sdl_stb_glyph * sdl_stb_font_cache::getGlyphOrTofu (uint32_t const codepoint, ui
 		
 		return NULL;
 		}
-void sdl_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sdl_stb_format const * const format, bool isDrawing)
-                                                                                                                                {
+void sdl_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sdl_stb_format const * const format, bool isDrawing, int kerningAdv, int & overdraw)
+                                                                                                                                                                {
 		// Draws the character, advances x & y to the next position
 		// NOTE: KErning
 		uint8_t formatCode = 0;
@@ -557,17 +597,73 @@ void sdl_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const code
 			r.h = G->height;
 			
 			if (G->mSdlTexture) {
-				if (format)
-					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, format->a);
-				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				if (format) {
+					int charAdv = kerningAdv + G->xOffset;
+					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+					uint8_t cr,cg,cb,ca;
+					if (isColoured || formatCode) {
+						SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
+						SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
+						// Remove bleeding pixels
+						SDL_Rect r2;
+						r2.x = r.x; r2.y = r.y;
+						r2.w = r.w; r2.h = r.h;
+						if (r2.x < overdraw) {
+							int dx = overdraw - r2.x;
+							r2.x += dx;
+							r2.w -= dx;
+							}
+						overdraw = r.x + r.w;
+						SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+						}
+					if (formatCode)
+						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
+					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+					
+					if (formatCode & sdl_stb_format::FORMAT_STRIKETHROUGH) {
+						SDL_Rect r2;
+						r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
+						if (r2.h < 1) r2.h = 1;
+						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
+						SDL_RenderFillRect (mRenderer, &r2);
+						}
+					if (formatCode & sdl_stb_format::FORMAT_UNDERLINE) {
+						SDL_Rect r2;
+						r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
+						if (r2.h < 1) r2.h = 1;
+						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
+						SDL_RenderFillRect (mRenderer, &r2);
+						}
+					
+					if (isColoured || formatCode) {
+						SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
+						SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
+						}
+					}
+				else {
+					overdraw = SSF_INT_MIN;
+					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+					}
 				}
 			}
 		x += scale*G->advance;
 		}
 SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
                                                                                                                                       {
+		return renderTextToTexture_worker(NULL, c, maxLen, widthOut, heightOut);
+		}
+SDL_Texture * sdl_stb_font_cache::renderTextToTexture (sdl_stb_formatted_text const & formatted, int * widthOut, int * heightOut)
+                                                                                                                                    {
+		return renderTextToTexture_worker(&formatted, NULL, -1, widthOut, heightOut);
+		}
+SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sdl_stb_formatted_text const * formatted, char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
+                                                                                                                                                                                       {
 		int width, height;
-		getTextSize(width, height, c, maxLen);
+		if (formatted)
+			getTextSize(width, height, *formatted);
+		else
+			getTextSize(width, height, c, maxLen);
 		
 		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
 		SDL_SetRenderTarget(mRenderer, RT);
@@ -580,7 +676,11 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t 
 		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
 		
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_BLEND);
-		drawText(0, 0, c, maxLen);
+		if (formatted)
+			drawText(0, 0, *formatted);
+		else
+			drawText(0, 0, c, maxLen);
+		
 		SDL_SetRenderTarget(mRenderer, NULL);
 		
 		*widthOut = width;
@@ -597,6 +697,10 @@ void sdl_stb_font_cache::renderTextToObject (sdl_stb_prerendered_text * textOut,
 		}
 void sdl_stb_font_cache::renderTextToObject (sdl_stb_prerendered_text * textOut, SSF_STRING const & str)
                                                                                              {
+		textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+void sdl_stb_font_cache::renderTextToObject (sdl_stb_prerendered_text * textOut, sdl_stb_formatted_text const & str)
+                                                                                                         {
 		textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
 #undef LZZ_INLINE
