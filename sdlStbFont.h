@@ -143,8 +143,8 @@ struct sdl_stb_prerendered_text
   int height;
   sdl_stb_prerendered_text ();
   void freeTexture ();
-  void draw (SDL_Renderer * mRenderer, int const x, int const y);
-  void drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int draw (SDL_Renderer * mRenderer, int const x, int const y);
+  int drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct sdl_stb_memory
 {
@@ -365,21 +365,22 @@ void sdl_stb_prerendered_text::freeTexture ()
 			SDL_DestroyTexture(mSdlTexture);
 		mSdlTexture = NULL;
 		}
-void sdl_stb_prerendered_text::draw (SDL_Renderer * mRenderer, int const x, int const y)
-                                                                       {
+int sdl_stb_prerendered_text::draw (SDL_Renderer * mRenderer, int const x, int const y)
+                                                                      {
 		SDL_Rect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
 		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		return r.x + r.w;
 		}
-void sdl_stb_prerendered_text::drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
-                                                                                                                                                            {
+int sdl_stb_prerendered_text::drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                           {
 		SDL_SetTextureColorMod(mSdlTexture, r, g, b);
 		if (a != 255)
 			SDL_SetTextureAlphaMod(mSdlTexture, a);
-		draw (mRenderer, x, y);
+		return draw (mRenderer, x, y);
 		}
 void sdl_stb_memory::alloc (size_t const size)
                                       {

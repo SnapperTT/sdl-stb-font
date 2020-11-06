@@ -142,8 +142,8 @@ struct sdl_stb_prerendered_text
   int height;
   sdl_stb_prerendered_text ();
   void freeTexture ();
-  void draw (SDL_Renderer * mRenderer, int const x, int const y);
-  void drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int draw (SDL_Renderer * mRenderer, int const x, int const y);
+  int drawWithColorMod (SDL_Renderer * mRenderer, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct sdl_stb_memory
 {

@@ -160,6 +160,8 @@ h = fc.getTextHeight("Text"); // Faster, if only height is needed
 int nRows = fc.getTextRows("Text \n More text"); // Returns the number of rows of text - here it's 2
 ```
 
+Tip: `drawText()` returns the x coordinate of the end of a drawn string or formatted text object.
+
 ## Manage Memory
 
 Manual Management:
@@ -217,6 +219,9 @@ prt.drawWithColor(mSdlRenderer, x, y, 255, 185, 85, 255);
 // Cleanup
 prt.freeTexture();
 ```
+
+Tip: `prt.draw()` returns the x coordinate of the end of the object.
+
 
 ## Print in Colours Other Than White
 Use `SDL_SetTextureColorMod` with a cached texture. Or use `sdl_stb_prerendered_text::drawWithColor`.

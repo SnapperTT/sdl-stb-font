@@ -175,21 +175,24 @@ struct sdl_stb_prerendered_text {
 			SDL_DestroyTexture(mSdlTexture);
 		mSdlTexture = NULL;
 		}
-		
-	void draw (SDL_Renderer * mRenderer, const int x, const int y) {
+	
+	/// Draws this prerendered text object, returns the x coordinate
+	/// at the end of the drawing
+	int draw (SDL_Renderer * mRenderer, const int x, const int y) {
 		SDL_Rect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
 		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		return r.x + r.w;
 		}
 		
-	void drawWithColorMod(SDL_Renderer * mRenderer, const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) {
+	int drawWithColorMod(SDL_Renderer * mRenderer, const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) {
 		SDL_SetTextureColorMod(mSdlTexture, r, g, b);
 		if (a != 255)
 			SDL_SetTextureAlphaMod(mSdlTexture, a);
-		draw (mRenderer, x, y);
+		return draw (mRenderer, x, y);
 		}
 	};
 	

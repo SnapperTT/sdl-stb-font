@@ -166,6 +166,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 	// Set this to something else to print
 	int test = 3;
 	
+	
 	if (test == 1) {
 		// Directly rendering text
 		for (int i = 0;; ++i) {
@@ -252,8 +253,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 			
 			//prt.draw(mSdlRenderer, 5, 5); // Render without colour modification
 			prt.drawWithColorMod(mSdlRenderer, 5, 5, 255, 185, 80, 255); // Render in orange
-			
-			
+
 			SDL_RenderPresent(mSdlRenderer);
 			
 			if (i % 100 == 0) {
@@ -302,7 +302,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 		
 		sdl_stb_prerendered_text prt2;
 		fc.renderTextToObject(&prt2, "Normal text after"); // Render normal text to test that colors/style is not messed up
-		
+				
 		for (int i = 0;; ++i) {
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
