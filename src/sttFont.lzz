@@ -1,0 +1,897 @@
+// control-f -> "// Make your own implmentation for your own frontend here" for notes w.r.t making your own rendering frontend
+
+#hdr
+#ifndef STB_TRUETYPE_INCLUDE_HANDLED
+	////////////////////////////////////////
+	// STB TRUETYPE 
+	// Handle double-including
+	#ifdef STB_TRUETYPE_IMPLEMENTATION
+		#undef STB_TRUETYPE_IMPLEMENTATION
+	#endif
+	#include "stb_truetype.h"
+	////////////////////////////////////////
+#endif
+
+// Defines
+#ifndef SSF_MAP
+	#include <map>
+	#define SSF_MAP std::map
+#endif
+#ifndef SSF_VECTOR
+	#include <vector>
+	#define SSF_VECTOR std::vector
+#endif
+#ifndef SSF_STRING
+	#include <string>
+	#define SSF_STRING std::string
+#endif
+
+
+// new and delete macros
+// all calls in this library are done with "foo * f = SSF_NEW(f)"
+// implement your custom allocator by defining SSF_NEW and SSF_DEL
+#ifndef SSF_NEW
+	#define SSF_NEW(X) new X
+#endif
+#ifndef SSF_NEW_ARR
+	#define SSF_NEW_ARR(X,S) new X[S]
+#endif
+#ifndef SSF_DEL
+	#define SSF_DEL(X) delete X
+#endif
+#ifndef SSF_DEL_ARR
+	#define SSF_DEL_ARR(X) delete[] X
+#endif
+
+
+#include <cstdint>
+
+// move semantics - makes lzz happy
+#define SSF_STRING_MS SSF_STRING&&
+#define sttfont_formatted_text_item_MS sttfont_formatted_text_item&&
+#define sttfont_formatted_text_MS sttfont_formatted_text&&
+
+// misc
+#ifdef INT32_MIN
+	#define SSF_INT_MIN  INT32_MIN
+#else
+	#define SSF_INT_MIN 0x8000000;
+#endif
+struct sttfont_formatted_text;
+#end
+
+#src
+#include <stdio.h>
+
+#ifndef STB_TRUETYPE_INCLUDE_HANDLED
+	////////////////////////////////////////
+	// STB TRUETYPE 
+	#define STB_TRUETYPE_IMPLEMENTATION
+	#include <math.h>
+	#include <string.h>
+	#include <assert.h>
+	#include <stdlib.h>
+	#include "stb_truetype.h"
+	////////////////////////////////////////
+#endif
+
+#end
+
+/// Formatted text
+struct sttfont_format_callback {
+	virtual void callbackOnDraw(const sttfont_formatted_text & text, int index, int x, int y, int xOffsetInitial, int xOffsetAfter, int segmentWidth, int segmentHeight) {}
+	};
+	
+// Include file for sttfont_font
+
+struct sttfont_format_reset {};
+struct sttfont_format {
+	uint8_t r,g,b,a;
+	uint8_t format;
+	static const uint8_t FORMAT_NONE 		  = 0 << 0;
+	static const uint8_t FORMAT_BOLD 		  = 1 << 0;
+	static const uint8_t FORMAT_ITALIC 		  = 1 << 1;
+	static const uint8_t FORMAT_UNDERLINE 	  = 1 << 2;
+	static const uint8_t FORMAT_STRIKETHROUGH = 1 << 3;
+	static const uint8_t FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS = 1 << 7;
+	
+	sttfont_format() : r(255), g(255), b(255), a(255), format(0) {}
+	sttfont_format(const uint8_t _format, const uint8_t _r = 255, const uint8_t _g = 255, const uint8_t _b = 255, const uint8_t _a = 255)
+					: r(_r), g(_g), b(_b), a(_a), format(_format) {}
+	
+	void combine(const sttfont_format & other) {
+		format |= other.format;
+		r = 255*((r/255.0)*(other.r/255.0));
+		g = 255*((g/255.0)*(other.g/255.0));
+		b = 255*((b/255.0)*(other.b/255.0));
+		a = 255*((a/255.0)*(other.a/255.0));
+		}
+	
+	// Constants and "constants"
+	static sttfont_format color(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sttfont_format(FORMAT_NONE,_r,_g,_b,_a); }
+	static sttfont_format colour(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sttfont_format(FORMAT_NONE,_r,_g,_b,_a); }
+	
+	static const sttfont_format bold = sttfont_format(FORMAT_BOLD);
+	static const sttfont_format italic = sttfont_format(FORMAT_ITALIC);
+	static const sttfont_format underline = sttfont_format(FORMAT_UNDERLINE);
+	static const sttfont_format strikethrough = sttfont_format(FORMAT_STRIKETHROUGH);
+	// If you don't like the colours, extend this class and define your own
+	static const sttfont_format red 	= sttfont_format(FORMAT_NONE,255,  0,  0,255);
+	static const sttfont_format green	= sttfont_format(FORMAT_NONE,  0,255,  0,255);
+	static const sttfont_format blue 	= sttfont_format(FORMAT_NONE,  0,  0,255,255);
+	static const sttfont_format yellow 	= sttfont_format(FORMAT_NONE,255,255,  0,255);
+	static const sttfont_format black 	= sttfont_format(FORMAT_NONE,  0,  0,  0,255);
+	static const sttfont_format white	= sttfont_format(FORMAT_NONE,255,255,255,255);
+	static const sttfont_format magenta	= sttfont_format(FORMAT_NONE,255,  0,255,255);
+	static const sttfont_format cyan	= sttfont_format(FORMAT_NONE,  0,255,255,255);
+	static const sttfont_format grey	= sttfont_format(FORMAT_NONE,128,128,128,255);
+	
+	static const sttfont_format_reset reset;
+	};
+	
+struct sttfont_formatted_text_item {
+	SSF_STRING text;
+	sttfont_format format;
+	sttfont_format_callback * callback;
+	sttfont_formatted_text_item () : callback(0) {}
+	sttfont_formatted_text_item (const SSF_STRING & _text, const sttfont_format & _format)	: text(_text), format(_format), callback(0) {}
+	sttfont_formatted_text_item (SSF_STRING_MS _text, const sttfont_format & _format) 		: text(_text), format(_format), callback(0) {}
+	sttfont_formatted_text_item& setCallback(sttfont_format_callback* _cb) { callback = _cb; return *this; }
+	};
+	
+struct sttfont_formatted_text {
+	SSF_VECTOR<sttfont_formatted_text_item> mItems;
+	sttfont_format activeFormat;
+	
+	sttfont_formatted_text(){}
+	sttfont_formatted_text(const SSF_STRING & text) { *this << text; }
+	sttfont_formatted_text(SSF_STRING_MS text) 		{ *this << text; }
+	sttfont_formatted_text(const char * text) 		{ *this << text; }
+	sttfont_formatted_text(sttfont_formatted_text_item_MS text)			{ *this << text; }
+	sttfont_formatted_text(const sttfont_formatted_text_item & text)	{ *this << text; }
+	sttfont_formatted_text(sttfont_formatted_text_MS obj){ mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); }
+	sttfont_formatted_text& operator = (sttfont_formatted_text_MS obj){ mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); return *this; }
+	sttfont_formatted_text& operator = (const sttfont_formatted_text & obj){ mItems = obj.mItems; activeFormat = obj.activeFormat; return *this; }
+	void resetFormat() { activeFormat = sttfont_format(); }
+	sttfont_formatted_text& operator << (const SSF_STRING & text) 	{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this; }
+	sttfont_formatted_text& operator << (SSF_STRING_MS text) 		{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator << (const char * text) 		{ mItems.push_back(sttfont_formatted_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator += (const SSF_STRING & text) 	{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this; }
+	sttfont_formatted_text& operator += (SSF_STRING_MS text) 		{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator += (const char * text) 			{ mItems.push_back(sttfont_formatted_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator << (const sttfont_format & format) 		{ activeFormat.combine(format); return *this; }
+	sttfont_formatted_text& operator << (const sttfont_format_reset & reset) 	{ resetFormat(); return *this; }
+	sttfont_formatted_text& operator << (const sttfont_formatted_text_item & obj) { mItems.push_back(obj); return *this; }
+	sttfont_formatted_text& operator << (sttfont_formatted_text_item_MS obj) 	{ mItems.push_back(obj); return *this; }
+
+	
+	// Editing functions:
+	bool back(const unsigned int num) {
+		// Removes @num characters from the end of this
+		// Returns true if changed
+		unsigned int nToRemove = num;
+		for (unsigned int  i = mItems.size() - 1; i < mItems.size(); --i ) {
+			if ( mItems[i].text.size() <= nToRemove) {
+				nToRemove -= mItems[i].text.size();
+				mItems.erase(mItems.begin() + i);
+				if (nToRemove == 0 || i == 0) {
+					return true;
+					}
+				}
+			else {
+				SSF_STRING& s = mItems[i].text;
+				s = s.erase(s.length()-nToRemove);
+				return true;
+				}
+			}
+		return false;
+		}
+		
+	void insert(const unsigned int position, const SSF_STRING & str) {
+		// Inserts @str at character position @pos
+		unsigned int workingLen = 0;
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
+				unsigned int localPos = position - workingLen;				
+				mItems[i].text.insert(localPos, str);
+				return;
+				}
+			workingLen += mItems[i].text.size();
+			}
+		// Pos is at the end - append string
+		*this << str;
+		}
+		
+	size_t size() const {
+		// Combined length of all the segments
+		size_t workingLen = 0;
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			workingLen += mItems[i].text.size();
+			}
+		return workingLen;
+		}
+	size_t length() const { return size(); }
+	
+	bool isEmpty() const {
+		// Returns true if there are no segments, or there is a single empty segment
+		if (mItems.size()) return !mItems[0].text.size();
+		return true;
+		}
+		
+	SSF_STRING getString() const {
+		SSF_STRING r;
+		r.reserve(size());
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			r += mItems[i].text;
+			}
+		return r;
+		}
+	
+private:
+	static void remove_substr_worker2(sttfont_formatted_text & tt, unsigned int & index, const int offset, const unsigned int num, int * const writeOut) {
+		if (num == tt.mItems[index].text.size() && offset == 0) {
+			tt.mItems.erase(tt.mItems.begin() + index);
+			--index;
+			return;
+			}
+		tt.mItems[index].text.erase(offset, num);
+		}
+		
+	static void remove_substr_worker2(const sttfont_formatted_text & tt, unsigned int & index, const int offset, const unsigned int num, SSF_STRING * const writeOut) {
+		*writeOut += tt.mItems[index].text.substr(offset, num);
+		}
+	
+	template<typename TT, typename RR>	// template used to handle const-ness
+	static void remove_substr_worker1(TT & tt, const unsigned int position, const unsigned int num, RR * const writeOut = NULL) {
+		unsigned int numToRemove = num;
+		unsigned int removeIndex = -1;
+		unsigned int workingLen = 0;
+		for (unsigned int  i = 0; i < tt.mItems.size(); ++i ) {
+			if (tt.mItems[i].text.size() + workingLen > position && workingLen <= position) {
+				removeIndex = i;
+				break;
+				}
+			workingLen += tt.mItems[i].text.size();
+			}
+		if (removeIndex >= tt.mItems.size()) return; // not found
+		
+		int offset = position - workingLen;	
+		
+		for (unsigned int i = removeIndex; i < tt.mItems.size(); ++i) {
+			unsigned int nToRemove = tt.mItems[i].text.size() - offset;
+			if (nToRemove > numToRemove) nToRemove = numToRemove;
+			
+			remove_substr_worker2(tt, i, offset, nToRemove, writeOut);
+			
+			numToRemove -= nToRemove;
+			offset = 0;
+			}
+			
+		}
+		
+public:
+	void remove(const unsigned int position, const unsigned int num) {
+		// Removes @num characters after position num
+		// UNTESTED!!
+		int dummy;
+		remove_substr_worker1(*this, position, num, &dummy);
+		}
+	
+	SSF_STRING substr(const unsigned int position, const unsigned int num) const {
+		// Reads @num characters after @position. If num goes past the end of a string
+		// then returns the end of the string. Returns as a plain string
+		SSF_STRING r;
+		remove_substr_worker1(*this, position, num, &r);
+		return r;
+		}
+		
+		
+	};
+
+struct sttfont_prerendered_text {
+	int width, height;
+	sttfont_prerendered_text () : width(0), height(0) {}
+	
+	virtual void freeTexture() {
+		// Make your own implmentation for your own frontend here
+		// Used to clear any resources held here
+		}
+	
+	/// Draws this prerendered text object, returns the x coordinate
+	/// at the end of the drawing
+	virtual int draw (const int x, const int y) { return x + width; }
+	virtual int drawWithColorMod(const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) {
+		return x + width;
+		}
+		
+	};
+
+struct sttfont_glyph {
+	int advance;
+	int leftSideBearing;
+	int width, height;
+	int xOffset, yOffset;
+	
+	sttfont_glyph () : advance(0), leftSideBearing(0), width(0), height(0), xOffset(0), yOffset(0) {}
+	};
+
+/// Memory management
+struct sttfont_memory {
+	char * data;
+	bool ownsData;
+	
+	void alloc(const size_t size) {
+		data = SSF_NEW_ARR(char, size);
+		ownsData = true;
+		}
+		
+	void transferTo(sttfont_memory & destination) {
+		destination.data = data;
+		destination.ownsData = destination.data;
+		ownsData = false;
+		}
+	
+	sttfont_memory () : data(NULL), ownsData(false) {}
+	~sttfont_memory () {
+		if (ownsData) {
+			SSF_DEL_ARR(data);
+			data = NULL;
+			}
+		}
+	};
+	
+/// Linked list of fonts. This is for font fallback purposes
+struct sttfont_font_list {
+	stbtt_fontinfo mFont;
+	sttfont_memory mMemory;
+	uint8_t format;			// Value is one of sttfont_format::FORMAT_*
+	SSF_VECTOR<sttfont_font_list*> mFormatedVariants;	// Variants for bold, italic, etc
+	sttfont_font_list * next;
+		
+	sttfont_font_list() : format(0), next(NULL) {}
+	~sttfont_font_list() {
+		for (sttfont_font_list * fl : mFormatedVariants)
+			delete fl;
+		if (next) delete next;
+		}
+	
+	/// Finds the font with the code point for 
+	void fetchFontForCodepoint(const uint32_t codepoint, const uint8_t format, stbtt_fontinfo ** mFontOut, int * indexOut) {
+		sttfont_font_list * working = this;
+		
+		*mFontOut = NULL;
+		*indexOut = 0;
+		
+		while (working) {
+			int index = stbtt_FindGlyphIndex(&(working->mFont), codepoint);
+			if (index) {
+				// Check for format in the variants
+				if (format) {
+					int bestBitsCount = 0;
+					sttfont_font_list * bestMatch = NULL;
+					sttfont_font_list * bestMatch2 = NULL;
+					for (sttfont_font_list * f : mFormatedVariants) {
+						uint8_t mask = (format & f->format);
+						if (mask) {
+							int nBits = 0;
+							for (int i = 0; i < 7; ++i)
+								if (mask & (1 << i)) nBits++;
+							if (nBits > bestBitsCount) {
+								bestBitsCount = nBits;
+								bestMatch2 = bestMatch;
+								bestMatch = f;
+								}
+							}
+						}
+					
+					if (bestMatch) {
+						int index2 = stbtt_FindGlyphIndex(&(bestMatch->mFont), codepoint);
+						*mFontOut = &(bestMatch->mFont);
+						*indexOut = index2;
+						return;
+						}
+					if (bestMatch2) {
+						int index2 = stbtt_FindGlyphIndex(&(bestMatch2->mFont), codepoint);
+						*mFontOut = &(bestMatch2->mFont);
+						*indexOut = index2;
+						return;
+						}
+					}
+				
+				// Format not found/no format
+				*mFontOut = &(working->mFont);
+				*indexOut = index;
+				return;
+				}
+			working = working->next;
+			}
+		}
+	};
+	
+/// Cache of a font
+class sttfont_font_cache {
+public:
+	sttfont_font_list mFont;
+	// Read-only (for you!) parameters set by library. You can change these
+	// if you know what you're doing
+	int ascent;
+	int descent;
+	int lineGap;
+	int baseline;
+	int rowSize;
+	int tabWidth;	// May be changed later
+	float scale;
+	float underlineThickness;
+	float strikethroughThickness;
+	float underlinePosition;
+	float strikethroughPosition;
+	// Must be set before loadFont() is called. Cannot be changed after
+	int faceSize;			// Default is 20. All the parameters are calcualted based on this
+	int tabWidthInSpaces;	// Default is 8, set this before loadFont(). Max 128. Sets tabWidth when font is loaded
+	
+	
+	sttfont_font_cache () : ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), tabWidth(1), scale(1.f),
+		underlineThickness(1.0), strikethroughThickness(1.0), underlinePosition(0.0), strikethroughPosition(0.0),
+		faceSize(20), tabWidthInSpaces(8) {}
+	virtual ~sttfont_font_cache () {}
+		
+	/// Sets the face size. Must be called BEFORE loading a font!
+	void setFaceSize(const int _faceSize) { faceSize = _faceSize; }
+	
+	/// The size between rows, in the same coordinates as whatever you set faceSize as
+	int getScaledRowSize () const { return scale * rowSize; }
+	
+	/// Loads the primary font
+	/// Also computes font properties (ascent/decent/basline/scale/rowSize/etc)
+	/// ttf_buffer must be null terminated
+	void loadFont (const char * ttf_buffer, int index = 0) {
+		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
+		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
+		
+		scale = stbtt_ScaleForPixelHeight(&mFont.mFont, faceSize);
+		baseline = ascent*scale;
+		rowSize = ascent - descent + lineGap;
+		
+		strikethroughThickness = faceSize/20.0;
+		if (strikethroughThickness < 1) strikethroughThickness = 1;
+		strikethroughPosition = baseline * 0.75 - strikethroughThickness/2;
+		underlineThickness = strikethroughThickness;
+		underlinePosition = baseline + underlineThickness;
+		
+		int w,h;
+		getTextSize(w,h,"                                                                                                                                ", tabWidthInSpaces <= 128 ? tabWidthInSpaces : 128);
+		tabWidth = w;
+		if (tabWidth < 1) tabWidth = 1;
+		}
+	
+	/// Does the dame as loadFont, but transfers ownership of the memory to here
+	/// ttf_buffer must be null terminated
+	/// ttf_buffer will be deallocated when this class is destroyed
+	/// Example usage:
+	/// filep * file = openFile("path/to/file");
+	/// sttfont_memory mem;
+	/// mem.alloc(file_size);
+	/// fread(file, &mem.data);
+	/// mSdl_stb_font_cache.loadFontManaged (mem);
+	/// You can safely let mem drop out of scope
+	void loadFontManaged (sttfont_memory & memory, int index = 0) {
+		memory.transferTo(mFont.mMemory);
+		loadFont(mFont.mMemory.data, index);
+		}
+		
+	/// Loads a fallback font. If a glyph is not found in a primary font it'll fallback to one of these
+	/// ttf_buffer must be null terminated
+	void addFont (const char * ttf_buffer, int index = 0) {
+		addFontWrap afw(ttf_buffer);
+		afw.index = index;
+		addFont_worker(afw, false);
+		}
+		
+	/// Same as addFont, but transfers ownership of the memory to here
+	/// ttf_buffer will be deallocated when this class is destroyed
+	/// ttf_buffer must be null terminated
+	/// Example usage:
+	/// filep * file = openFile("path/to/file");
+	/// sttfont_memory mem;
+	/// mem.alloc(file_size);
+	/// fread(file, &mem.data);
+	/// mSdl_stb_font_cache.loadFontManaged (mem);
+	/// You can safely let mem drop out of scope
+	void addFontManaged (sttfont_memory & memory, int index = 0) {
+		addFontWrap afw(NULL);
+		afw.memory = &memory;
+		afw.index = index;
+		addFont_worker(afw, false);
+		}
+	
+	/// Adds a format variant to the last loaded font
+	/// Use this to add Bold, Italic, etc
+	/// FormatMask is one of sttfont_format::FORMAT_*
+	void addFormatFont (uint8_t formatMask, const char * ttf_buffer, int index = 0) {
+		addFontWrap afw(ttf_buffer);
+		afw.index = index;
+		addFont_worker(afw, true, formatMask);
+		}
+	
+	void addFormatFontManaged (uint8_t formatMask, sttfont_memory & memory, int index = 0) {
+		addFontWrap afw(NULL);
+		afw.memory = &memory;
+		afw.index = index;
+		addFont_worker(afw, true, formatMask);
+		}
+		
+		
+protected:
+	struct addFontWrap {
+		const char * ttf_buffer;
+		sttfont_memory * memory;
+		int index;
+		addFontWrap (const char * c) : ttf_buffer(c), memory(NULL), index(0) {}
+		};
+		
+	void addFont_worker(addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0) { 
+		sttfont_font_list * n = SSF_NEW(sttfont_font_list);
+		sttfont_font_list * w = &mFont;
+		while (w->next)
+			w = w->next;
+		n->format = formatMask;
+		
+		if (fwm.memory) {
+			sttfont_memory & memory = *(fwm.memory);
+			memory.transferTo(n->mMemory);
+			stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,fwm.index));
+			}
+		else {
+			stbtt_InitFont(&n->mFont, (const unsigned char *) fwm.ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) fwm.ttf_buffer,fwm.index));
+			}
+		if (isFormatVariant)
+			w->mFormatedVariants.push_back(n);
+		else
+			w->next = n;
+		}
+public:
+
+	/// For a given codepoint, generate a texture (if required) and populate the
+	/// details of the glyph (width, height, etc) in gOut	
+	void genGlyph (const uint32_t codepoint, const uint8_t format, sttfont_glyph * gOut) {
+		// Fetch font and index - existance check for glyph in font
+		stbtt_fontinfo * mFontContaining;
+		int mIndex;
+		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex);
+		
+		if (!mIndex)
+			return;
+		
+		// found the font! generate the glyph
+	   	unsigned char *bitmap;
+	   	int w,h,woff,hoff;
+		bitmap = stbtt_GetCodepointBitmap(mFontContaining, 0, scale, codepoint, &w, &h, &woff, &hoff);
+		
+        // Convert bitmap to RGBA
+        unsigned int sz = w*h;
+        unsigned char bitmap2[sz*4];
+        for (unsigned int i = 0; i < sz; ++i) {
+        	bitmap2[i*4+0] = 255;
+        	bitmap2[i*4+1] = 255;
+        	bitmap2[i*4+2] = 255;
+        	bitmap2[i*4+3] = bitmap[i];
+        	}
+        
+        stbtt_FreeBitmap (bitmap, 0);
+        
+        if (w && h) {
+			genGlyph_writeData(gOut, bitmap2, w, h);
+			}
+		
+		gOut->width = w;
+		gOut->height = h;
+		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &gOut->advance, &gOut->leftSideBearing);
+		
+		gOut->xOffset = woff;
+		gOut->yOffset = hoff;
+		}
+	
+	virtual void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
+		// Make your own implmentation for your own frontend here
+		}
+	
+	virtual sttfont_glyph * getGlyph(const uint64_t target) {
+		// Make your own implmentation for your own frontend here
+		return NULL;
+		}
+	
+	/// Looks up a glyph, generating it if it does not exist yet
+	sttfont_glyph * getGenGlyph(const uint32_t codepoint, const uint8_t format) {
+		uint64_t target = codepoint | (uint64_t(format) << 32);
+		sttfont_glyph * r = getGlyph(target);
+		if (r) return r;
+		return genGlyph_createAndInsert(target, codepoint, format);
+		}
+		
+	virtual sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
+		// Make your own implmentation for your own frontend here
+		return getGlyph(target);
+		}
+		
+	int getKerningAdvance(const uint32_t cp1, const uint32_t cp2) {
+		return stbtt_GetCodepointKernAdvance(&mFont.mFont, cp1, cp2);
+		}
+	
+	int utf8_charsize(const char* c) {
+		if (!c) return 0;
+		if ((uint8_t)*c <= 0x7F) return 1;
+		else if ((uint8_t)*c <= 0xE0) return 2;
+		else if ((uint8_t)*c <= 0xF0) return 3;
+		else
+			return 4;
+		}
+	
+	/// Reads a utf8 codepoint from a string
+	uint32_t utf8_read(const char* c, uint32_t & seek, const uint32_t maxLen) {
+		if (!c) return 0;
+		int chsz = utf8_charsize(c);
+		seek += chsz;
+	
+		if (seek > maxLen) {
+			return *c; //Buffer overflow - stop to be safe!
+			}
+			
+		if (chsz == 1) return *c;		
+		if (chsz == 2)
+			return (((uint32_t((uint8_t) c[0] & 0b00111111) << 6)) | uint32_t((uint8_t) c[1] & 0b00111111));
+		if (chsz == 3)
+			return (uint32_t((uint8_t) c[0] & 0b00011111) << 12) | (uint32_t((uint8_t) c[1] & 0b00111111) << 6) | uint32_t((uint8_t) c[2] & 0b00111111);
+		return (uint32_t((uint8_t) c[0] & 0b00001111) << 18) | (uint32_t((uint8_t) c[1] & 0b00111111) << 12) | (uint32_t((uint8_t) c[2] & 0b00111111) << 6) | uint32_t((uint8_t) c[3] & 0b00111111);
+		}
+	
+	
+	/// Draws a c string at position x, y
+	/// maxLen should be set if you want to use non-zero terminated strings
+	/// Returns the x coordinate of the caret at the end of the string
+	/// (If you draw a 100 width string at x=5 this will return 105.
+	/// If there is a newline at the end this will return 5) 
+	int drawText(const int x, const int y, const char * c, const uint32_t maxLen = -1) {
+		return processString(x, y, c, maxLen, NULL, true);
+		}
+	
+	int drawText (const int x, const int y, const SSF_STRING & str) {
+		return drawText(x,y,str.data(),str.size());
+		}
+
+	/// These overloads return the width and height of the drawn string
+	int drawText(const int x, const int y, int & widthOut, int & heightOut, const char * c, const uint32_t maxLen = -1) {
+		return processString(x, y, c, maxLen, NULL, true, &widthOut, &heightOut);
+		}
+	
+	int drawText (const int x, const int y, const SSF_STRING & str, int & widthOut, int & heightOut) {
+		return drawText(x,y,widthOut, heightOut, str.data(),str.size());
+		}
+		
+	int drawText(const int x, const int y, const sttfont_formatted_text & text) {
+		int dummyWidth, dummyHeight;
+		return drawText(x, y, text, dummyWidth, dummyHeight);
+		}
+		
+	int drawText(const int x, const int y, const sttfont_formatted_text & text, int & widthOut, int & heightOut) {
+		return processFormatted(text, x, y, true, &widthOut, &heightOut);
+		}
+	
+	/// Gets the size of a string (width and height). Returns the x position of the caret at the end of the string
+	int getTextSize (int & w, int & h, const char * c, const uint32_t maxLen = -1) {
+		return processString(0, 0, c, maxLen, NULL, false, &w, &h);
+		}
+		
+	int getTextSize (int & w, int & h, const SSF_STRING & str) {
+		return processString(0, 0, str.data(), str.size(), NULL, false, &w, &h);
+		}
+	int getTextSize (int & w, int & h, const sttfont_formatted_text & str) {
+		return processFormatted(str, 0, 0, false, &w, &h);
+		}
+	
+	/// Returns the number of rows (newlines + 1) a string has here
+	int getNumberOfRows (const SSF_STRING & str) {
+		int n = 1;
+		for (const char c : str)
+			if (c == '\n') n++;
+		return n;
+		}
+	int getNumberOfRows (const sttfont_formatted_text & str) {
+		int n = 1;
+		for (const sttfont_formatted_text_item & item : str.mItems) {
+			for (const char c : item.text)
+				if (c == '\n') n++;
+			}
+		return n;
+		}
+
+	/// Returns the height of string. This is much faster than getTextSize(), but only returns the height
+	int getTextHeight (const SSF_STRING & str) {
+		return scale*rowSize*getNumberOfRows(str);
+		}
+	int getTextHeight (const sttfont_formatted_text & str) {
+		return scale*rowSize*getNumberOfRows(str);
+		}
+		
+	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+		// Scan through function and extract the glyphs
+		// returns the x position at the end
+		uint32_t seek = 0;
+		uint32_t uCharLast = 0;
+		uint32_t uChar = utf8_read(c, seek, maxLen);
+		int xx = x + initialXOffset;
+		int overdraw = SSF_INT_MIN;
+		int yy = y;
+		if (widthOut) *widthOut = 0;
+		if (heightOut) *heightOut = 0;
+		bool hasNewlined = false;
+		
+		const bool lookupCaret = caretPosition && threshX && threshY;
+		if (lookupCaret) {
+			*caretPosition = -1;
+			}
+		
+		while (uChar && seek <= maxLen) {
+			int xxl = xx;
+			if (uChar == '\t') {
+				// Next tab position:
+				int nTabsSoFar = (xx - x)/tabWidth;
+				xx = x + (nTabsSoFar+1)*tabWidth;
+				}
+			else if (uChar == '\n') {
+				if (widthOut)
+					if (*widthOut < xx) *widthOut = xx;
+				hasNewlined = true;
+				xx = x;
+				yy += scale*rowSize;
+				overdraw = SSF_INT_MIN;
+				}
+			else {
+				int dx = scale*getKerningAdvance(uCharLast, uChar);
+				xx += dx;
+				processCodepoint(xx, yy, uChar, format, isDrawing, dx, overdraw);
+				}
+			
+			if (lookupCaret) {
+				//const int dx = xx - x;
+				if (xx > *threshX && xxl <= *threshX ) {
+					if (*threshX > xxl + (xx - xxl)/2)
+						*caretPosition = seek; // right half of char
+					else
+						*caretPosition = seek-1; // left half of char
+					return xx;
+					}
+				}
+				
+			uCharLast = uChar;
+			uChar = utf8_read(c + seek, seek, maxLen);
+			}
+		if (widthOut) {
+			if (*widthOut < xx) *widthOut = xx;
+			*widthOut -= x;
+			}
+		if (heightOut) {
+			if (*heightOut < yy) *heightOut = yy;
+			*heightOut += scale*rowSize;
+			*heightOut -= y;
+			}
+		return xx;
+		}
+
+	int processFormatted(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+		int xOffset = initialXOffset;
+		int yOffset = 0;
+		
+		if (widthOut) *widthOut = 0;
+		if (heightOut) *heightOut = 0;
+		
+		for (unsigned int i = 0; i < text.mItems.size(); ++i) {
+			const sttfont_formatted_text_item & ssfti = text.mItems[i];
+			
+			bool isDrawingWorking = isDrawing;
+			if (ssfti.callback && isDrawingWorking)
+				isDrawingWorking = (ssfti.format.format & sttfont_format::FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS);
+			
+			int widthWorking, heightWorking;
+			
+			int xOffsetBefore = xOffset;
+			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			
+			xOffset -= x;
+			yOffset += heightWorking - scale*rowSize;
+			if (widthOut) *widthOut = *widthOut > widthWorking ? *widthOut : widthWorking;
+			
+			heightWorking = yOffset + scale*rowSize;
+			if (heightOut) *heightOut = *heightOut > heightWorking ? *heightOut : heightWorking;
+			
+			if (ssfti.callback)
+				ssfti.callback->callbackOnDraw(text, i, x, y, xOffsetBefore, xOffset, widthWorking, heightWorking);
+			}
+		return xOffset + x;
+		}
+	
+	
+	/// Returns the position in the string where a click happend
+	/// MouseX and MouseY are relative to whatever draw position of this string you are using
+	/// Currently only suppors single row strings
+	int getCaretPos(const SSF_STRING & str, const int relMouseX, const int relMouseY) {
+		int caretPosition = -1;
+		processString(0,0, str.data(), str.length(), NULL, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		return caretPosition;
+		}
+	int getCaretPos(const sttfont_formatted_text & str, const int relMouseX, const int relMouseY) {
+		int caretPosition = -1;
+		processFormatted(str, 0,0, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		return caretPosition;
+		}
+	
+	bool isTofu (sttfont_glyph * G) {
+		if (!G) return true;
+		if (!G->advance) return true; //unprintable characters have no width
+		return false;
+		}
+	
+	/// Returns either a glyph with a valid texture, or a tofu glyph with a valid texture or NULL
+	sttfont_glyph * getGlyphOrTofu (const uint32_t codepoint, const uint8_t format) {
+		sttfont_glyph * G = getGenGlyph(codepoint, format);
+		if (!isTofu(G)) return G;
+		
+		G = getGenGlyph((uint32_t) 0xFFFD, format); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
+		if (!isTofu(G)) return G;
+			
+		G = getGenGlyph((uint32_t) '?', format);
+		if (!isTofu(G)) return G;
+		
+		if (format)
+			return getGlyphOrTofu(codepoint, 0);
+		
+		return NULL;
+		}
+	
+	virtual void processCodepoint (int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int kerningAdv, int & overdraw) {
+		// Draws the character, advances x & y to the next position
+		// NOTE: KErning
+		uint8_t formatCode = 0;
+		if (format)
+			formatCode = format->format;
+			
+		sttfont_glyph * G = getGlyphOrTofu(codepoint, formatCode);
+		if (!G) {
+			x += faceSize/2;
+			return;
+			}
+		if (isDrawing) {
+			// Make your own implmentation for your own frontend here
+			}
+		x += scale*G->advance;
+		}
+		
+	/// Creates a SDL_Texture of a suitable size and renders an entire string to it
+	//SDL_Texture * renderTextToTexture (const char * c, const uint32_t maxLen = -1, int * widthOut = NULL, int * heightOut = NULL) {
+	//	return renderTextToTexture_worker(NULL, c, maxLen, widthOut, heightOut);
+	//	}
+	//SDL_Texture * renderTextToTexture (const sttfont_formatted_text & formatted, int * widthOut = NULL, int * heightOut = NULL) {
+	//	return renderTextToTexture_worker(&formatted, NULL, -1, widthOut, heightOut);
+	//	}
+	//SDL_Texture * renderTextToTexture (const SSF_STRING & str, int * widthOut = NULL, int * heightOut = NULL) {
+	//	return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
+	//	}
+	//SDL_Texture * renderTextToTexture_worker (const sttfont_formatted_text * formatted, const char * c, const uint32_t maxLen = -1, int * widthOut = NULL, int * heightOut = NULL) {
+	//	// Make your own implmentation for your own frontend here
+	//	}
+
+	/// Same as renderTextToTexture, but stores the result in an object that has a convienent 
+	virtual void renderTextToObject (sttfont_prerendered_text * textOut, const char * c, const uint32_t maxLen = -1) {
+		// Make your own implmentation for your own frontend here
+		//textOut->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
+		}
+	virtual void renderTextToObject (sttfont_prerendered_text * textOut, const SSF_STRING & str) {
+		// Make your own implmentation for your own frontend here
+		//textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+	virtual void renderTextToObject (sttfont_prerendered_text * textOut, const sttfont_formatted_text & str) {
+		// Make your own implmentation for your own frontend here
+		//textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+	
+	
+	}

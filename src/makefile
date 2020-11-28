@@ -1,17 +1,14 @@
 # This makefile creates the .h files in the parent directory from .lzz files here
 LAZY=../tools/lzz -hx hh
-RAWSOURCES=sdlStbFont.lzz example.lzz
-SUBSOURCES=sdlStbFormattedText.lzz
+RAWSOURCES=sdlFrontend.lzz sttFont.lzz example.lzz
 OUTPUTDIR=../
 TEMPDIR=temp/
 SOURCES=$(addprefix $(TEMPDIR),$(RAWSOURCES:.lzz=.cpp))
 SFI=$(addprefix $(OUTPUTDIR), $(RAWSOURCES:.lzz=.h))
 
-
 all: $(SOURCES) $(SFI) 
 	mv ../example.h ../example.cpp
-
-$(SOURCES): $(SUBSOURCES)
+	cat ../sttFont.h ../sdlFrontend.h > ../sdlStbFont.h
 
 .PHONEY clean:
 	rm -rf $(TEMPDIR)*

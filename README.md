@@ -21,11 +21,12 @@ Liam Twigger - @SnapperTheTwig
 * Rendering to a texture object - see examples
 * Can convert mouse location to caret location in string (strings without newlines only)
 * UTF-8 support
-* Handles newlines
+* Handles newlines and tabs
 * Fallback fonts support - can support many languages at once!
 * Only ~1000 lines of code
 * No dependencies apart from STB_Truetype, SDL and standard libraries
 * Automatic or manual memory management
+* Can support other frontends (such as DirectX/OpenGl/Vulkan/whatever apple is shoving down our throats) by extending some classes
 * Public Domain
 
 ## Performance:
@@ -37,6 +38,10 @@ Example image takes ~5ms to render (~200 FPS) if rendering directly (`drawText`)
 
 For text that lasts more than one frame you should cache it with either `renderTextToTexture` or `renderTextToObject`.
 
+## How Does The Frontend/Backend Work?
+This consists of two parts - a font handling backend (classes named `sttfont_*`) and a SDL rendering frontend (`sdl_stb_*`).
+
+To make your own rendering frontend extend the relevent `sttfont_*` classes. See the SDL implementation for details. Its ~200 lines of code, all you have to do is take out the SDL specific stuff and put in your renderer specific stuff.
 
 How Do I?
 =========
@@ -86,6 +91,7 @@ char * ttfFontFromMemory = loadFontFileSomehow("path/to/file.ttf");
 
 sdl_stb_font_cache fc;
 fc.faceSize = 24; // Must be set before loadFont()!
+fc.tabWidthInSpaces = 8; // Optional
 fc.loadFont(ttfFontFromMemory);
 
 ...
@@ -121,16 +127,20 @@ fc.drawText(5, 5, widthOut, heightOut, "Hello world!");
 class sdl_stb_font_cache {
 ...
 public:
-// All of these are calculated when loadFont() is called
-// You can safely read these
   int ascent;
   int descent;
   int lineGap;
   int baseline;
   int rowSize;
+  int tabWidth;  // May be changed later
   float scale;
-// Must be set before loadFont() is called. Cannot be changed after
-  int faceSize;
+  float underlineThickness;
+  float strikethroughThickness;
+  float underlinePosition;
+  float strikethroughPosition;
+  // Must be set before loadFont() is called. Cannot be changed after
+  int faceSize;      // Default is 20. All the parameters are calcualted based on this
+  int tabWidthInSpaces;  // Default is 8, set this before loadFont(). Max 128. Sets tabWidth when font is loaded
 ...
   }
   
@@ -178,7 +188,7 @@ fc.loadFont(mFontData);
 Automatic Management:
 ```c++
 filep * file = openFile("path/to/file");
-sdl_stb_memory mFontData;
+sttfont_memory mFontData;
 mFontData.alloc(file_size);
 fread(file, &mFontData.data);
 fc.loadFontManaged(mFontData);
@@ -209,13 +219,14 @@ Second way (same effect, but cleaner)
 ```c++
 // creating
 sdl_stb_prerendered_text prt;
+prt.mRenderer = your__SDL_Render__instance;
 fc.renderTextToObject(&prt, "Text"); 
 		
 // Rendering
-prt.draw(mSdlRenderer, x, y);
+prt.draw(x, y);
 
 // Rendering in colour & alpha
-prt.drawWithColor(mSdlRenderer, x, y, 255, 185, 85, 255);
+prt.drawWithColor(x, y, 255, 185, 85, 255);
 
 // Cleanup
 prt.freeTexture();
@@ -245,18 +256,18 @@ Formatted Text
 
 ![Example formatting](example2.png)
 
-First create a `sdl_stb_formatted_text`. The above example was created with:
+First create a `sttfont_formatted_text`. The above example was created with:
 ```
-sdl_stb_formatted_text formattedText;
-formattedText << sdl_stb_format::black << "Plain text "
-	<< sdl_stb_format::bold << "bold text "
-	<< sdl_stb_format::italic << "italic text\n"
-	<< sdl_stb_format::underline << sdl_stb_format::green << "underline text "
-	<< sdl_stb_format::strikethrough << "strikethrough text\n"
-	<< sdl_stb_format::red << sdl_stb_format::bold << "red bold "
-	<< sdl_stb_format::bold << "not red bold "
-	<< sdl_stb_format::red << "red not bold\n"
-	<< sdl_stb_format::bold << sdl_stb_format::italic << sdl_stb_format::colour(255,127,50) << "custom colour";
+sttfont_formatted_text formattedText;
+formattedText << sttfont_format::black << "Plain text "
+	<< sttfont_format::bold << "bold text "
+	<< sttfont_format::italic << "italic text\n"
+	<< sttfont_format::underline << sttfont_format::green << "underline text "
+	<< sttfont_format::strikethrough << "strikethrough text\n"
+	<< sttfont_format::red << sttfont_format::bold << "red bold "
+	<< sttfont_format::bold << "not red bold "
+	<< sttfont_format::red << "red not bold\n"
+	<< sttfont_format::bold << sttfont_format::italic << sttfont_format::colour(255,127,50) << "custom colour";
 ```
 You can combine formatting options with the `<<` operator. Formatting is reset after a string is inserted.
 
@@ -270,13 +281,13 @@ To load a variant use `addFormatFont` or `addFormatFontManaged` after loading a 
 
 ```
 fc.loadFontManaged(notoSans);	// First font - loadFont
-	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD, notoSansBold);
-	fc.addFormatFontManaged(sdl_stb_format::FORMAT_ITALIC, notoSansItalic);
-	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD | sdl_stb_format::FORMAT_ITALIC, notoSansBoldItalic);
+	fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansBold);
+	fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansItalic);
+	fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD | sttfont_format::FORMAT_ITALIC, notoSansBoldItalic);
 fc.addFontManaged(notoSansArmenian);	// Fallback fonts - addFont
-	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD, notoSansArmenianBold);
-	fc.addFormatFontManaged(sdl_stb_format::FORMAT_ITALIC, notoSansArmenianItalic);
-	fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD | sdl_stb_format::FORMAT_ITALIC, notoSansArmenianBoldItalic);
+	fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansArmenianBold);
+	fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansArmenianItalic);
+	fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD | sttfont_format::FORMAT_ITALIC, notoSansArmenianBoldItalic);
 ```
 
 ## Limitations

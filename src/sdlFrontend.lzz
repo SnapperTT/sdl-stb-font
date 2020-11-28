@@ -1,0 +1,244 @@
+#hdr
+// SdlStbFont example
+// By Liam Twigger - 2020
+// Public Domain
+
+struct SDL_Renderer;
+struct SDL_Texture;
+struct SDL_Surface;
+
+#end
+
+#src
+#include <SDL2/SDL.h>
+#end
+
+/// Prerended cached text
+struct sdl_stb_prerendered_text : public sttfont_prerendered_text {
+	SDL_Texture * mSdlTexture;
+	SDL_Renderer * mRenderer;
+	
+	sdl_stb_prerendered_text () : sttfont_prerendered_text(), mSdlTexture(NULL), mRenderer(NULL) {}
+	
+	void freeTexture () {
+		if (mSdlTexture)
+			SDL_DestroyTexture(mSdlTexture);
+		mSdlTexture = NULL;
+		}
+	
+	/// Draws this prerendered text object, returns the x coordinate
+	/// at the end of the drawing
+	int draw (const int x, const int y) {
+		SDL_Rect r;
+		r.x = x;
+		r.y = y;
+		r.w = width;
+		r.h = height;
+		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		return r.x + r.w;
+		}
+		
+	int drawWithColorMod(const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) {
+		SDL_SetTextureColorMod(mSdlTexture, r, g, b);
+		if (a != 255)
+			SDL_SetTextureAlphaMod(mSdlTexture, a);
+		return draw (x, y);
+		}
+	};
+	
+
+/// A glyph
+struct sdl_stb_glyph : public sttfont_glyph {
+	SDL_Texture * mSdlTexture;
+	SDL_Surface * mSdlSurface;
+	
+	sdl_stb_glyph () : sttfont_glyph(), mSdlTexture(0), mSdlSurface(0) {}
+	};
+	
+/// SDL Frontend
+class sdl_stb_font_cache : public sttfont_font_cache {
+public:
+	SDL_Renderer * mRenderer;
+	
+	sdl_stb_font_cache () : sttfont_font_cache(), mRenderer(NULL) {}
+	~sdl_stb_font_cache () {
+		clearGlyphs();
+		}
+			
+	SSF_MAP<uint64_t, sdl_stb_glyph> mGlyphs;
+	
+	void clearGlyphs () {
+		for (auto & g : mGlyphs) {
+			if (g.second.mSdlTexture) {
+				SDL_DestroyTexture(g.second.mSdlTexture);
+				g.second.mSdlTexture = NULL;
+				}
+			if (g.second.mSdlSurface) {
+				SDL_FreeSurface(g.second.mSdlSurface);
+				g.second.mSdlSurface = NULL;
+				}
+			}
+		mGlyphs.clear();
+		}
+	
+	/// Binds an SDL_Renderer for rendering
+	/// Must be called before drawing any text
+	void bindRenderer(SDL_Renderer * _mRenderer) {
+		mRenderer = _mRenderer;
+		}
+	
+
+	// Override - write 
+	void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
+		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
+		gOut2->mSdlSurface = SDL_CreateRGBSurfaceFrom(bitmap2, w, h, 32, 4*w, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);
+		}
+	
+	sttfont_glyph * getGlyph(const uint64_t target) {
+		auto it = mGlyphs.find(target);
+		if (it == mGlyphs.end())
+			return NULL;
+		return &((*it).second);
+		}
+		
+	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
+		sdl_stb_glyph g;
+		genGlyph(codepoint, format, &g);
+		mGlyphs[target] = g;
+		return getGlyph(target);
+		}
+		
+	
+	void processCodepoint (int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int kerningAdv, int & overdraw) {
+		// Draws the character, advances x & y to the next position
+		// NOTE: KErning
+		uint8_t formatCode = 0;
+		if (format)
+			formatCode = format->format;
+			
+		sdl_stb_glyph * G = (sdl_stb_glyph*) getGlyphOrTofu(codepoint, formatCode);
+		if (!G) {
+			x += faceSize/2;
+			return;
+			}
+		if (isDrawing) {
+			SDL_Rect r;
+			r.x = x + G->xOffset;
+			r.y = y + G->yOffset + baseline;
+			r.w = G->width;
+			r.h = G->height;
+			
+			if (G->mSdlTexture) {
+				if (format) {
+					int charAdv = kerningAdv + G->xOffset;
+					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+					uint8_t cr,cg,cb,ca;
+					if (isColoured || formatCode) {
+						SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
+						SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
+						// Remove bleeding pixels
+						SDL_Rect r2;
+						r2.x = r.x; r2.y = r.y;
+						r2.w = r.w; r2.h = r.h;
+						if (r2.x < overdraw) {
+							int dx = overdraw - r2.x;
+							r2.x += dx;
+							r2.w -= dx;
+							}
+						overdraw = r.x + r.w;
+						SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+						}
+					if (formatCode)
+						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
+					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+					
+					if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
+						SDL_Rect r2;
+						r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
+						if (r2.h < 1) r2.h = 1;
+						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
+						SDL_RenderFillRect (mRenderer, &r2);
+						}
+					if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
+						SDL_Rect r2;
+						r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
+						if (r2.h < 1) r2.h = 1;
+						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
+						SDL_RenderFillRect (mRenderer, &r2);
+						}
+					
+					if (isColoured || formatCode) {
+						SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
+						SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
+						}
+					}
+				else {
+					overdraw = SSF_INT_MIN;
+					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+					}
+				}
+			}
+		x += scale*G->advance;
+		}
+		
+	/// Creates a SDL_Texture of a suitable size and renders an entire string to it
+	SDL_Texture * renderTextToTexture (const char * c, const uint32_t maxLen = -1, int * widthOut = NULL, int * heightOut = NULL) {
+		return renderTextToTexture_worker(NULL, c, maxLen, widthOut, heightOut);
+		}
+	SDL_Texture * renderTextToTexture (const sttfont_formatted_text & formatted, int * widthOut = NULL, int * heightOut = NULL) {
+		return renderTextToTexture_worker(&formatted, NULL, -1, widthOut, heightOut);
+		}
+protected:
+	SDL_Texture * renderTextToTexture_worker (const sttfont_formatted_text * formatted, const char * c, const uint32_t maxLen = -1, int * widthOut = NULL, int * heightOut = NULL) {
+		int width, height;
+		if (formatted)
+			getTextSize(width, height, *formatted);
+		else
+			getTextSize(width, height, c, maxLen);
+		
+		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
+		SDL_SetRenderTarget(mRenderer, RT);
+		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
+		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
+		// Fill RT with blank pixels. SDL_RenderClear will leave artefacts in SDL Software mode
+		SDL_Rect r;
+		r.x = 0; r.y = 0;
+		r.w = width; r.h = height;
+		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
+		
+		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_BLEND);
+		if (formatted)
+			drawText(0, 0, *formatted);
+		else
+			drawText(0, 0, c, maxLen);
+		
+		SDL_SetRenderTarget(mRenderer, NULL);
+		
+		*widthOut = width;
+		*heightOut = height;
+		return RT;
+		}
+public:
+	SDL_Texture * renderTextToTexture (const SSF_STRING & str, int * widthOut = NULL, int * heightOut = NULL) {
+		return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
+		}
+	
+	/// Same as renderTextToTexture, but stores the result in an object that has a convienent 
+	void renderTextToObject (sttfont_prerendered_text * textOut, const char * c, const uint32_t maxLen = -1) {
+		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
+		textOut2->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
+		}
+	void renderTextToObject (sttfont_prerendered_text * textOut, const SSF_STRING & str) {
+		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
+		textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+	void renderTextToObject (sttfont_prerendered_text * textOut, const sttfont_formatted_text & str) {
+		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
+		textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+	
+	
+	}
+

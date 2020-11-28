@@ -32,7 +32,7 @@ void readFileRaw (const std::string & fullPath, std::string & output) {
 	}
 
 /// Opens a file and stores it in a stb_memory for automatic management
-void readFileRaw_toMemory (const std::string & fullPath, sdl_stb_memory & mem) {
+void readFileRaw_toMemory (const std::string & fullPath, sttfont_memory & mem) {
 	std::ifstream fs(fullPath.c_str(), std::ios::in | std::ios::binary);
 	
 	if (!fs.is_open()) {
@@ -64,22 +64,22 @@ const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol:
 
 // Formatted text example
 // set (test = 5) to see
-sdl_stb_formatted_text formattedText;
-formattedText << sdl_stb_format::black << "Plain text "
-	<< sdl_stb_format::bold << "bold text "
-	<< sdl_stb_format::italic << "italic text\n"
-	<< sdl_stb_format::underline << sdl_stb_format::green << "underline text\t"
-	<< sdl_stb_format::strikethrough << "strikethrough text\n"
-	<< sdl_stb_format::red << sdl_stb_format::bold << "red bold\t"
-	<< sdl_stb_format::bold << "not red bold\t"
-	<< sdl_stb_format::red << "red not bold\n"
-	<< sdl_stb_format::bold << sdl_stb_format::italic			<< sdl_stb_format::colour(255,127, 50) << "custom colour\t"
-	<< sdl_stb_format::bold << sdl_stb_format::strikethrough	<< sdl_stb_format::colour(127,255, 50) << "bold strikethrough\n"
-	<< sdl_stb_format::bold << sdl_stb_format::underline		<< sdl_stb_format::colour(  0, 50,200) << "bold underline\t"
-	<< sdl_stb_format::italic << sdl_stb_format::strikethrough	<< sdl_stb_format::colour(255,255, 50) << "italic strikethrough\n"
-	<< sdl_stb_format::italic << sdl_stb_format::underline		<< sdl_stb_format::colour(127, 50,255) << "italic underline"
+sttfont_formatted_text formattedText;
+formattedText << sttfont_format::black << "Plain text "
+	<< sttfont_format::bold << "bold text "
+	<< sttfont_format::italic << "italic text\n"
+	<< sttfont_format::underline << sttfont_format::green << "underline text\t"
+	<< sttfont_format::strikethrough << "strikethrough text\n"
+	<< sttfont_format::red << sttfont_format::bold << "red bold\t"
+	<< sttfont_format::bold << "not red bold\t"
+	<< sttfont_format::red << "red not bold\n"
+	<< sttfont_format::bold << sttfont_format::italic			<< sttfont_format::colour(255,127, 50) << "custom colour\t"
+	<< sttfont_format::bold << sttfont_format::strikethrough	<< sttfont_format::colour(127,255, 50) << "bold strikethrough\n"
+	<< sttfont_format::bold << sttfont_format::underline		<< sttfont_format::colour(  0, 50,200) << "bold underline\t"
+	<< sttfont_format::italic << sttfont_format::strikethrough	<< sttfont_format::colour(255,255, 50) << "italic strikethrough\n"
+	<< sttfont_format::italic << sttfont_format::underline		<< sttfont_format::colour(127, 50,255) << "italic underline"
 	;
-	//sdl_stb_format::colour(255,127,50) 
+	//sttfont_format::colour(255,127,50) 
 	sdl_stb_font_cache fc;
 	fc.faceSize = 24;
 	fc.tabWidthInSpaces = 12;	// Big value to make the effects obvious. For non-monospace fonts a value like this is good
@@ -93,8 +93,8 @@ formattedText << sdl_stb_format::black << "Plain text "
 	// if notoSansBuffer is destroyed then fc will perform undefined
 	// behaviour
 	//
-	// 2. Load the file into a sdl_stb_memory and let SdlStbFont manage it
-	//		sdl_stb_memory notoSansMem;
+	// 2. Load the file into a sttfont_memory and let SdlStbFont manage it
+	//		sttfont_memory notoSansMem;
 	// 		readFileRaw_toMemory("fonts/NotoSans-Regular.ttf, notoSansMem);
 	//		fc.loadFont(notoSansMem);
 	//	fc will now own the contents of notoSansMem and you can safely
@@ -103,17 +103,17 @@ formattedText << sdl_stb_format::black << "Plain text "
 	
 	{
 		
-		sdl_stb_memory notoSans;
-			sdl_stb_memory notoSansBold;
-			sdl_stb_memory notoSansItalic;
-			sdl_stb_memory notoSansBoldItalic;
+		sttfont_memory notoSans;
+			sttfont_memory notoSansBold;
+			sttfont_memory notoSansItalic;
+			sttfont_memory notoSansBoldItalic;
 		
-		sdl_stb_memory notoSansArmenian;
-		sdl_stb_memory notoSansGeorgian;
-		sdl_stb_memory notoSansHebrew;
-		//sdl_stb_memory notoSansHindi;
-		sdl_stb_memory notoSansArabic;
-		sdl_stb_memory notoSansCJK;
+		sttfont_memory notoSansArmenian;
+		sttfont_memory notoSansGeorgian;
+		sttfont_memory notoSansHebrew;
+		//sttfont_memory notoSansHindi;
+		sttfont_memory notoSansArabic;
+		sttfont_memory notoSansCJK;
 		
 		readFileRaw_toMemory("fonts/NotoSans-Regular.ttf", notoSans);
 			readFileRaw_toMemory("fonts/NotoSans-Bold.ttf", notoSansBold);
@@ -127,9 +127,9 @@ formattedText << sdl_stb_format::black << "Plain text "
 		readFileRaw_toMemory("fonts/NotoSansCJKjp-Regular.otf", notoSansCJK);
 		
 		fc.loadFontManaged(notoSans);
-			fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD, notoSansBold);
-			fc.addFormatFontManaged(sdl_stb_format::FORMAT_ITALIC, notoSansItalic);
-			fc.addFormatFontManaged(sdl_stb_format::FORMAT_BOLD | sdl_stb_format::FORMAT_ITALIC, notoSansBoldItalic);
+			fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansBold);
+			fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansItalic);
+			fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD | sttfont_format::FORMAT_ITALIC, notoSansBoldItalic);
 		fc.addFontManaged(notoSansArmenian);
 		fc.addFontManaged(notoSansGeorgian);
 		fc.addFontManaged(notoSansHebrew);
@@ -227,6 +227,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 	if (test == 3) {
 		// Rendering text to a render target wrapped in an object & reusing
 		sdl_stb_prerendered_text prt;
+		prt.mRenderer = mSdlRenderer;
 		fc.renderTextToObject(&prt, "Render Object Test - " + loremIpsum); // Renders the loremIpsum string and stores in the prt object
 		
 		for (int i = 0;; ++i) {
@@ -243,7 +244,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 			SDL_RenderClear(mSdlRenderer);
 							
 			//prt.draw(mSdlRenderer, 5, 5); // Render without colour modification
-			prt.drawWithColorMod(mSdlRenderer, 5, 5, 255, 185, 80, 255); // Render in orange
+			prt.drawWithColorMod(5, 5, 255, 185, 80, 255); // Render in orange
 
 			SDL_RenderPresent(mSdlRenderer);
 			
@@ -289,9 +290,11 @@ formattedText << sdl_stb_format::black << "Plain text "
 	if (test == 5) {
 		// Formatted text to render target
 		sdl_stb_prerendered_text prt;
+		prt.mRenderer = mSdlRenderer;
 		fc.renderTextToObject(&prt, formattedText); 
 		
 		sdl_stb_prerendered_text prt2;
+		prt.mRenderer = mSdlRenderer;
 		fc.renderTextToObject(&prt2, "Normal text after"); // Render normal text to test that colors/style is not messed up
 		
 		int numRows = fc.getNumberOfRows(formattedText);
@@ -309,8 +312,8 @@ formattedText << sdl_stb_format::black << "Plain text "
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
 			SDL_RenderClear(mSdlRenderer);
 			
-			prt.draw(mSdlRenderer, 5, 5);
-			prt2.draw(mSdlRenderer, 5, 5 + fc.faceSize * (numRows)); 
+			prt.draw(5, 5);
+			prt2.draw(5, 5 + fc.faceSize * (numRows)); 
 			
 			SDL_RenderPresent(mSdlRenderer);
 			
