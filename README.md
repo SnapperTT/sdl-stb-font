@@ -38,10 +38,6 @@ Example image takes ~5ms to render (~200 FPS) if rendering directly (`drawText`)
 
 For text that lasts more than one frame you should cache it with either `renderTextToTexture` or `renderTextToObject`.
 
-## How Does The Frontend/Backend Work?
-This consists of two parts - a font handling backend (classes named `sttfont_*`) and a SDL rendering frontend (`sdl_stb_*`).
-
-To make your own rendering frontend extend the relevent `sttfont_*` classes. See the SDL implementation for details. Its ~200 lines of code, all you have to do is take out the SDL specific stuff and put in your renderer specific stuff.
 
 How Do I?
 =========
@@ -56,6 +52,7 @@ How Do I?
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
 * [Get Where in a String a User has Clicked](#get-where-in-a-string-a-user-has-clicked)
 * [Handle Tabs](#handle-tabs)
+* [Write A Custom Frontend](#write-a-custom-backend)
 
 Formatted Text:
 * [Print Formatted Text?](#print-formatted-text)
@@ -248,6 +245,11 @@ Tab width is handled by the variable `fc.tabWidth`. Characters after a tab will 
 
 You can set `fc.tabWidthInSpaces = X` before calling `fc.loadFont(...)` to automatically set `fc.tabWidth` to some multiple of the space width. By default fonts are set to 8 spaces in width. Lower values are better for monospace fonts, higher values are better for non-monospace fonts.
 
+## Write A Custom Frontend
+This library consists of two parts - a font handling backend (classes named `sttfont_*`) and a SDL rendering frontend (`sdl_stb_*`).
+
+To make your own rendering frontend extend the relevent `sttfont_*` classes. See the SDL implementation for details. Its ~200 lines of code, all you have to do is take out the SDL specific stuff and put in your renderer specific stuff. In your application, include `sttFont.h` instead of `sdlStbFont.h`
+
 
 Formatted Text
 ==============
@@ -260,14 +262,18 @@ First create a `sttfont_formatted_text`. The above example was created with:
 ```
 sttfont_formatted_text formattedText;
 formattedText << sttfont_format::black << "Plain text "
-	<< sttfont_format::bold << "bold text "
-	<< sttfont_format::italic << "italic text\n"
-	<< sttfont_format::underline << sttfont_format::green << "underline text "
-	<< sttfont_format::strikethrough << "strikethrough text\n"
-	<< sttfont_format::red << sttfont_format::bold << "red bold "
-	<< sttfont_format::bold << "not red bold "
-	<< sttfont_format::red << "red not bold\n"
-	<< sttfont_format::bold << sttfont_format::italic << sttfont_format::colour(255,127,50) << "custom colour";
+<< sttfont_format::bold << "bold text "
+<< sttfont_format::italic << "italic text\n"
+<< sttfont_format::underline << sttfont_format::green << "underline text\t"
+<< sttfont_format::strikethrough << "strikethrough text\n"
+<< sttfont_format::red << sttfont_format::bold << "red bold\t"
+<< sttfont_format::bold << "not red bold\t"
+<< sttfont_format::red << "red not bold\n"
+<< sttfont_format::bold << sttfont_format::italic		<< sttfont_format::colour(255,127, 50) << "custom colour\t"
+<< sttfont_format::bold << sttfont_format::strikethrough	<< sttfont_format::colour(127,255, 50) << "bold strikethrough\n"
+<< sttfont_format::bold << sttfont_format::underline		<< sttfont_format::colour(  0, 50,200) << "bold underline\t"
+<< sttfont_format::italic << sttfont_format::strikethrough	<< sttfont_format::colour(255,255, 50) << "italic strikethrough\n"
+<< sttfont_format::italic << sttfont_format::underline		<< sttfont_format::colour(127, 50,255) << "italic underline"
 ```
 You can combine formatting options with the `<<` operator. Formatting is reset after a string is inserted.
 
