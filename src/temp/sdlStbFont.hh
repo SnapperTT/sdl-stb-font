@@ -187,12 +187,14 @@ public:
   int lineGap;
   int baseline;
   int rowSize;
+  int tabWidth;
   float scale;
   float underlineThickness;
   float strikethroughThickness;
   float underlinePosition;
   float strikethroughPosition;
   int faceSize;
+  int tabWidthInSpaces;
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
   sdl_stb_font_cache ();
   ~ sdl_stb_font_cache ();

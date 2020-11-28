@@ -42,9 +42,9 @@ void sdl_stb_format::combine (sdl_stb_format const & other)
 		a = 255*((a/255.0)*(other.a/255.0));
 		}
 sdl_stb_format sdl_stb_format::color (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
-                                                                                                                  { return sdl_stb_format(_r,_g,_b,_a); }
+                                                                                                                  { return sdl_stb_format(FORMAT_NONE,_r,_g,_b,_a); }
 sdl_stb_format sdl_stb_format::colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
-                                                                                                                   { return sdl_stb_format(_r,_g,_b,_a); }
+                                                                                                                   { return sdl_stb_format(FORMAT_NONE,_r,_g,_b,_a); }
 sdl_stb_format const sdl_stb_format::bold = sdl_stb_format(FORMAT_BOLD);
 sdl_stb_format const sdl_stb_format::italic = sdl_stb_format(FORMAT_ITALIC);
 sdl_stb_format const sdl_stb_format::underline = sdl_stb_format(FORMAT_UNDERLINE);
@@ -205,8 +205,8 @@ void sdl_stb_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 			}
 		}
 sdl_stb_font_cache::sdl_stb_font_cache ()
-  : mRenderer (NULL), ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), scale (1.f), faceSize (20), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0)
-                                                                                                                         {}
+  : mRenderer (NULL), ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8)
+                                                  {}
 sdl_stb_font_cache::~ sdl_stb_font_cache ()
                                {
 		clearGlyphs();
@@ -247,6 +247,11 @@ void sdl_stb_font_cache::loadFont (char const * ttf_buffer, int index)
 		strikethroughPosition = baseline * 0.75 - strikethroughThickness/2;
 		underlineThickness = strikethroughThickness;
 		underlinePosition = baseline + underlineThickness;
+		
+		int w,h;
+		getTextSize(w,h,"                                                                                                                                ", tabWidthInSpaces <= 128 ? tabWidthInSpaces : 128);
+		tabWidth = w;
+		if (tabWidth < 1) tabWidth = 1;
 		}
 void sdl_stb_font_cache::loadFontManaged (sdl_stb_memory & memory, int index)
                                                                       {
@@ -472,7 +477,12 @@ int sdl_stb_font_cache::processString (int const x, int const y, char const * c,
 		
 		while (uChar && seek <= maxLen) {
 			int xxl = xx;
-			if (uChar == '\n') {
+			if (uChar == '\t') {
+				// Next tab position:
+				int nTabsSoFar = (xx - x)/tabWidth;
+				xx = x + (nTabsSoFar+1)*tabWidth;
+				}
+			else if (uChar == '\n') {
 				if (widthOut)
 					if (*widthOut < xx) *widthOut = xx;
 				hasNewlined = true;

@@ -50,6 +50,7 @@ How Do I?
 * [Caching Results in a Texture](#caching-results-in-a-texture)
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
 * [Get Where in a String a User has Clicked](#get-where-in-a-string-a-user-has-clicked)
+* [Handle Tabs](#handle-tabs)
 
 Formatted Text:
 * [Print Formatted Text?](#print-formatted-text)
@@ -230,6 +231,12 @@ Use `SDL_SetTextureColorMod` with a cached texture. Or use `sdl_stb_prerendered_
 Use `getCaretPos(text, relativeMouseX, relativeMouseY)`
 
 Note that this only currently supports carret lookup in strings without newlines - if you attempt this with a multiline string then it may return an incorrect value. 
+
+## Handle Tabs
+Tab width is handled by the variable `fc.tabWidth`. Characters after a tab will align to the next tab location.
+
+You can set `fc.tabWidthInSpaces = X` before calling `fc.loadFont(...)` to automatically set `fc.tabWidth` to some multiple of the space width. By default fonts are set to 8 spaces in width. Lower values are better for monospace fonts, higher values are better for non-monospace fonts.
+
 
 Formatted Text
 ==============

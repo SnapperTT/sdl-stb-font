@@ -62,19 +62,28 @@ int main(int argc, char**argv) {
 // 
 const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol: €.\nGreek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\nÍslenska / Icelandic: Ég get etið gler án þess að meiða mig.\nPolish: Mogę jeść szkło, i mi nie szkodzi.\nRomanian: Pot să mănânc sticlă și ea nu mă rănește.\nUkrainian: Я можу їсти шкло, й воно мені не пошкодить.\nArmenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\nGeorgian: მინას ვჭამ და არა მტკივა.\nHebrew: אני יכול לאכול זכוכית וזה לא מזיק לי.\nArabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\nChinese: 我能吞下玻璃而不伤身体。\nChinese (Traditional): 我能吞下玻璃而不傷身體。 \nJapanese: 私はガラスを食べられます。それは私を傷つけません。\nKorean: 률로 정한다. 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다\nCJK Variants: 判 与 海 直 約 返 次 今 ";
 
+// Formatted text example
+// set (test = 5) to see
 sdl_stb_formatted_text formattedText;
 formattedText << sdl_stb_format::black << "Plain text "
 	<< sdl_stb_format::bold << "bold text "
 	<< sdl_stb_format::italic << "italic text\n"
-	<< sdl_stb_format::underline << sdl_stb_format::green << "underline text "
+	<< sdl_stb_format::underline << sdl_stb_format::green << "underline text\t"
 	<< sdl_stb_format::strikethrough << "strikethrough text\n"
-	<< sdl_stb_format::red << sdl_stb_format::bold << "red bold "
-	<< sdl_stb_format::bold << "not red bold "
+	<< sdl_stb_format::red << sdl_stb_format::bold << "red bold\t"
+	<< sdl_stb_format::bold << "not red bold\t"
 	<< sdl_stb_format::red << "red not bold\n"
-	<< sdl_stb_format::bold << sdl_stb_format::italic << sdl_stb_format::colour(255,127,50) << "custom colour";
-					
+	<< sdl_stb_format::bold << sdl_stb_format::italic			<< sdl_stb_format::colour(255,127, 50) << "custom colour\t"
+	<< sdl_stb_format::bold << sdl_stb_format::strikethrough	<< sdl_stb_format::colour(127,255, 50) << "bold strikethrough\n"
+	<< sdl_stb_format::bold << sdl_stb_format::underline		<< sdl_stb_format::colour(  0, 50,200) << "bold underline\t"
+	<< sdl_stb_format::italic << sdl_stb_format::strikethrough	<< sdl_stb_format::colour(255,255, 50) << "italic strikethrough\n"
+	<< sdl_stb_format::italic << sdl_stb_format::underline		<< sdl_stb_format::colour(127, 50,255) << "italic underline"
+	;
+	//sdl_stb_format::colour(255,127,50) 
 	sdl_stb_font_cache fc;
 	fc.faceSize = 24;
+	fc.tabWidthInSpaces = 12;	// Big value to make the effects obvious. For non-monospace fonts a value like this is good
+								// You can manually set fc.tabWidth after calling loadFont()
 	
 	// Ways to load font data:
 	// 1. Load a file into some container (such as a std::string)
@@ -146,7 +155,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 	
 	// Rendering test
 	// Set this to something else to print
-	int test = 3;
+	int test = 5;
 	
 	
 	if (test == 1) {
@@ -232,7 +241,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 			
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
 			SDL_RenderClear(mSdlRenderer);
-			
+							
 			//prt.draw(mSdlRenderer, 5, 5); // Render without colour modification
 			prt.drawWithColorMod(mSdlRenderer, 5, 5, 255, 185, 80, 255); // Render in orange
 
@@ -284,7 +293,9 @@ formattedText << sdl_stb_format::black << "Plain text "
 		
 		sdl_stb_prerendered_text prt2;
 		fc.renderTextToObject(&prt2, "Normal text after"); // Render normal text to test that colors/style is not messed up
-				
+		
+		int numRows = fc.getNumberOfRows(formattedText);
+		
 		for (int i = 0;; ++i) {
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
@@ -299,7 +310,7 @@ formattedText << sdl_stb_format::black << "Plain text "
 			SDL_RenderClear(mSdlRenderer);
 			
 			prt.draw(mSdlRenderer, 5, 5);
-			prt2.draw(mSdlRenderer, 5, 5 + fc.faceSize * 5); 
+			prt2.draw(mSdlRenderer, 5, 5 + fc.faceSize * (numRows)); 
 			
 			SDL_RenderPresent(mSdlRenderer);
 			
