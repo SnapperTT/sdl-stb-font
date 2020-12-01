@@ -25,24 +25,29 @@ uint8_t const sttfont_format::FORMAT_ITALIC = 1 << 1;
 uint8_t const sttfont_format::FORMAT_UNDERLINE = 1 << 2;
 uint8_t const sttfont_format::FORMAT_STRIKETHROUGH = 1 << 3;
 uint8_t const sttfont_format::FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS = 1 << 7;
+uint8_t const sttfont_format::FORMAT_FLAGS_COLOUR_SET = 1 << 0;
 sttfont_format::sttfont_format ()
-  : r (255), g (255), b (255), a (255), format (0)
-                                                                     {}
+  : r (255), g (255), b (255), a (255), format (0), flags (0)
+                                                                               {}
+sttfont_format::sttfont_format (uint8_t const _format)
+  : r (255), g (255), b (255), a (255), format (_format), flags (0)
+                                                                                                    {}
 sttfont_format::sttfont_format (uint8_t const _format, uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
-  : r (_r), g (_g), b (_b), a (_a), format (_format)
-                                                                                      {}
+  : r (_r), g (_g), b (_b), a (_a), format (_format), flags (FORMAT_FLAGS_COLOUR_SET)
+                                                                                                                      {}
 void sttfont_format::combine (sttfont_format const & other)
                                                    {
 		format |= other.format;
+		flags |= other.flags;
 		r = 255*((r/255.0)*(other.r/255.0));
 		g = 255*((g/255.0)*(other.g/255.0));
 		b = 255*((b/255.0)*(other.b/255.0));
 		a = 255*((a/255.0)*(other.a/255.0));
 		}
 sttfont_format sttfont_format::color (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
-                                                                                                                  { return sttfont_format(FORMAT_NONE,_r,_g,_b,_a); }
+                                                                                                                   { sttfont_format ret(FORMAT_NONE,_r,_g,_b,_a); ret.flags |= FORMAT_FLAGS_COLOUR_SET; return ret; }
 sttfont_format sttfont_format::colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
-                                                                                                                   { return sttfont_format(FORMAT_NONE,_r,_g,_b,_a); }
+                                                                                                                   { sttfont_format ret(FORMAT_NONE,_r,_g,_b,_a); ret.flags |= FORMAT_FLAGS_COLOUR_SET; return ret; }
 sttfont_format const sttfont_format::bold = sttfont_format(FORMAT_BOLD);
 sttfont_format const sttfont_format::italic = sttfont_format(FORMAT_ITALIC);
 sttfont_format const sttfont_format::underline = sttfont_format(FORMAT_UNDERLINE);
@@ -70,6 +75,8 @@ sttfont_formatted_text_item & sttfont_formatted_text_item::setCallback (sttfont_
                                                                                { callback = _cb; return *this; }
 sttfont_formatted_text::sttfont_formatted_text ()
                                 {}
+sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text const & obj)
+                                                                   { mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); }
 sttfont_formatted_text::sttfont_formatted_text (SSF_STRING const & text)
                                                         { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (SSF_STRING_MS text)
@@ -108,10 +115,49 @@ sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_
                                                                                       { mItems.push_back(obj); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_text_item_MS obj)
                                                                                         { mItems.push_back(obj); return *this; }
+sttfont_formatted_text sttfont_formatted_text::copy () const
+                                            {
+		// Explicit copy - named function
+		sttfont_formatted_text r = *this;
+		return r;
+		}
+void sttfont_formatted_text::append (sttfont_formatted_text const & obj)
+                                                        {
+		mItems.insert(mItems.end(), obj.mItems.begin(), obj.mItems.end());
+		activeFormat = obj.activeFormat;
+		}
+void sttfont_formatted_text::append (sttfont_formatted_text_MS obj)
+                                                   {
+		mItems.insert(mItems.end(), std::make_move_iterator(obj.mItems.begin()), std::make_move_iterator(obj.mItems.end()));
+		activeFormat = obj.activeFormat;
+		}
+void sttfont_formatted_text::setColour (sttfont_format const & fmt)
+                                                   {
+		/// If any pieces do not have their colour set, set the colour to fmt's colour
+		for (sttfont_formatted_text_item & sfti : mItems) {
+			if (!(sfti.format.flags & sttfont_format::FORMAT_FLAGS_COLOUR_SET)) {
+				uint8_t nfmt  = fmt.format | sfti.format.format;
+				uint8_t nflg  = fmt.flags;
+				sfti.format = fmt;
+				sfti.format.format = nfmt;
+				sfti.format.flags  = nflg;
+				}
+			}
+		}
+void sttfont_formatted_text::mergeIdenticalSegments ()
+                                      {
+		/// "Cleans" up this object by merging adjacent items if they have the same format
+		for (unsigned int  i = mItems.size() - 2; i < mItems.size(); --i ) {
+			if (mItems[i].format == mItems[i+1].format) {
+				mItems[i].text += mItems[i+1].text;
+				mItems.erase(mItems.begin() + i + 1);
+				}
+			}
+		}
 bool sttfont_formatted_text::back (unsigned int const num)
                                           {
-		// Removes @num characters from the end of this
-		// Returns true if changed
+		/// Removes @num characters from the end of this
+		/// Returns true if changed
 		unsigned int nToRemove = num;
 		for (unsigned int  i = mItems.size() - 1; i < mItems.size(); --i ) {
 			if ( mItems[i].text.size() <= nToRemove) {
@@ -131,7 +177,7 @@ bool sttfont_formatted_text::back (unsigned int const num)
 		}
 void sttfont_formatted_text::insert (unsigned int const position, SSF_STRING const & str)
                                                                          {
-		// Inserts @str at character position @pos
+		/// Inserts @str at character position @pos
 		unsigned int workingLen = 0;
 		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
 			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
@@ -146,7 +192,7 @@ void sttfont_formatted_text::insert (unsigned int const position, SSF_STRING con
 		}
 size_t sttfont_formatted_text::size () const
                             {
-		// Combined length of all the segments
+		/// Combined length of all the segments
 		size_t workingLen = 0;
 		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
 			workingLen += mItems[i].text.size();
@@ -157,12 +203,14 @@ size_t sttfont_formatted_text::length () const
                               { return size(); }
 bool sttfont_formatted_text::isEmpty () const
                              {
-		// Returns true if there are no segments, or there is a single empty segment
-		if (mItems.size()) return !mItems[0].text.size();
-		return true;
+		/// Returns true if there are no segments, or there is a single empty segment
+		if (!mItems.size()) return true;
+		if (mItems.size() == 0) return !mItems[0].text.size();
+		return false;
 		}
 SSF_STRING sttfont_formatted_text::getString () const
                                      {
+		/// Returns a plain unformatted string of all the segments stitched together
 		SSF_STRING r;
 		r.reserve(size());
 		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
@@ -170,33 +218,164 @@ SSF_STRING sttfont_formatted_text::getString () const
 			}
 		return r;
 		}
-void sttfont_formatted_text::remove_substr_worker2 (sttfont_formatted_text & tt, unsigned int & index, int const offset, unsigned int const num, int * const writeOut)
-                                                                                                                                                             {
-		if (num == tt.mItems[index].text.size() && offset == 0) {
-			tt.mItems.erase(tt.mItems.begin() + index);
-			--index;
-			return;
+void sttfont_formatted_text::getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut) const
+                                                                                                              {
+		/// Returns the segment index and position within the segment of a character position
+		indexOut = -1;
+		localPosOut = -1;
+		unsigned int workingLen = 0;
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
+				indexOut = i;
+				localPosOut = position - workingLen;	
+				return;
+				}
+			workingLen += mItems[i].text.size();
 			}
-		tt.mItems[index].text.erase(offset, num);
-		}
-void sttfont_formatted_text::remove_substr_worker2 (sttfont_formatted_text const & tt, unsigned int & index, int const offset, unsigned int const num, SSF_STRING * const writeOut)
-                                                                                                                                                                          {
-		*writeOut += tt.mItems[index].text.substr(offset, num);
 		}
 void sttfont_formatted_text::remove (unsigned int const position, unsigned int const num)
                                                                          {
-		// Removes @num characters after position num
-		// UNTESTED!!
-		int dummy;
-		remove_substr_worker1(*this, position, num, &dummy);
+		/// Removes @num characters after position num
+		unsigned int index, offset;
+		getIndexAt(position, index, offset);
+		if (index >= mItems.size()) return; // not found
+		
+		unsigned int numToRemove = num;
+		
+		for (unsigned int i = index; i < mItems.size(); ++i) {
+			unsigned int nToRemove = mItems[i].text.size() - offset;
+			if (nToRemove > numToRemove) nToRemove = numToRemove;
+			
+			if (nToRemove == mItems[i].text.size() && offset == 0) {
+				mItems.erase(mItems.begin() + i);
+				--i;
+				return;
+				}
+			mItems[i].text.erase(offset, nToRemove);
+			
+			numToRemove -= nToRemove;
+			offset = 0;
+			}
+			
 		}
 SSF_STRING sttfont_formatted_text::substr (unsigned int const position, unsigned int const num) const
                                                                                      {
-		// Reads @num characters after @position. If num goes past the end of a string
-		// then returns the end of the string. Returns as a plain string
+		/// Reads @num characters after @position. If num goes past the end of a string
+		/// then returns the end of the string. Returns as a plain string
+		/// To get a "formatted" substr use this->extract(position, num);
 		SSF_STRING r;
-		remove_substr_worker1(*this, position, num, &r);
+		unsigned int index, offset;
+		getIndexAt(position, index, offset);
+		if (index >= mItems.size()) return r; // not found
+		
+		unsigned int numToRemove = num;
+		
+		for (unsigned int i = index; i < mItems.size(); ++i) {
+			unsigned int nToRemove = mItems[i].text.size() - offset;
+			if (nToRemove > numToRemove) nToRemove = numToRemove;
+			
+			r += mItems[i].text.substr(offset, nToRemove);
+			
+			numToRemove -= nToRemove;
+			offset = 0;
+			}
 		return r;
+		}
+sttfont_formatted_text sttfont_formatted_text::extract (unsigned int const position, unsigned int const num) const
+                                                                                                  {
+		/// Creates a new @sttfont_formatted_text containing the segments starting at character @position and of length @num in bytes
+		/// To get a std::string substring use this->substr(position, num)
+		sttfont_formatted_text r;
+		
+		unsigned int index, offset;
+		getIndexAt(position, index, offset);
+		if (index >= mItems.size()) {
+			return r;
+			}
+			
+		unsigned int numToRemove = num;
+		
+		for (unsigned int i = index; i < mItems.size() && numToRemove; ++i) {
+			unsigned int nToRemove = mItems[i].text.size() - offset;
+			if (nToRemove > numToRemove) nToRemove = numToRemove;
+			
+			//std::cout << "extracting: " << i << " " << " offset: " << offset << ", nToRemove: " << nToRemove << "/" << numToRemove << " " << mItems[i].text.size() << std::endl;
+			
+			if (nToRemove == mItems[i].text.size() && offset == 0) {
+				r.mItems.push_back(mItems[i]);
+				}
+			else {
+				sttfont_formatted_text_item sfti;
+				sfti.format = mItems[i].format;
+				sfti.text = mItems[i].text.substr(offset, nToRemove);
+				r.mItems.push_back(sfti);
+				}
+			//r += mItems[i].text.substr(offset, nToRemove);
+			
+			numToRemove -= nToRemove;
+			offset = 0;
+			}
+		return r;
+		}
+void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks, uint32_t const escapeChar) const
+                                                                                                                                                                         {
+		/// Breaks this into an array of sttfont_formatted_text objects
+		/// tokenised by "delimter" (unless inbetween two `"` marks).
+		/// An escape character negates the delimiter
+		/// Handles UTF-8
+		///
+		/// Example usage - tokenise on newlines:
+		///     vector<sttfont_formatted_text> output;
+		///     input.tokenise(output, '\n', true, '\\');
+		///
+		const sttfont_formatted_text & stringIn = *this;
+		
+		bool open = false;
+		bool escape = false;
+		
+		uint32_t segmentStart = 0;	// The start of the working token
+		uint32_t workingPos = 0;	// The cumulative positon along the string
+		uint32_t offset = 0;		// A small offset to prevent including the token character in the extracted strings
+		
+		for (size_t si = 0; si < stringIn.mItems.size(); ++si) {
+			const SSF_STRING & s = stringIn.mItems[si].text;
+			uint32_t seek = 0;
+			const uint32_t len = s.length();
+			
+			while (seek < len) {
+				const uint32_t seekBefore = seek;
+				uint32_t uChar = sttfont_font_cache::utf8_read(&s[seek], seek, len);
+				
+				if (escape) {
+					escape = false;
+					continue;
+					}
+			
+				if (uChar == escapeChar) {
+					// Add the next charcter in regardless
+					escape = true;
+					continue;
+					}
+				if (uChar != delimiter || open) {
+					if (uChar != '"' || !checkQuoteMarks) {
+						// No-op
+						}
+					else {
+						open = !open;
+						}
+					}
+				else {
+					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset);
+					segmentStart = workingPos + seekBefore;
+					offset = sttfont_font_cache::utf8_charsize(uChar); // Used to skip including the newline
+					arrOut.push_back(std::move(d));
+					}
+				}
+			workingPos += len;
+			}
+		
+		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1);
+		arrOut.push_back(std::move(d));
 		}
 sttfont_prerendered_text::sttfont_prerendered_text ()
   : width (0), height (0)
@@ -444,7 +623,7 @@ int sttfont_font_cache::getKerningAdvance (uint32_t const cp1, uint32_t const cp
 		return stbtt_GetCodepointKernAdvance(&mFont.mFont, cp1, cp2);
 		}
 int sttfont_font_cache::utf8_charsize (char const * c)
-                                         {
+                                                {
 		if (!c) return 0;
 		if ((uint8_t)*c <= 0x7F) return 1;
 		else if ((uint8_t)*c <= 0xE0) return 2;
@@ -452,8 +631,15 @@ int sttfont_font_cache::utf8_charsize (char const * c)
 		else
 			return 4;
 		}
+int sttfont_font_cache::utf8_charsize (uint32_t const codepoint)
+                                                           {
+		if ((codepoint & 0x000000ff) == codepoint) return 1;
+		if ((codepoint & 0x0000ffff) == codepoint) return 2;
+		if ((codepoint & 0x00ffffff) == codepoint) return 3;
+		return 4;
+		}
 uint32_t sttfont_font_cache::utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen)
-                                                                                  {
+                                                                                         {
 		if (!c) return 0;
 		int chsz = utf8_charsize(c);
 		seek += chsz;
@@ -603,6 +789,8 @@ int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, i
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
 		
+		size_t runningLength = 0;
+		
 		for (unsigned int i = 0; i < text.mItems.size(); ++i) {
 			const sttfont_formatted_text_item & ssfti = text.mItems[i];
 			
@@ -613,7 +801,14 @@ int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, i
 			int widthWorking, heightWorking;
 			
 			int xOffsetBefore = xOffset;
-			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			int carretPosition2 = -1;
+			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
+			
+			if (caretPosition) {
+				if (carretPosition2 >= 0)
+					*caretPosition = runningLength + carretPosition2;
+				runningLength += ssfti.text.size(); // running length is only calculated here as its only used here
+				}
 			
 			xOffset -= x;
 			yOffset += heightWorking - scale*rowSize;

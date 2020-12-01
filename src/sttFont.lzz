@@ -77,216 +77,7 @@ struct sttfont_formatted_text;
 
 #end
 
-/// Formatted text
-struct sttfont_format_callback {
-	virtual void callbackOnDraw(const sttfont_formatted_text & text, int index, int x, int y, int xOffsetInitial, int xOffsetAfter, int segmentWidth, int segmentHeight) {}
-	};
-	
-// Include file for sttfont_font
-
-struct sttfont_format_reset {};
-struct sttfont_format {
-	uint8_t r,g,b,a;
-	uint8_t format;
-	static const uint8_t FORMAT_NONE 		  = 0 << 0;
-	static const uint8_t FORMAT_BOLD 		  = 1 << 0;
-	static const uint8_t FORMAT_ITALIC 		  = 1 << 1;
-	static const uint8_t FORMAT_UNDERLINE 	  = 1 << 2;
-	static const uint8_t FORMAT_STRIKETHROUGH = 1 << 3;
-	static const uint8_t FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS = 1 << 7;
-	
-	sttfont_format() : r(255), g(255), b(255), a(255), format(0) {}
-	sttfont_format(const uint8_t _format, const uint8_t _r = 255, const uint8_t _g = 255, const uint8_t _b = 255, const uint8_t _a = 255)
-					: r(_r), g(_g), b(_b), a(_a), format(_format) {}
-	
-	void combine(const sttfont_format & other) {
-		format |= other.format;
-		r = 255*((r/255.0)*(other.r/255.0));
-		g = 255*((g/255.0)*(other.g/255.0));
-		b = 255*((b/255.0)*(other.b/255.0));
-		a = 255*((a/255.0)*(other.a/255.0));
-		}
-	
-	// Constants and "constants"
-	static sttfont_format color(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sttfont_format(FORMAT_NONE,_r,_g,_b,_a); }
-	static sttfont_format colour(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { return sttfont_format(FORMAT_NONE,_r,_g,_b,_a); }
-	
-	static const sttfont_format bold = sttfont_format(FORMAT_BOLD);
-	static const sttfont_format italic = sttfont_format(FORMAT_ITALIC);
-	static const sttfont_format underline = sttfont_format(FORMAT_UNDERLINE);
-	static const sttfont_format strikethrough = sttfont_format(FORMAT_STRIKETHROUGH);
-	// If you don't like the colours, extend this class and define your own
-	static const sttfont_format red 	= sttfont_format(FORMAT_NONE,255,  0,  0,255);
-	static const sttfont_format green	= sttfont_format(FORMAT_NONE,  0,255,  0,255);
-	static const sttfont_format blue 	= sttfont_format(FORMAT_NONE,  0,  0,255,255);
-	static const sttfont_format yellow 	= sttfont_format(FORMAT_NONE,255,255,  0,255);
-	static const sttfont_format black 	= sttfont_format(FORMAT_NONE,  0,  0,  0,255);
-	static const sttfont_format white	= sttfont_format(FORMAT_NONE,255,255,255,255);
-	static const sttfont_format magenta	= sttfont_format(FORMAT_NONE,255,  0,255,255);
-	static const sttfont_format cyan	= sttfont_format(FORMAT_NONE,  0,255,255,255);
-	static const sttfont_format grey	= sttfont_format(FORMAT_NONE,128,128,128,255);
-	
-	static const sttfont_format_reset reset;
-	};
-	
-struct sttfont_formatted_text_item {
-	SSF_STRING text;
-	sttfont_format format;
-	sttfont_format_callback * callback;
-	sttfont_formatted_text_item () : callback(0) {}
-	sttfont_formatted_text_item (const SSF_STRING & _text, const sttfont_format & _format)	: text(_text), format(_format), callback(0) {}
-	sttfont_formatted_text_item (SSF_STRING_MS _text, const sttfont_format & _format) 		: text(_text), format(_format), callback(0) {}
-	sttfont_formatted_text_item& setCallback(sttfont_format_callback* _cb) { callback = _cb; return *this; }
-	};
-	
-struct sttfont_formatted_text {
-	SSF_VECTOR<sttfont_formatted_text_item> mItems;
-	sttfont_format activeFormat;
-	
-	sttfont_formatted_text(){}
-	sttfont_formatted_text(const SSF_STRING & text) { *this << text; }
-	sttfont_formatted_text(SSF_STRING_MS text) 		{ *this << text; }
-	sttfont_formatted_text(const char * text) 		{ *this << text; }
-	sttfont_formatted_text(sttfont_formatted_text_item_MS text)			{ *this << text; }
-	sttfont_formatted_text(const sttfont_formatted_text_item & text)	{ *this << text; }
-	sttfont_formatted_text(sttfont_formatted_text_MS obj){ mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); }
-	sttfont_formatted_text& operator = (sttfont_formatted_text_MS obj){ mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); return *this; }
-	sttfont_formatted_text& operator = (const sttfont_formatted_text & obj){ mItems = obj.mItems; activeFormat = obj.activeFormat; return *this; }
-	void resetFormat() { activeFormat = sttfont_format(); }
-	sttfont_formatted_text& operator << (const SSF_STRING & text) 	{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this; }
-	sttfont_formatted_text& operator << (SSF_STRING_MS text) 		{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator << (const char * text) 		{ mItems.push_back(sttfont_formatted_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator += (const SSF_STRING & text) 	{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this; }
-	sttfont_formatted_text& operator += (SSF_STRING_MS text) 		{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator += (const char * text) 			{ mItems.push_back(sttfont_formatted_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator << (const sttfont_format & format) 		{ activeFormat.combine(format); return *this; }
-	sttfont_formatted_text& operator << (const sttfont_format_reset & reset) 	{ resetFormat(); return *this; }
-	sttfont_formatted_text& operator << (const sttfont_formatted_text_item & obj) { mItems.push_back(obj); return *this; }
-	sttfont_formatted_text& operator << (sttfont_formatted_text_item_MS obj) 	{ mItems.push_back(obj); return *this; }
-
-	
-	// Editing functions:
-	bool back(const unsigned int num) {
-		// Removes @num characters from the end of this
-		// Returns true if changed
-		unsigned int nToRemove = num;
-		for (unsigned int  i = mItems.size() - 1; i < mItems.size(); --i ) {
-			if ( mItems[i].text.size() <= nToRemove) {
-				nToRemove -= mItems[i].text.size();
-				mItems.erase(mItems.begin() + i);
-				if (nToRemove == 0 || i == 0) {
-					return true;
-					}
-				}
-			else {
-				SSF_STRING& s = mItems[i].text;
-				s = s.erase(s.length()-nToRemove);
-				return true;
-				}
-			}
-		return false;
-		}
-		
-	void insert(const unsigned int position, const SSF_STRING & str) {
-		// Inserts @str at character position @pos
-		unsigned int workingLen = 0;
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
-			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
-				unsigned int localPos = position - workingLen;				
-				mItems[i].text.insert(localPos, str);
-				return;
-				}
-			workingLen += mItems[i].text.size();
-			}
-		// Pos is at the end - append string
-		*this << str;
-		}
-		
-	size_t size() const {
-		// Combined length of all the segments
-		size_t workingLen = 0;
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
-			workingLen += mItems[i].text.size();
-			}
-		return workingLen;
-		}
-	size_t length() const { return size(); }
-	
-	bool isEmpty() const {
-		// Returns true if there are no segments, or there is a single empty segment
-		if (mItems.size()) return !mItems[0].text.size();
-		return true;
-		}
-		
-	SSF_STRING getString() const {
-		SSF_STRING r;
-		r.reserve(size());
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
-			r += mItems[i].text;
-			}
-		return r;
-		}
-	
-private:
-	static void remove_substr_worker2(sttfont_formatted_text & tt, unsigned int & index, const int offset, const unsigned int num, int * const writeOut) {
-		if (num == tt.mItems[index].text.size() && offset == 0) {
-			tt.mItems.erase(tt.mItems.begin() + index);
-			--index;
-			return;
-			}
-		tt.mItems[index].text.erase(offset, num);
-		}
-		
-	static void remove_substr_worker2(const sttfont_formatted_text & tt, unsigned int & index, const int offset, const unsigned int num, SSF_STRING * const writeOut) {
-		*writeOut += tt.mItems[index].text.substr(offset, num);
-		}
-	
-	template<typename TT, typename RR>	// template used to handle const-ness
-	static void remove_substr_worker1(TT & tt, const unsigned int position, const unsigned int num, RR * const writeOut = NULL) {
-		unsigned int numToRemove = num;
-		unsigned int removeIndex = -1;
-		unsigned int workingLen = 0;
-		for (unsigned int  i = 0; i < tt.mItems.size(); ++i ) {
-			if (tt.mItems[i].text.size() + workingLen > position && workingLen <= position) {
-				removeIndex = i;
-				break;
-				}
-			workingLen += tt.mItems[i].text.size();
-			}
-		if (removeIndex >= tt.mItems.size()) return; // not found
-		
-		int offset = position - workingLen;	
-		
-		for (unsigned int i = removeIndex; i < tt.mItems.size(); ++i) {
-			unsigned int nToRemove = tt.mItems[i].text.size() - offset;
-			if (nToRemove > numToRemove) nToRemove = numToRemove;
-			
-			remove_substr_worker2(tt, i, offset, nToRemove, writeOut);
-			
-			numToRemove -= nToRemove;
-			offset = 0;
-			}
-			
-		}
-		
-public:
-	void remove(const unsigned int position, const unsigned int num) {
-		// Removes @num characters after position num
-		// UNTESTED!!
-		int dummy;
-		remove_substr_worker1(*this, position, num, &dummy);
-		}
-	
-	SSF_STRING substr(const unsigned int position, const unsigned int num) const {
-		// Reads @num characters after @position. If num goes past the end of a string
-		// then returns the end of the string. Returns as a plain string
-		SSF_STRING r;
-		remove_substr_worker1(*this, position, num, &r);
-		return r;
-		}
-		
-		
-	};
+#insert "sttFontFormattedText.lzz"
 
 struct sttfont_prerendered_text {
 	int width, height;
@@ -617,7 +408,7 @@ public:
 		return stbtt_GetCodepointKernAdvance(&mFont.mFont, cp1, cp2);
 		}
 	
-	int utf8_charsize(const char* c) {
+	static int utf8_charsize(const char* c) {
 		if (!c) return 0;
 		if ((uint8_t)*c <= 0x7F) return 1;
 		else if ((uint8_t)*c <= 0xE0) return 2;
@@ -625,9 +416,16 @@ public:
 		else
 			return 4;
 		}
+		
+	static int utf8_charsize(const uint32_t codepoint) {
+		if ((codepoint & 0x000000ff) == codepoint) return 1;
+		if ((codepoint & 0x0000ffff) == codepoint) return 2;
+		if ((codepoint & 0x00ffffff) == codepoint) return 3;
+		return 4;
+		}
 	
 	/// Reads a utf8 codepoint from a string
-	uint32_t utf8_read(const char* c, uint32_t & seek, const uint32_t maxLen) {
+	static uint32_t utf8_read(const char* c, uint32_t & seek, const uint32_t maxLen) {
 		if (!c) return 0;
 		int chsz = utf8_charsize(c);
 		seek += chsz;
@@ -784,6 +582,8 @@ public:
 		if (widthOut) *widthOut = 0;
 		if (heightOut) *heightOut = 0;
 		
+		size_t runningLength = 0;
+		
 		for (unsigned int i = 0; i < text.mItems.size(); ++i) {
 			const sttfont_formatted_text_item & ssfti = text.mItems[i];
 			
@@ -794,7 +594,14 @@ public:
 			int widthWorking, heightWorking;
 			
 			int xOffsetBefore = xOffset;
-			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition, xOffset); // color!!!
+			int carretPosition2 = -1;
+			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
+			
+			if (caretPosition) {
+				if (carretPosition2 >= 0)
+					*caretPosition = runningLength + carretPosition2;
+				runningLength += ssfti.text.size(); // running length is only calculated here as its only used here
+				}
 			
 			xOffset -= x;
 			yOffset += heightWorking - scale*rowSize;

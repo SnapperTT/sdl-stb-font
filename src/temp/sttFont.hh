@@ -75,14 +75,19 @@ struct sttfont_format
   uint8_t b;
   uint8_t a;
   uint8_t format;
+  uint8_t flags;
+  uint8_t (padding) [2];
   static uint8_t const FORMAT_NONE;
   static uint8_t const FORMAT_BOLD;
   static uint8_t const FORMAT_ITALIC;
   static uint8_t const FORMAT_UNDERLINE;
   static uint8_t const FORMAT_STRIKETHROUGH;
   static uint8_t const FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS;
+  static uint8_t const FORMAT_FLAGS_COLOUR_SET;
   sttfont_format ();
-  sttfont_format (uint8_t const _format, uint8_t const _r = 255, uint8_t const _g = 255, uint8_t const _b = 255, uint8_t const _a = 255);
+  sttfont_format (uint8_t const _format);
+  sttfont_format (uint8_t const _format, uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
+  bool operator == (sttfont_format const & other) const;
   void combine (sttfont_format const & other);
   static sttfont_format color (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
   static sttfont_format colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
@@ -116,6 +121,7 @@ struct sttfont_formatted_text
   SSF_VECTOR <sttfont_formatted_text_item> mItems;
   sttfont_format activeFormat;
   sttfont_formatted_text ();
+  sttfont_formatted_text (sttfont_formatted_text const & obj);
   sttfont_formatted_text (SSF_STRING const & text);
   sttfont_formatted_text (SSF_STRING_MS text);
   sttfont_formatted_text (char const * text);
@@ -135,20 +141,22 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator << (sttfont_format_reset const & reset);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item const & obj);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item_MS obj);
+  sttfont_formatted_text copy () const;
+  void append (sttfont_formatted_text const & obj);
+  void append (sttfont_formatted_text_MS obj);
+  void setColour (sttfont_format const & fmt);
+  void mergeIdenticalSegments ();
   bool back (unsigned int const num);
   void insert (unsigned int const position, SSF_STRING const & str);
   size_t size () const;
   size_t length () const;
   bool isEmpty () const;
   SSF_STRING getString () const;
-private:
-  static void remove_substr_worker2 (sttfont_formatted_text & tt, unsigned int & index, int const offset, unsigned int const num, int * const writeOut);
-  static void remove_substr_worker2 (sttfont_formatted_text const & tt, unsigned int & index, int const offset, unsigned int const num, SSF_STRING * const writeOut);
-  template <typename TT, typename RR>
-  static void remove_substr_worker1 (TT & tt, unsigned int const position, unsigned int const num, RR * const writeOut = NULL);
-public:
+  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut) const;
   void remove (unsigned int const position, unsigned int const num);
   SSF_STRING substr (unsigned int const position, unsigned int const num) const;
+  sttfont_formatted_text extract (unsigned int const position, unsigned int const num) const;
+  void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\') const;
 };
 struct sttfont_prerendered_text
 {
@@ -232,8 +240,9 @@ public:
   sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format);
   virtual sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
   int getKerningAdvance (uint32_t const cp1, uint32_t const cp2);
-  int utf8_charsize (char const * c);
-  uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
+  static int utf8_charsize (char const * c);
+  static int utf8_charsize (uint32_t const codepoint);
+  static uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
   int drawText (int const x, int const y, char const * c, uint32_t const maxLen = -1);
   int drawText (int const x, int const y, SSF_STRING const & str);
   int drawText (int const x, int const y, int & widthOut, int & heightOut, char const * c, uint32_t const maxLen = -1);
@@ -258,33 +267,9 @@ public:
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
 };
-template <typename TT, typename RR>
-void sttfont_formatted_text::remove_substr_worker1 (TT & tt, unsigned int const position, unsigned int const num, RR * const writeOut)
-                                                                                                                                    {
-		unsigned int numToRemove = num;
-		unsigned int removeIndex = -1;
-		unsigned int workingLen = 0;
-		for (unsigned int  i = 0; i < tt.mItems.size(); ++i ) {
-			if (tt.mItems[i].text.size() + workingLen > position && workingLen <= position) {
-				removeIndex = i;
-				break;
-				}
-			workingLen += tt.mItems[i].text.size();
-			}
-		if (removeIndex >= tt.mItems.size()) return; // not found
-		
-		int offset = position - workingLen;	
-		
-		for (unsigned int i = removeIndex; i < tt.mItems.size(); ++i) {
-			unsigned int nToRemove = tt.mItems[i].text.size() - offset;
-			if (nToRemove > numToRemove) nToRemove = numToRemove;
-			
-			remove_substr_worker2(tt, i, offset, nToRemove, writeOut);
-			
-			numToRemove -= nToRemove;
-			offset = 0;
-			}
-			
+LZZ_INLINE bool sttfont_format::operator == (sttfont_format const & other) const
+                                                                     {
+		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
 		}
 #undef LZZ_INLINE
 #endif

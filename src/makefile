@@ -1,12 +1,13 @@
 # This makefile creates the .h files in the parent directory from .lzz files here
 LAZY=../tools/lzz -hx hh
 RAWSOURCES=sdlFrontend.lzz sttFont.lzz example.lzz
+SUBSOURCES=sttFontFormattedText.lzz
 OUTPUTDIR=../
 TEMPDIR=temp/
 SOURCES=$(addprefix $(TEMPDIR),$(RAWSOURCES:.lzz=.cpp))
 SFI=$(addprefix $(OUTPUTDIR), $(RAWSOURCES:.lzz=.h))
 
-all: $(SOURCES) $(SFI) 
+all: $(SOURCES) $(SFI)
 	mv ../example.h ../example.cpp
 	cat ../sttFont.h ../sdlFrontend.h > ../sdlStbFont.h
 
@@ -14,7 +15,7 @@ all: $(SOURCES) $(SFI)
 	rm -rf $(TEMPDIR)*
 
 # Convert .lzz to .cpp and .hh
-$(TEMPDIR)%.cpp $(TEMPDIR)%.hh: %.lzz
+$(TEMPDIR)%.cpp $(TEMPDIR)%.hh: %.lzz $(SUBSOURCES)
 	mkdir -p $(TEMPDIR)$(dir $<)
 	$(LAZY) -o $(TEMPDIR)$(dir $<) $<
 		
