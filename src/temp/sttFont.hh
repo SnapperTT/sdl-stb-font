@@ -3,6 +3,14 @@
 
 #ifndef LZZ_sttFont_hh
 #define LZZ_sttFont_hh
+
+#ifndef STTR_ENABLED
+namespace sttr {
+	template<typename T> inline const char * getTypeName() { return "sttr_not_defined"; }
+	template<typename T> inline char * getTypeSignature() { return (char*) 0; }
+	}
+#endif
+
 #ifndef STB_TRUETYPE_INCLUDE_HANDLED
 	////////////////////////////////////////
 	// STB TRUETYPE 
@@ -105,6 +113,9 @@ struct sttfont_format
   static sttfont_format const cyan;
   static sttfont_format const grey;
   static sttfont_format_reset const reset;
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_text_item
 {
@@ -115,6 +126,9 @@ struct sttfont_formatted_text_item
   sttfont_formatted_text_item (SSF_STRING const & _text, sttfont_format const & _format);
   sttfont_formatted_text_item (SSF_STRING_MS _text, sttfont_format const & _format);
   sttfont_formatted_text_item & setCallback (sttfont_format_callback * _cb);
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_text
 {
@@ -141,6 +155,9 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator << (sttfont_format_reset const & reset);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item const & obj);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item_MS obj);
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
   sttfont_formatted_text copy () const;
   void append (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text_MS obj);

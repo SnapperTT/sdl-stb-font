@@ -1,6 +1,18 @@
 // control-f -> "// Make your own implmentation for your own frontend here" for notes w.r.t making your own rendering frontend
+#define STTFONT_STTR_CLASS_SIG(X)																\
+	virtual void * sttr_getClassSig() const { return (void*) sttr::getTypeSignature<X>(); } \
+	virtual const char * const sttr_getClassName() const { return sttr::getTypeName<X>(); }
+
 
 #hdr
+
+#ifndef STTR_ENABLED
+namespace sttr {
+	template<typename T> inline const char * getTypeName() { return "sttr_not_defined"; }
+	template<typename T> inline char * getTypeSignature() { return (char*) 0; }
+	}
+#endif
+
 #ifndef STB_TRUETYPE_INCLUDE_HANDLED
 	////////////////////////////////////////
 	// STB TRUETYPE 

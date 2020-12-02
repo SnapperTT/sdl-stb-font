@@ -61,6 +61,44 @@ struct sttfont_format {
 	static const sttfont_format grey	= sttfont_format(FORMAT_NONE,128,128,128,255);
 	
 	static const sttfont_format_reset reset;
+	
+	static void sttr_register() {
+		#ifdef STTR_ENABLED
+		// Reflection stuff - see snappertt/sttr on github for more info. You don't need STTR to use this library
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_format>("sttfont_format")
+			.STTR_REGF(sttfont_format,r,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,g,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,b,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,a,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,format,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,flags,STTR_JSON_ENABLED)
+			
+			.STTR_REG(sttfont_format,combine)
+			
+			.STTR_REG(sttfont_format,color)
+			.STTR_REG(sttfont_format,colour)
+			.STTR_REG(sttfont_format,bold)
+			.STTR_REG(sttfont_format,italic)
+			.STTR_REG(sttfont_format,underline)
+			.STTR_REG(sttfont_format,strikethrough)
+			
+			.STTR_REG(sttfont_format,red)
+			.STTR_REG(sttfont_format,green)
+			.STTR_REG(sttfont_format,blue)
+			.STTR_REG(sttfont_format,yellow)
+			.STTR_REG(sttfont_format,black)
+			.STTR_REG(sttfont_format,white)
+			.STTR_REG(sttfont_format,magenta)
+			.STTR_REG(sttfont_format,cyan)
+			.STTR_REG(sttfont_format,grey)
+			
+			.STTR_REG(sttfont_format,reset)
+		.endClass();
+		#endif
+		}
+	STTFONT_STTR_CLASS_SIG(sttfont_format)
+	
 	};
 	
 struct sttfont_formatted_text_item {
@@ -71,6 +109,17 @@ struct sttfont_formatted_text_item {
 	sttfont_formatted_text_item (const SSF_STRING & _text, const sttfont_format & _format)	: text(_text), format(_format), callback(0) {}
 	sttfont_formatted_text_item (SSF_STRING_MS _text, const sttfont_format & _format) 		: text(_text), format(_format), callback(0) {}
 	sttfont_formatted_text_item& setCallback(sttfont_format_callback* _cb) { callback = _cb; return *this; }
+	
+	static void sttr_register() {
+		#ifdef STTR_ENABLED
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_formatted_text_item>("sttfont_formatted_text_item")
+			.STTR_REGF(sttfont_formatted_text_item,text,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_text_item,format,STTR_JSON_ENABLED)
+		.endClass();
+		#endif
+		}
+	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text_item)
 	};
 	
 struct sttfont_formatted_text {
@@ -100,6 +149,17 @@ struct sttfont_formatted_text {
 	sttfont_formatted_text& operator << (const sttfont_format_reset & reset) 	{ resetFormat(); return *this; }
 	sttfont_formatted_text& operator << (const sttfont_formatted_text_item & obj) { mItems.push_back(obj); return *this; }
 	sttfont_formatted_text& operator << (sttfont_formatted_text_item_MS obj) 	{ mItems.push_back(obj); return *this; }
+	
+	static void sttr_register() {
+		#ifdef STTR_ENABLED
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_formatted_text>("sttfont_formatted_text")
+			.STTR_REGF(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_text,activeFormat,STTR_JSON_ENABLED)
+		.endClass();
+		#endif
+		}
+	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text)
 	
 	sttfont_formatted_text copy() const {
 		// Explicit copy - named function

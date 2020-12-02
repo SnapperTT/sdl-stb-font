@@ -4,6 +4,14 @@
 
 #ifndef LZZ_sttFont_hh
 #define LZZ_sttFont_hh
+
+#ifndef STTR_ENABLED
+namespace sttr {
+	template<typename T> inline const char * getTypeName() { return "sttr_not_defined"; }
+	template<typename T> inline char * getTypeSignature() { return (char*) 0; }
+	}
+#endif
+
 #ifndef STB_TRUETYPE_INCLUDE_HANDLED
 	////////////////////////////////////////
 	// STB TRUETYPE 
@@ -106,6 +114,9 @@ struct sttfont_format
   static sttfont_format const cyan;
   static sttfont_format const grey;
   static sttfont_format_reset const reset;
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_text_item
 {
@@ -116,6 +127,9 @@ struct sttfont_formatted_text_item
   sttfont_formatted_text_item (SSF_STRING const & _text, sttfont_format const & _format);
   sttfont_formatted_text_item (SSF_STRING_MS _text, sttfont_format const & _format);
   sttfont_formatted_text_item & setCallback (sttfont_format_callback * _cb);
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_text
 {
@@ -142,6 +156,9 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator << (sttfont_format_reset const & reset);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item const & obj);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item_MS obj);
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
   sttfont_formatted_text copy () const;
   void append (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text_MS obj);
@@ -343,6 +360,46 @@ sttfont_format const sttfont_format::magenta = sttfont_format(FORMAT_NONE,255,  
 sttfont_format const sttfont_format::cyan = sttfont_format(FORMAT_NONE,  0,255,255,255);
 sttfont_format const sttfont_format::grey = sttfont_format(FORMAT_NONE,128,128,128,255);
 sttfont_format_reset const sttfont_format::reset;
+void sttfont_format::sttr_register ()
+                                    {
+		#ifdef STTR_ENABLED
+		// Reflection stuff - see snappertt/sttr on github for more info. You don't need STTR to use this library
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_format>("sttfont_format")
+			.STTR_REGF(sttfont_format,r,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,g,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,b,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,a,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,format,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_format,flags,STTR_JSON_ENABLED)
+			
+			.STTR_REG(sttfont_format,combine)
+			
+			.STTR_REG(sttfont_format,color)
+			.STTR_REG(sttfont_format,colour)
+			.STTR_REG(sttfont_format,bold)
+			.STTR_REG(sttfont_format,italic)
+			.STTR_REG(sttfont_format,underline)
+			.STTR_REG(sttfont_format,strikethrough)
+			
+			.STTR_REG(sttfont_format,red)
+			.STTR_REG(sttfont_format,green)
+			.STTR_REG(sttfont_format,blue)
+			.STTR_REG(sttfont_format,yellow)
+			.STTR_REG(sttfont_format,black)
+			.STTR_REG(sttfont_format,white)
+			.STTR_REG(sttfont_format,magenta)
+			.STTR_REG(sttfont_format,cyan)
+			.STTR_REG(sttfont_format,grey)
+			
+			.STTR_REG(sttfont_format,reset)
+		.endClass();
+		#endif
+		}
+void * sttfont_format::sttr_getClassSig () const
+        { return ( void * ) sttr :: getTypeSignature < sttfont_format > ( ) ; }
+char const * const sttfont_format::sttr_getClassName () const
+        { return sttr :: getTypeName < sttfont_format > ( ) ; }
 sttfont_formatted_text_item::sttfont_formatted_text_item ()
   : callback (0)
                                                      {}
@@ -354,6 +411,20 @@ sttfont_formatted_text_item::sttfont_formatted_text_item (SSF_STRING_MS _text, s
                                                                                                                                                     {}
 sttfont_formatted_text_item & sttfont_formatted_text_item::setCallback (sttfont_format_callback * _cb)
                                                                                { callback = _cb; return *this; }
+void sttfont_formatted_text_item::sttr_register ()
+                                    {
+		#ifdef STTR_ENABLED
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_formatted_text_item>("sttfont_formatted_text_item")
+			.STTR_REGF(sttfont_formatted_text_item,text,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_text_item,format,STTR_JSON_ENABLED)
+		.endClass();
+		#endif
+		}
+void * sttfont_formatted_text_item::sttr_getClassSig () const
+        { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text_item > ( ) ; }
+char const * const sttfont_formatted_text_item::sttr_getClassName () const
+        { return sttr :: getTypeName < sttfont_formatted_text_item > ( ) ; }
 sttfont_formatted_text::sttfont_formatted_text ()
                                 {}
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text const & obj)
@@ -396,6 +467,20 @@ sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_
                                                                                       { mItems.push_back(obj); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_text_item_MS obj)
                                                                                         { mItems.push_back(obj); return *this; }
+void sttfont_formatted_text::sttr_register ()
+                                    {
+		#ifdef STTR_ENABLED
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_formatted_text>("sttfont_formatted_text")
+			.STTR_REGF(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_text,activeFormat,STTR_JSON_ENABLED)
+		.endClass();
+		#endif
+		}
+void * sttfont_formatted_text::sttr_getClassSig () const
+        { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text > ( ) ; }
+char const * const sttfont_formatted_text::sttr_getClassName () const
+        { return sttr :: getTypeName < sttfont_formatted_text > ( ) ; }
 sttfont_formatted_text sttfont_formatted_text::copy () const
                                             {
 		// Explicit copy - named function
