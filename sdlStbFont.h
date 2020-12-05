@@ -163,17 +163,25 @@ struct sttfont_formatted_text
   void append (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text_MS obj);
   void setColour (sttfont_format const & fmt);
-  void mergeIdenticalSegments ();
+  void consolidateSegments ();
+protected:
+  void consolidateSegments_worker ();
+public:
   bool back (unsigned int const num);
   void insert (unsigned int const position, SSF_STRING const & str);
   size_t size () const;
   size_t length () const;
   bool isEmpty () const;
   SSF_STRING getString () const;
-  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut) const;
+  struct lookupHint
+  {
+    unsigned int index;
+    unsigned int workingLen;
+  };
+  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_formatted_text::lookupHint * mHint = NULL) const;
   void remove (unsigned int const position, unsigned int const num);
-  SSF_STRING substr (unsigned int const position, unsigned int const num) const;
-  sttfont_formatted_text extract (unsigned int const position, unsigned int const num) const;
+  SSF_STRING substr (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint = NULL) const;
+  sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint = NULL) const;
   void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\') const;
 };
 struct sttfont_prerendered_text
@@ -510,15 +518,36 @@ void sttfont_formatted_text::setColour (sttfont_format const & fmt)
 				}
 			}
 		}
-void sttfont_formatted_text::mergeIdenticalSegments ()
-                                      {
+void sttfont_formatted_text::consolidateSegments ()
+                                   {
+		/// "Cleans" up this object by merging adjacent items if they have
+		/// the same format, and removes empty segments
+		
+		// Strip empty segments
+		for (unsigned int  i = mItems.size() - 1; i < mItems.size(); --i ) {
+			if (!mItems[i].text.size())
+				mItems.erase(mItems.begin() + i + 1);
+			}
+		size_t szStart;
+		size_t szEnd;
+		do {
+			szStart = mItems.size();
+			consolidateSegments_worker();
+			szEnd = mItems.size();
+			}
+		while (szEnd < szStart);
+		}
+void sttfont_formatted_text::consolidateSegments_worker ()
+                                          {
 		/// "Cleans" up this object by merging adjacent items if they have the same format
+		/// Removes empty segments
 		for (unsigned int  i = mItems.size() - 2; i < mItems.size(); --i ) {
 			if (mItems[i].format == mItems[i+1].format) {
 				mItems[i].text += mItems[i+1].text;
 				mItems.erase(mItems.begin() + i + 1);
 				}
 			}
+		
 		}
 bool sttfont_formatted_text::back (unsigned int const num)
                                           {
@@ -569,9 +598,12 @@ size_t sttfont_formatted_text::length () const
                               { return size(); }
 bool sttfont_formatted_text::isEmpty () const
                              {
-		/// Returns true if there are no segments, or there is a single empty segment
+		/// Returns true if there are no segments, or there are only empty segments
+		/// Ie, returns true if this contains no characters
 		if (!mItems.size()) return true;
-		if (mItems.size() == 0) return !mItems[0].text.size();
+		//if (mItems.size() == 1) return !mItems[0].text.size();
+		for (sttfont_formatted_text_item item : mItems)
+			if (item.text.size()) return false;
 		return false;
 		}
 SSF_STRING sttfont_formatted_text::getString () const
@@ -584,16 +616,31 @@ SSF_STRING sttfont_formatted_text::getString () const
 			}
 		return r;
 		}
-void sttfont_formatted_text::getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut) const
-                                                                                                              {
+void sttfont_formatted_text::getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_formatted_text::lookupHint * mHint) const
+                                                                                                                                                                 {
 		/// Returns the segment index and position within the segment of a character position
+		/// A hint can be used to prevent itterating over the whole thing
 		indexOut = -1;
 		localPosOut = -1;
+		
+		unsigned int start = 0;		
 		unsigned int workingLen = 0;
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+		
+		if (mHint) {
+			if (position >= mHint->workingLen) {
+				start = mHint->index;
+				workingLen = mHint->workingLen;
+				}
+			else {
+				// Uncomment below to test for useless hints
+				//std::cout << "Hint is useless!: " << position << " " << mHint->workingLen << std::endl;
+				}
+			}
+		
+		for (unsigned int  i = start; i < mItems.size(); ++i ) {
 			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
 				indexOut = i;
-				localPosOut = position - workingLen;	
+				localPosOut = position - workingLen;
 				return;
 				}
 			workingLen += mItems[i].text.size();
@@ -624,14 +671,14 @@ void sttfont_formatted_text::remove (unsigned int const position, unsigned int c
 			}
 			
 		}
-SSF_STRING sttfont_formatted_text::substr (unsigned int const position, unsigned int const num) const
-                                                                                     {
+SSF_STRING sttfont_formatted_text::substr (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint) const
+                                                                                                                                        {
 		/// Reads @num characters after @position. If num goes past the end of a string
 		/// then returns the end of the string. Returns as a plain string
 		/// To get a "formatted" substr use this->extract(position, num);
 		SSF_STRING r;
 		unsigned int index, offset;
-		getIndexAt(position, index, offset);
+		getIndexAt(position, index, offset, mHint);
 		if (index >= mItems.size()) return r; // not found
 		
 		unsigned int numToRemove = num;
@@ -647,14 +694,14 @@ SSF_STRING sttfont_formatted_text::substr (unsigned int const position, unsigned
 			}
 		return r;
 		}
-sttfont_formatted_text sttfont_formatted_text::extract (unsigned int const position, unsigned int const num) const
-                                                                                                  {
+sttfont_formatted_text sttfont_formatted_text::extract (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint) const
+                                                                                                                                                     {
 		/// Creates a new @sttfont_formatted_text containing the segments starting at character @position and of length @num in bytes
 		/// To get a std::string substring use this->substr(position, num)
 		sttfont_formatted_text r;
 		
 		unsigned int index, offset;
-		getIndexAt(position, index, offset);
+		getIndexAt(position, index, offset, mHint);
 		if (index >= mItems.size()) {
 			return r;
 			}
@@ -674,7 +721,7 @@ sttfont_formatted_text sttfont_formatted_text::extract (unsigned int const posit
 				sttfont_formatted_text_item sfti;
 				sfti.format = mItems[i].format;
 				sfti.text = mItems[i].text.substr(offset, nToRemove);
-				r.mItems.push_back(sfti);
+				r.mItems.push_back(std::move(sfti));
 				}
 			//r += mItems[i].text.substr(offset, nToRemove);
 			
@@ -702,6 +749,9 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 		uint32_t segmentStart = 0;	// The start of the working token
 		uint32_t workingPos = 0;	// The cumulative positon along the string
 		uint32_t offset = 0;		// A small offset to prevent including the token character in the extracted strings
+		
+		uint32_t workingPosLastStart = 0;
+		uint32_t siLastStart = 0;
 		
 		for (size_t si = 0; si < stringIn.mItems.size(); ++si) {
 			const SSF_STRING & s = stringIn.mItems[si].text;
@@ -731,7 +781,14 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 						}
 					}
 				else {
-					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset);
+					sttfont_formatted_text::lookupHint mHint;
+						mHint.index = siLastStart;
+						mHint.workingLen = workingPosLastStart;
+					
+					workingPosLastStart = workingPos;
+					siLastStart = si;
+					
+					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset, &mHint);
 					segmentStart = workingPos + seekBefore;
 					offset = sttfont_font_cache::utf8_charsize(uChar); // Used to skip including the newline
 					arrOut.push_back(std::move(d));
@@ -740,7 +797,10 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 			workingPos += len;
 			}
 		
-		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1);
+		sttfont_formatted_text::lookupHint mHint;
+			mHint.index = siLastStart;
+			mHint.workingLen = workingPosLastStart;
+		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1, &mHint);
 		arrOut.push_back(std::move(d));
 		}
 sttfont_prerendered_text::sttfont_prerendered_text ()
@@ -1488,6 +1548,10 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 			getTextSize(width, height, c, maxLen);
 		
 		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
+		SDL_Texture * oldRT = SDL_GetRenderTarget(mRenderer);
+		const bool isClipping = SDL_RenderIsClipEnabled(mRenderer);
+		SDL_Rect oldScissor;
+		if (isClipping) SDL_RenderGetClipRect(mRenderer, &oldScissor);
 		SDL_SetRenderTarget(mRenderer, RT);
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
@@ -1503,7 +1567,8 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 		else
 			drawText(0, 0, c, maxLen);
 		
-		SDL_SetRenderTarget(mRenderer, NULL);
+		SDL_SetRenderTarget(mRenderer, oldRT);
+		if (isClipping) SDL_RenderSetClipRect(mRenderer, &oldScissor);
 		
 		*widthOut = width;
 		*heightOut = height;

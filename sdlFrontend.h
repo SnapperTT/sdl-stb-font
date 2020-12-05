@@ -228,6 +228,10 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 			getTextSize(width, height, c, maxLen);
 		
 		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
+		SDL_Texture * oldRT = SDL_GetRenderTarget(mRenderer);
+		const bool isClipping = SDL_RenderIsClipEnabled(mRenderer);
+		SDL_Rect oldScissor;
+		if (isClipping) SDL_RenderGetClipRect(mRenderer, &oldScissor);
 		SDL_SetRenderTarget(mRenderer, RT);
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
@@ -243,7 +247,8 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 		else
 			drawText(0, 0, c, maxLen);
 		
-		SDL_SetRenderTarget(mRenderer, NULL);
+		SDL_SetRenderTarget(mRenderer, oldRT);
+		if (isClipping) SDL_RenderSetClipRect(mRenderer, &oldScissor);
 		
 		*widthOut = width;
 		*heightOut = height;

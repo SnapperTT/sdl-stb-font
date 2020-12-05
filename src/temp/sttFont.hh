@@ -162,17 +162,25 @@ struct sttfont_formatted_text
   void append (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text_MS obj);
   void setColour (sttfont_format const & fmt);
-  void mergeIdenticalSegments ();
+  void consolidateSegments ();
+protected:
+  void consolidateSegments_worker ();
+public:
   bool back (unsigned int const num);
   void insert (unsigned int const position, SSF_STRING const & str);
   size_t size () const;
   size_t length () const;
   bool isEmpty () const;
   SSF_STRING getString () const;
-  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut) const;
+  struct lookupHint
+  {
+    unsigned int index;
+    unsigned int workingLen;
+  };
+  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_formatted_text::lookupHint * mHint = NULL) const;
   void remove (unsigned int const position, unsigned int const num);
-  SSF_STRING substr (unsigned int const position, unsigned int const num) const;
-  sttfont_formatted_text extract (unsigned int const position, unsigned int const num) const;
+  SSF_STRING substr (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint = NULL) const;
+  sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint = NULL) const;
   void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\') const;
 };
 struct sttfont_prerendered_text

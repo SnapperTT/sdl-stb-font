@@ -189,15 +189,39 @@ struct sttfont_formatted_text {
 			}
 		}
 		
-	void mergeIdenticalSegments() {
+	void consolidateSegments() {
+		/// "Cleans" up this object by merging adjacent items if they have
+		/// the same format, and removes empty segments
+		
+		// Strip empty segments
+		for (unsigned int  i = mItems.size() - 1; i < mItems.size(); --i ) {
+			if (!mItems[i].text.size())
+				mItems.erase(mItems.begin() + i + 1);
+			}
+		size_t szStart;
+		size_t szEnd;
+		do {
+			szStart = mItems.size();
+			consolidateSegments_worker();
+			szEnd = mItems.size();
+			}
+		while (szEnd < szStart);
+		}
+
+protected:
+	void consolidateSegments_worker() {
 		/// "Cleans" up this object by merging adjacent items if they have the same format
+		/// Removes empty segments
 		for (unsigned int  i = mItems.size() - 2; i < mItems.size(); --i ) {
 			if (mItems[i].format == mItems[i+1].format) {
 				mItems[i].text += mItems[i+1].text;
 				mItems.erase(mItems.begin() + i + 1);
 				}
 			}
+		
 		}
+		
+public:
 	
 	bool back(const unsigned int num) {
 		/// Removes @num characters from the end of this
@@ -246,9 +270,12 @@ struct sttfont_formatted_text {
 	size_t length() const { return size(); }
 	
 	bool isEmpty() const {
-		/// Returns true if there are no segments, or there is a single empty segment
+		/// Returns true if there are no segments, or there are only empty segments
+		/// Ie, returns true if this contains no characters
 		if (!mItems.size()) return true;
-		if (mItems.size() == 0) return !mItems[0].text.size();
+		//if (mItems.size() == 1) return !mItems[0].text.size();
+		for (sttfont_formatted_text_item item : mItems)
+			if (item.text.size()) return false;
 		return false;
 		}
 		
@@ -262,15 +289,35 @@ struct sttfont_formatted_text {
 		return r;
 		}
 	
-	void getIndexAt(const unsigned int position, unsigned int& indexOut, unsigned int& localPosOut) const {
+	struct lookupHint {
+		unsigned int index;
+		unsigned int workingLen;
+		};
+	
+	void getIndexAt(const unsigned int position, unsigned int& indexOut, unsigned int& localPosOut, sttfont_formatted_text::lookupHint * mHint = NULL) const {
 		/// Returns the segment index and position within the segment of a character position
+		/// A hint can be used to prevent itterating over the whole thing
 		indexOut = -1;
 		localPosOut = -1;
+		
+		unsigned int start = 0;		
 		unsigned int workingLen = 0;
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+		
+		if (mHint) {
+			if (position >= mHint->workingLen) {
+				start = mHint->index;
+				workingLen = mHint->workingLen;
+				}
+			else {
+				// Uncomment below to test for useless hints
+				//std::cout << "Hint is useless!: " << position << " " << mHint->workingLen << std::endl;
+				}
+			}
+		
+		for (unsigned int  i = start; i < mItems.size(); ++i ) {
 			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
 				indexOut = i;
-				localPosOut = position - workingLen;	
+				localPosOut = position - workingLen;
 				return;
 				}
 			workingLen += mItems[i].text.size();
@@ -303,13 +350,13 @@ struct sttfont_formatted_text {
 			
 		}
 	
-	SSF_STRING substr(const unsigned int position, const unsigned int num) const {
+	SSF_STRING substr(const unsigned int position, const unsigned int num, sttfont_formatted_text::lookupHint * mHint = NULL) const {
 		/// Reads @num characters after @position. If num goes past the end of a string
 		/// then returns the end of the string. Returns as a plain string
 		/// To get a "formatted" substr use this->extract(position, num);
 		SSF_STRING r;
 		unsigned int index, offset;
-		getIndexAt(position, index, offset);
+		getIndexAt(position, index, offset, mHint);
 		if (index >= mItems.size()) return r; // not found
 		
 		unsigned int numToRemove = num;
@@ -326,13 +373,13 @@ struct sttfont_formatted_text {
 		return r;
 		}
 		
-	sttfont_formatted_text extract(const unsigned int position, const unsigned int num) const {
+	sttfont_formatted_text extract(const unsigned int position, const unsigned int num, sttfont_formatted_text::lookupHint * mHint = NULL) const {
 		/// Creates a new @sttfont_formatted_text containing the segments starting at character @position and of length @num in bytes
 		/// To get a std::string substring use this->substr(position, num)
 		sttfont_formatted_text r;
 		
 		unsigned int index, offset;
-		getIndexAt(position, index, offset);
+		getIndexAt(position, index, offset, mHint);
 		if (index >= mItems.size()) {
 			return r;
 			}
@@ -352,7 +399,7 @@ struct sttfont_formatted_text {
 				sttfont_formatted_text_item sfti;
 				sfti.format = mItems[i].format;
 				sfti.text = mItems[i].text.substr(offset, nToRemove);
-				r.mItems.push_back(sfti);
+				r.mItems.push_back(std::move(sfti));
 				}
 			//r += mItems[i].text.substr(offset, nToRemove);
 			
@@ -380,6 +427,9 @@ struct sttfont_formatted_text {
 		uint32_t segmentStart = 0;	// The start of the working token
 		uint32_t workingPos = 0;	// The cumulative positon along the string
 		uint32_t offset = 0;		// A small offset to prevent including the token character in the extracted strings
+		
+		uint32_t workingPosLastStart = 0;
+		uint32_t siLastStart = 0;
 		
 		for (size_t si = 0; si < stringIn.mItems.size(); ++si) {
 			const SSF_STRING & s = stringIn.mItems[si].text;
@@ -409,7 +459,14 @@ struct sttfont_formatted_text {
 						}
 					}
 				else {
-					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset);
+					sttfont_formatted_text::lookupHint mHint;
+						mHint.index = siLastStart;
+						mHint.workingLen = workingPosLastStart;
+					
+					workingPosLastStart = workingPos;
+					siLastStart = si;
+					
+					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset, &mHint);
 					segmentStart = workingPos + seekBefore;
 					offset = sttfont_font_cache::utf8_charsize(uChar); // Used to skip including the newline
 					arrOut.push_back(std::move(d));
@@ -418,7 +475,10 @@ struct sttfont_formatted_text {
 			workingPos += len;
 			}
 		
-		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1);
+		sttfont_formatted_text::lookupHint mHint;
+			mHint.index = siLastStart;
+			mHint.workingLen = workingPosLastStart;
+		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1, &mHint);
 		arrOut.push_back(std::move(d));
 		}
 	};
