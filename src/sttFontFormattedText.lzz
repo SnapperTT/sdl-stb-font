@@ -1,4 +1,12 @@
-
+/// Lookup Hint
+struct sttfont_lookupHint {
+	unsigned int index;
+	unsigned int workingLen;
+	int workingX, workingY;		// Working values to do with X and Y stuff. Meaning changes based on the context
+	uint32_t uCharLast;
+	bool writeOut;				// If true, this will be updated after calling getIndexAt
+	sttfont_lookupHint() : index(0), workingLen(0), workingX(0), workingY(0), uCharLast(0), writeOut(false) {}
+	};
 
 /// Formatted text
 struct sttfont_format_callback {
@@ -62,6 +70,12 @@ struct sttfont_format {
 	
 	static const sttfont_format_reset reset;
 	
+	void swap(sttfont_format & other) {
+		sttfont_format tmp = *this;
+		*this = other;
+		other = tmp;
+		}
+		
 	static void sttr_register() {
 		#ifdef STTR_ENABLED
 		// Reflection stuff - see snappertt/sttr on github for more info. You don't need STTR to use this library
@@ -150,6 +164,7 @@ struct sttfont_formatted_text {
 	sttfont_formatted_text& operator << (const sttfont_formatted_text_item & obj) { mItems.push_back(obj); return *this; }
 	sttfont_formatted_text& operator << (sttfont_formatted_text_item_MS obj) 	{ mItems.push_back(obj); return *this; }
 	
+
 	static void sttr_register() {
 		#ifdef STTR_ENABLED
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
@@ -165,15 +180,81 @@ struct sttfont_formatted_text {
 		// Explicit copy - named function
 		sttfont_formatted_text r = *this;
 		return r;
-		} 
+		}
+		
+	void swap(sttfont_formatted_text & other) {
+		other.mItems.swap(mItems);
+		other.activeFormat.swap(activeFormat);
+		}
+		
+	size_t size() const {
+		/// Combined length of all the segments
+		size_t workingLen = 0;
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			workingLen += mItems[i].text.size();
+			}
+		return workingLen;
+		}
+	size_t length() const { return size(); }
+	
+	bool isEmpty() const {
+		/// Returns true if there are no segments, or there are only empty segments
+		/// Ie, returns true if this contains no characters
+		if (!mItems.size()) return true;
+		//if (mItems.size() == 1) return !mItems[0].text.size();
+		for (sttfont_formatted_text_item item : mItems)
+			if (item.text.size()) return false;
+		return false;
+		}
+		
+	SSF_STRING getString() const {
+		/// Returns a plain unformatted string of all the segments stitched together
+		SSF_STRING r;
+		r.reserve(size());
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			r += mItems[i].text;
+			}
+		return r;
+		}
+		
+	SSF_STRING getStringTruncated(const unsigned int maxLen) const {
+		/// Returns a plain unformatted string of all the segments stitched together, cut to max len
+		SSF_STRING r;
+		r.reserve(size());
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			r += mItems[i].text;
+			if (r.size() > maxLen) {
+				if (maxLen > 3)
+					return r.substr(0, maxLen-3)+"...";
+				return r.substr(0, maxLen);
+				}
+			}
+		return r;
+		}
 		
 	void append(const sttfont_formatted_text & obj) {
+		if (obj.mItems.size() == 1 && mItems.size()) {
+			if (mItems[mItems.size()-1].format == obj.mItems[0].format) {
+				mItems[mItems.size()-1].text += obj.mItems[0].text;
+				return;
+				}
+			}
 		mItems.insert(mItems.end(), obj.mItems.begin(), obj.mItems.end());
 		activeFormat = obj.activeFormat;
 		}
 	void append(sttfont_formatted_text_MS obj) {
+		if (obj.mItems.size() == 1 && mItems.size()) {
+			if (mItems[mItems.size()-1].format == obj.mItems[0].format) {
+				mItems[mItems.size()-1].text += std::move(obj.mItems[0].text);
+				return;
+				}
+			}
 		mItems.insert(mItems.end(), std::make_move_iterator(obj.mItems.begin()), std::make_move_iterator(obj.mItems.end()));
 		activeFormat = obj.activeFormat;
+		}
+		
+	void clear() {
+		*this = sttfont_formatted_text();
 		}
 
 	void setColour(const sttfont_format & fmt) {
@@ -224,7 +305,7 @@ protected:
 public:
 	
 	bool back(const unsigned int num) {
-		/// Removes @num characters from the end of this
+		/// Removes @num bytes from the end of this
 		/// Returns true if changed
 		unsigned int nToRemove = num;
 		for (unsigned int  i = mItems.size() - 1; i < mItems.size(); --i ) {
@@ -243,58 +324,8 @@ public:
 			}
 		return false;
 		}
-		
-	void insert(const unsigned int position, const SSF_STRING & str) {
-		/// Inserts @str at character position @pos
-		unsigned int workingLen = 0;
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
-			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
-				unsigned int localPos = position - workingLen;				
-				mItems[i].text.insert(localPos, str);
-				return;
-				}
-			workingLen += mItems[i].text.size();
-			}
-		// Pos is at the end - append string
-		*this << str;
-		}
-		
-	size_t size() const {
-		/// Combined length of all the segments
-		size_t workingLen = 0;
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
-			workingLen += mItems[i].text.size();
-			}
-		return workingLen;
-		}
-	size_t length() const { return size(); }
 	
-	bool isEmpty() const {
-		/// Returns true if there are no segments, or there are only empty segments
-		/// Ie, returns true if this contains no characters
-		if (!mItems.size()) return true;
-		//if (mItems.size() == 1) return !mItems[0].text.size();
-		for (sttfont_formatted_text_item item : mItems)
-			if (item.text.size()) return false;
-		return false;
-		}
-		
-	SSF_STRING getString() const {
-		/// Returns a plain unformatted string of all the segments stitched together
-		SSF_STRING r;
-		r.reserve(size());
-		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
-			r += mItems[i].text;
-			}
-		return r;
-		}
-	
-	struct lookupHint {
-		unsigned int index;
-		unsigned int workingLen;
-		};
-	
-	void getIndexAt(const unsigned int position, unsigned int& indexOut, unsigned int& localPosOut, sttfont_formatted_text::lookupHint * mHint = NULL) const {
+	void getIndexAt(const unsigned int position, unsigned int& indexOut, unsigned int& localPosOut, sttfont_lookupHint * mHint = NULL) const {
 		/// Returns the segment index and position within the segment of a character position
 		/// A hint can be used to prevent itterating over the whole thing
 		indexOut = -1;
@@ -318,17 +349,120 @@ public:
 			if (mItems[i].text.size() + workingLen > position && workingLen <= position) {
 				indexOut = i;
 				localPosOut = position - workingLen;
+				
+				if (mHint) {
+					if (mHint->writeOut) {
+						mHint->index = i;
+						mHint->workingLen = workingLen;
+						}
+					}
+				
 				return;
 				}
 			workingLen += mItems[i].text.size();
 			}
 		}
 		
-
-	void remove(const unsigned int position, const unsigned int num) {
-		/// Removes @num characters after position num
+	void utf8_charsizeAt(const unsigned int position, unsigned int & posOut, unsigned int & sizeOut, sttfont_lookupHint * mHint = NULL) {
+		/// At @position, what is the caracter size? Returns this in @sizeOut
+		/// If this is in the middle of a character, return the position of the start of the character in @posOut
+		posOut = position;
+		sizeOut = 0;
+		
 		unsigned int index, offset;
-		getIndexAt(position, index, offset);
+		getIndexAt(position, index, offset, mHint);
+		if (index >= mItems.size()) return; // not found
+		
+		// Lookup to 3 characters back and get the charSize
+		for (unsigned int lookup = 0; lookup <= offset;) {
+			int thisSz = sttfont_font_cache::utf8_charsize(&mItems[index].text[lookup]);
+			
+			//std::cout << "Lookup utf8_charsizeAt " << lookup << " " << thisSz
+			//		<< " char[" << mItems[index].text.substr(lookup, thisSz) << "] " << offset << std::endl;
+			
+			if (thisSz + lookup > offset) {				
+				//std::cout << "Out! size: " << thisSz << std::endl;
+				posOut = lookup + position - offset;
+				sizeOut = thisSz;
+				return;
+				}
+			if (thisSz)
+				lookup += thisSz;
+			else
+				lookup++;
+			}
+		}
+		
+	void insert(const unsigned int position, const SSF_STRING & str, sttfont_lookupHint * mHint = NULL) {
+		/// Inserts @str at character position @pos
+		unsigned int index, offset;
+		getIndexAt(position, index, offset, mHint);
+		if (index >= mItems.size()) { *this << str; return; } // not found, append to end
+		mItems[index].text.insert(offset, str);
+		}
+		
+	void insert(const unsigned int position, SSF_STRING_MS str, sttfont_lookupHint * mHint = NULL) {
+		/// Inserts @str at character position @pos. Moving version
+		unsigned int index, offset;
+		getIndexAt(position, index, offset, mHint);
+		if (index >= mItems.size()) { *this << std::move(str); return; } // not found, append to end
+		mItems[index].text.insert(offset, std::move(str));
+		}
+		
+	void insert(const unsigned int position, const sttfont_formatted_text & str, sttfont_lookupHint * mHint = NULL) {
+		/// Inserts @str at character position @pos. Copying formatted text version
+		if (str.mItems.size() == 0) return;
+		unsigned int index, offset;
+		getIndexAt(position, index, offset, mHint);
+		if (index >= mItems.size()) { append(str); return; } // not found, append to end
+
+		if (str.mItems.size() == 1) { // Quickie - only 1 format being inserted. Do not split
+			if (mItems[index].format == str.mItems[0].format) {
+				mItems[index].text.insert(offset, str.mItems[0].text); return;
+				}
+			}
+			
+		sttfont_formatted_text_item after = mItems[index];	
+		mItems[index].text.erase(offset);
+		after.text.erase(0, offset);	
+		
+		unsigned int strSz = str.mItems.size();
+		mItems.insert(mItems.begin()+index+1, str.mItems.begin(), str.mItems.end());
+		
+		if (after.text.length())
+			mItems.insert(mItems.begin()+index+1+strSz, std::move(after));
+		}
+		
+	void insert(const unsigned int position, sttfont_formatted_text_MS str, sttfont_lookupHint * mHint = NULL) {
+		/// Inserts @str at character position @pos. Moving version
+		if (str.mItems.size() == 0) return;
+		unsigned int index, offset;
+		getIndexAt(position, index, offset, mHint);
+		if (index >= mItems.size()) { append(std::move(str)); return; } // not found, append to end
+		
+		if (str.mItems.size() == 1) { // Quickie - only 1 format being inserted. Do not split
+			if (mItems[index].format == str.mItems[0].format) {
+				mItems[index].text.insert(offset, std::move(str.mItems[0].text)); return;
+				}
+			}
+			
+		sttfont_formatted_text_item after = mItems[index];	
+		mItems[index].text.erase(offset);
+		after.text.erase(0, offset);	
+		
+		unsigned int strSz = str.mItems.size();
+		mItems.insert(mItems.begin()+index+1, std::make_move_iterator(str.mItems.begin()), std::make_move_iterator(str.mItems.end()));
+		
+		if (after.text.length())
+			mItems.insert(mItems.begin()+index+1+strSz, std::move(after));
+		}
+		
+
+	void remove(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint = NULL) {
+		/// Removes @num characters after position num
+		/// Note that if you're using hints that they might be invalid after removing text
+		unsigned int index, offset;
+		getIndexAt(position, index, offset, mHint);
 		if (index >= mItems.size()) return; // not found
 		
 		unsigned int numToRemove = num;
@@ -350,7 +484,7 @@ public:
 			
 		}
 	
-	SSF_STRING substr(const unsigned int position, const unsigned int num, sttfont_formatted_text::lookupHint * mHint = NULL) const {
+	SSF_STRING substr(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint = NULL) const {
 		/// Reads @num characters after @position. If num goes past the end of a string
 		/// then returns the end of the string. Returns as a plain string
 		/// To get a "formatted" substr use this->extract(position, num);
@@ -373,7 +507,7 @@ public:
 		return r;
 		}
 		
-	sttfont_formatted_text extract(const unsigned int position, const unsigned int num, sttfont_formatted_text::lookupHint * mHint = NULL) const {
+	sttfont_formatted_text extract(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint = NULL) const {
 		/// Creates a new @sttfont_formatted_text containing the segments starting at character @position and of length @num in bytes
 		/// To get a std::string substring use this->substr(position, num)
 		sttfont_formatted_text r;
@@ -409,7 +543,7 @@ public:
 		return r;
 		}
 		
-	void tokenise (SSF_VECTOR<sttfont_formatted_text> & arrOut, const uint32_t delimiter, const bool checkQuoteMarks = true, const uint32_t escapeChar = '\\') const {
+	void tokenise (SSF_VECTOR<sttfont_formatted_text> & arrOut, const uint32_t delimiter, const bool checkQuoteMarks = true, const uint32_t escapeChar = '\\', const bool includeDelimiterInToken = false) const {
 		/// Breaks this into an array of sttfont_formatted_text objects
 		/// tokenised by "delimter" (unless inbetween two `"` marks).
 		/// An escape character negates the delimiter
@@ -430,6 +564,11 @@ public:
 		
 		uint32_t workingPosLastStart = 0;
 		uint32_t siLastStart = 0;
+		
+		uint32_t delimiterSize = 1;
+		if (delimiter > 0x007F) delimiterSize = 2;
+		if (delimiter > 0x07FF) delimiterSize = 3;
+		if (delimiter > 0xFFFF) delimiterSize = 4;
 		
 		for (size_t si = 0; si < stringIn.mItems.size(); ++si) {
 			const SSF_STRING & s = stringIn.mItems[si].text;
@@ -459,10 +598,13 @@ public:
 						}
 					}
 				else {
-					sttfont_formatted_text::lookupHint mHint;
+					sttfont_lookupHint mHint;
 						mHint.index = siLastStart;
 						mHint.workingLen = workingPosLastStart;
-					
+						
+					if (includeDelimiterInToken)
+						workingPos+=delimiterSize;
+						
 					workingPosLastStart = workingPos;
 					siLastStart = si;
 					
@@ -475,7 +617,7 @@ public:
 			workingPos += len;
 			}
 		
-		sttfont_formatted_text::lookupHint mHint;
+		sttfont_lookupHint mHint;
 			mHint.index = siLastStart;
 			mHint.workingLen = workingPosLastStart;
 		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1, &mHint);

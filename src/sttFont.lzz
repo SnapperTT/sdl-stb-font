@@ -237,6 +237,7 @@ public:
 		underlineThickness(1.0), strikethroughThickness(1.0), underlinePosition(0.0), strikethroughPosition(0.0),
 		faceSize(20), tabWidthInSpaces(8) {}
 	virtual ~sttfont_font_cache () {}
+	
 		
 	/// Sets the face size. Must be called BEFORE loading a font!
 	void setFaceSize(const int _faceSize) { faceSize = _faceSize; }
@@ -487,15 +488,15 @@ public:
 		}
 	
 	/// Gets the size of a string (width and height). Returns the x position of the caret at the end of the string
-	int getTextSize (int & w, int & h, const char * c, const uint32_t maxLen = -1) {
-		return processString(0, 0, c, maxLen, NULL, false, &w, &h);
+	int getTextSize (int & w, int & h, const char * c, const uint32_t maxLen = -1, sttfont_lookupHint * mHint = NULL, const int * const maxWidth = NULL) {
+		return processString(0, 0, c, maxLen, NULL, false, &w, &h, maxWidth);
 		}
 		
-	int getTextSize (int & w, int & h, const SSF_STRING & str) {
-		return processString(0, 0, str.data(), str.size(), NULL, false, &w, &h);
+	int getTextSize (int & w, int & h, const SSF_STRING & str, sttfont_lookupHint * mHint = NULL, const int * const maxWidth = NULL) {
+		return processString(0, 0, str.data(), str.size(), NULL, false, &w, &h, maxWidth, mHint);
 		}
-	int getTextSize (int & w, int & h, const sttfont_formatted_text & str) {
-		return processFormatted(str, 0, 0, false, &w, &h);
+	int getTextSize (int & w, int & h, const sttfont_formatted_text & str, sttfont_lookupHint * mHint = NULL, const int * const maxWidth = NULL) {
+		return processFormatted(str, 0, 0, false, &w, &h, maxWidth, mHint);
 		}
 	
 	/// Returns the number of rows (newlines + 1) a string has here
@@ -522,17 +523,28 @@ public:
 		return scale*rowSize*getNumberOfRows(str);
 		}
 		
-	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		// Scan through function and extract the glyphs
 		// returns the x position at the end
 		uint32_t seek = 0;
+		uint32_t seekLast = 0;
 		uint32_t uCharLast = 0;
-		uint32_t uChar = utf8_read(c, seek, maxLen);
+		
 		int xx = x + initialXOffset;
 		int overdraw = SSF_INT_MIN;
 		int yy = y;
-		if (widthOut) *widthOut = 0;
-		if (heightOut) *heightOut = 0;
+		
+		if (mHint) {
+			seek = mHint->workingLen;
+			seekLast = seek;
+			xx = mHint->workingX;
+			yy = mHint->workingY;
+			uCharLast = mHint->uCharLast;
+			}
+			
+		uint32_t uChar = utf8_read(c+seek, seek, maxLen);
+		if (widthOut) { *widthOut = 0; if (mHint) *widthOut = mHint->workingX-x; }
+		if (heightOut) { *heightOut = 0; if (mHint) *heightOut = mHint->workingY-y; }
 		bool hasNewlined = false;
 		
 		const bool lookupCaret = caretPosition && threshX && threshY;
@@ -540,8 +552,11 @@ public:
 			*caretPosition = -1;
 			}
 		
+		int xxl = xx;
 		while (uChar && seek <= maxLen) {
-			int xxl = xx;
+			//if (mHint)
+			//	std::cout << "Processing: (" << seekLast << "," << (seek-seekLast) << ") " << std::string(&c[seekLast], seek-seekLast) << ", codePoint " << uChar << ", suibstring: [" << std::string(&c[seekLast]) << "], fullstring:["<<maxLen<<"] " << c << std::endl;
+			xxl = xx;
 			if (uChar == '\t') {
 				// Next tab position:
 				int nTabsSoFar = (xx - x)/tabWidth;
@@ -567,13 +582,34 @@ public:
 					if (*threshX > xxl + (xx - xxl)/2)
 						*caretPosition = seek; // right half of char
 					else
-						*caretPosition = seek-1; // left half of char
+						*caretPosition = seekLast; // left half of char
+						
+					if (mHint) {
+						if (mHint->writeOut) {
+							mHint->workingLen = seek;
+							mHint->workingX = xx;
+							mHint->workingY = yy;
+							mHint->uCharLast = uCharLast;
+							}
+						}
 					return xx;
 					}
 				}
 				
+			if (mHint) {
+				if (mHint->writeOut) {
+					mHint->uCharLast = uCharLast;
+					mHint->workingLen = seek;
+					mHint->workingX = xx;
+					mHint->workingY = yy;
+					}
+				}
 			uCharLast = uChar;
+			seekLast = seek;
 			uChar = utf8_read(c + seek, seek, maxLen);
+			if (maxWidth) {
+				if (xx > *maxWidth) break;
+				}
 			}
 		if (widthOut) {
 			if (*widthOut < xx) *widthOut = xx;
@@ -587,7 +623,7 @@ public:
 		return xx;
 		}
 
-	int processFormatted(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+	int processFormatted(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		int xOffset = initialXOffset;
 		int yOffset = 0;
 		
@@ -596,7 +632,10 @@ public:
 		
 		size_t runningLength = 0;
 		
-		for (unsigned int i = 0; i < text.mItems.size(); ++i) {
+		unsigned int start = 0;
+		if (mHint) start = mHint->index;
+		
+		for (unsigned int i = start; i < text.mItems.size(); ++i) {
 			const sttfont_formatted_text_item & ssfti = text.mItems[i];
 			
 			bool isDrawingWorking = isDrawing;
@@ -607,7 +646,18 @@ public:
 			
 			int xOffsetBefore = xOffset;
 			int carretPosition2 = -1;
-			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
+			
+			if (mHint) {
+				if (mHint->writeOut) {
+					mHint->index = i;
+					}
+				if (i != start) {
+					mHint->workingLen = 0;
+					mHint->workingX = 0;
+					mHint->workingY = 0;
+					}
+				}
+			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, maxHeight, mHint, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
 			
 			if (caretPosition) {
 				if (carretPosition2 >= 0)
@@ -632,14 +682,14 @@ public:
 	/// Returns the position in the string where a click happend
 	/// MouseX and MouseY are relative to whatever draw position of this string you are using
 	/// Currently only suppors single row strings
-	int getCaretPos(const SSF_STRING & str, const int relMouseX, const int relMouseY) {
+	int getCaretPos(const SSF_STRING & str, const int relMouseX, const int relMouseY, sttfont_lookupHint * mHint = NULL) {
 		int caretPosition = -1;
-		processString(0,0, str.data(), str.length(), NULL, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		processString(0,0, str.data(), str.length(), NULL, false, NULL, NULL, NULL, mHint, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
-	int getCaretPos(const sttfont_formatted_text & str, const int relMouseX, const int relMouseY) {
+	int getCaretPos(const sttfont_formatted_text & str, const int relMouseX, const int relMouseY, sttfont_lookupHint * mHint = NULL) {
 		int caretPosition = -1;
-		processFormatted(str, 0,0, false, NULL, NULL, &relMouseX, &relMouseY, &caretPosition);
+		processFormatted(str, 0,0, false, NULL, NULL, NULL, mHint, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
 	

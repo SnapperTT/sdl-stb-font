@@ -69,6 +69,16 @@ namespace sttr {
 #endif
 struct sttfont_formatted_text;
 #define LZZ_INLINE inline
+struct sttfont_lookupHint
+{
+  unsigned int index;
+  unsigned int workingLen;
+  int workingX;
+  int workingY;
+  uint32_t uCharLast;
+  bool writeOut;
+  sttfont_lookupHint ();
+};
 struct sttfont_format_callback
 {
   virtual void callbackOnDraw (sttfont_formatted_text const & text, int index, int x, int y, int xOffsetInitial, int xOffsetAfter, int segmentWidth, int segmentHeight);
@@ -113,6 +123,7 @@ struct sttfont_format
   static sttfont_format const cyan;
   static sttfont_format const grey;
   static sttfont_format_reset const reset;
+  void swap (sttfont_format & other);
   static void sttr_register ();
   virtual void * sttr_getClassSig () const;
   virtual char const * const sttr_getClassName () const;
@@ -159,29 +170,31 @@ struct sttfont_formatted_text
   virtual void * sttr_getClassSig () const;
   virtual char const * const sttr_getClassName () const;
   sttfont_formatted_text copy () const;
+  void swap (sttfont_formatted_text & other);
+  size_t size () const;
+  size_t length () const;
+  bool isEmpty () const;
+  SSF_STRING getString () const;
+  SSF_STRING getStringTruncated (unsigned int const maxLen) const;
   void append (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text_MS obj);
+  void clear ();
   void setColour (sttfont_format const & fmt);
   void consolidateSegments ();
 protected:
   void consolidateSegments_worker ();
 public:
   bool back (unsigned int const num);
-  void insert (unsigned int const position, SSF_STRING const & str);
-  size_t size () const;
-  size_t length () const;
-  bool isEmpty () const;
-  SSF_STRING getString () const;
-  struct lookupHint
-  {
-    unsigned int index;
-    unsigned int workingLen;
-  };
-  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_formatted_text::lookupHint * mHint = NULL) const;
-  void remove (unsigned int const position, unsigned int const num);
-  SSF_STRING substr (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint = NULL) const;
-  sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_formatted_text::lookupHint * mHint = NULL) const;
-  void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\') const;
+  void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_lookupHint * mHint = NULL) const;
+  void utf8_charsizeAt (unsigned int const position, unsigned int & posOut, unsigned int & sizeOut, sttfont_lookupHint * mHint = NULL);
+  void insert (unsigned int const position, SSF_STRING const & str, sttfont_lookupHint * mHint = NULL);
+  void insert (unsigned int const position, SSF_STRING_MS str, sttfont_lookupHint * mHint = NULL);
+  void insert (unsigned int const position, sttfont_formatted_text const & str, sttfont_lookupHint * mHint = NULL);
+  void insert (unsigned int const position, sttfont_formatted_text_MS str, sttfont_lookupHint * mHint = NULL);
+  void remove (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL);
+  SSF_STRING substr (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL) const;
+  sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL) const;
+  void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\', bool const includeDelimiterInToken = false) const;
 };
 struct sttfont_prerendered_text
 {
@@ -274,17 +287,17 @@ public:
   int drawText (int const x, int const y, SSF_STRING const & str, int & widthOut, int & heightOut);
   int drawText (int const x, int const y, sttfont_formatted_text const & text);
   int drawText (int const x, int const y, sttfont_formatted_text const & text, int & widthOut, int & heightOut);
-  int getTextSize (int & w, int & h, char const * c, uint32_t const maxLen = -1);
-  int getTextSize (int & w, int & h, SSF_STRING const & str);
-  int getTextSize (int & w, int & h, sttfont_formatted_text const & str);
+  int getTextSize (int & w, int & h, char const * c, uint32_t const maxLen = -1, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
+  int getTextSize (int & w, int & h, SSF_STRING const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
+  int getTextSize (int & w, int & h, sttfont_formatted_text const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
   int getNumberOfRows (SSF_STRING const & str);
   int getNumberOfRows (sttfont_formatted_text const & str);
   int getTextHeight (SSF_STRING const & str);
   int getTextHeight (sttfont_formatted_text const & str);
-  int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
-  int processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
-  int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY);
-  int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY);
+  int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
+  int processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
+  int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
+  int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   bool isTofu (sttfont_glyph * G);
   sttfont_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
   virtual void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
