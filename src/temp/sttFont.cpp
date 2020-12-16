@@ -1000,7 +1000,6 @@ int sttfont_font_cache::processString (int const x, int const y, char const * c,
 		uint32_t uChar = utf8_read(c+seek, seek, maxLen);
 		if (widthOut) { *widthOut = 0; if (mHint) *widthOut = mHint->workingX-x; }
 		if (heightOut) { *heightOut = 0; if (mHint) *heightOut = mHint->workingY-y; }
-		bool hasNewlined = false;
 		
 		const bool lookupCaret = caretPosition && threshX && threshY;
 		if (lookupCaret) {
@@ -1020,7 +1019,6 @@ int sttfont_font_cache::processString (int const x, int const y, char const * c,
 			else if (uChar == '\n') {
 				if (widthOut)
 					if (*widthOut < xx) *widthOut = xx;
-				hasNewlined = true;
 				xx = x;
 				yy += scale*rowSize;
 				overdraw = SSF_INT_MIN;
