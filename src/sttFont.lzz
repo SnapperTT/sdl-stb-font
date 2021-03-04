@@ -384,7 +384,7 @@ public:
         stbtt_FreeBitmap (bitmap, 0);
         
         if (w && h) {
-			genGlyph_writeData(gOut, bitmap2, w, h);
+			genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
 			}
 		
 		gOut->width = w;
@@ -393,6 +393,16 @@ public:
 		
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;
+		}
+	
+	/// Pregenerate glyphs. For SDL software rendering this isn't needed
+	/// For GPU based rendering (OpenGl, Bgfx, etc) this is recommended
+	virtual void pregenGlyphs(SSF_VECTOR<uint32_t> & mCodepoints, const uint8_t format) {
+		// Make your own implmentation for your own frontend here
+		for (uint32_t codepoint : mCodepoints) {
+			uint64_t target = codepoint | (uint64_t(format) << 32);
+			genGlyph_createAndInsert(target, codepoint, format);
+			}
 		}
 	
 	virtual void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {

@@ -52,13 +52,13 @@ How Do I?
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
 * [Get Where in a String a User has Clicked](#get-where-in-a-string-a-user-has-clicked)
 * [Handle Tabs](#handle-tabs)
+* [Pregenerate Glyphs](#pregenerate-glyphs)
 * [Write A Custom Frontend](#write-a-custom-backend)
 
 Formatted Text:
 * [Print Formatted Text?](#print-formatted-text)
 * [Load Bold/Italic Font Variants?](#load-bold-italic_font-variants)
 * [Limitations](#limitations)
-
 
 ## Use This Library?
 This is a header only library - no build system required
@@ -249,6 +249,16 @@ You can set `fc.tabWidthInSpaces = X` before calling `fc.loadFont(...)` to autom
 This library consists of two parts - a font handling backend (classes named `sttfont_*`) and a SDL rendering frontend (`sdl_stb_*`).
 
 To make your own rendering frontend extend the relevent `sttfont_*` classes. See the SDL implementation for details. Its ~200 lines of code, all you have to do is take out the SDL specific stuff and put in your renderer specific stuff. In your application, include `sttFont.h` instead of `sdlStbFont.h`
+
+
+## Pregenerate Glyphs
+You can use the `pregenGlyphs function`:
+```c++
+std::vector<uint32_t> codepoints = { 1, 2, 3, ... };
+fc.pregenGlyphs(codepoints, 0);
+```
+
+If you are software rendering in SDL *this is not needed*. If you are using a custom frontend that uses texture atlases then this is recommended
 
 
 Formatted Text
