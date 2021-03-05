@@ -848,7 +848,7 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
         stbtt_FreeBitmap (bitmap, 0);
         
         if (w && h) {
-			genGlyph_writeData(gOut, bitmap2, w, h);
+			genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
 			}
 		
 		gOut->width = w;
@@ -857,6 +857,14 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 		
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;
+		}
+void sttfont_font_cache::pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint8_t const format)
+                                                                                            {
+		// Make your own implmentation for your own frontend here
+		for (uint32_t codepoint : mCodepoints) {
+			uint64_t target = codepoint | (uint64_t(format) << 32);
+			genGlyph_createAndInsert(target, codepoint, format);
+			}
 		}
 void sttfont_font_cache::genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
                                                                                                       {

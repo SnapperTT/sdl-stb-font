@@ -273,6 +273,7 @@ protected:
   void addFont_worker (addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0);
 public:
   void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut);
+  virtual void pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint8_t const format);
   virtual void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   virtual sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format);
