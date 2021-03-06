@@ -275,7 +275,7 @@ protected:
 public:
   void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut);
   virtual void pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint8_t const format);
-  virtual void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  virtual void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   virtual sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format);
   virtual sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
@@ -1186,8 +1186,8 @@ void sttfont_font_cache::pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint
 			genGlyph_createAndInsert(target, codepoint, format);
 			}
 		}
-void sttfont_font_cache::genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
-                                                                                                      {
+void sttfont_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                                {
 		// Make your own implmentation for your own frontend here
 		}
 sttfont_glyph * sttfont_font_cache::getGlyph (uint64_t const target)

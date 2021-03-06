@@ -10,8 +10,8 @@ SFI=$(addprefix $(OUTPUTDIR), $(RAWSOURCES:.lzz=.h))
 all: $(SOURCES) $(SFI)
 	mv ../example.h ../example.cpp
 	cat ../sttFont.h ../sdlFrontend.h > ../sdlStbFont.h
-	cat bgfx_shaders/bgfxh_embedded_shader.h \
-		bgfx_shaders/c/fs_textured_passthrough.bin.h \
+	cp bgfx_shaders/bgfxh_embedded_shader.h ..
+	cat bgfx_shaders/c/fs_textured_passthrough.bin.h \
 		bgfx_shaders/c/vs_textured_passthrough.bin.h \
 		bgfx_shaders/c/fs_untextured_passthrough.bin.h \
 		bgfx_shaders/c/vs_untextured_passthrough.bin.h \

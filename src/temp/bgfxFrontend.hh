@@ -6,24 +6,29 @@
 // SdlStbFont bgfxFrontend
 // By Liam Twigger - 2021
 // Public Domain
-#include "bgfxFrontendShaders.h"
+#include "bgfxh_embedded_shader.h"
 #define LZZ_INLINE inline
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
 {
   bgfx::TextureHandle mBgfxTexture;
   bgfx_stb_prerendered_text ();
   void freeTexture ();
-  int draw (int const x, int const y);
-  int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int draw (bgfx::ViewId mViewId, int const x, int const y);
+  int drawWithColorMod (bgfx::ViewId mViewId, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct bgfxsfh
 {
 public:
   static bgfx::ShaderHandle vert_passthrough;
+  static bgfx::ShaderHandle frag_passthrough;
+  static bgfx::ShaderHandle textured_vert_passthrough;
+  static bgfx::ShaderHandle textured_frag_passthrough;
+  static bgfx::ProgramHandle untexturedProgram;
   static bgfx::ProgramHandle texturedProgram;
   static bgfx::UniformHandle u_colour;
-  static bgfx::UniformHandle u_texture;
+  static bgfx::UniformHandle s_texture;
   static int refCount;
+  static float * toVec4 (uint8_t const a, uint8_t const b, uint8_t const c, uint8_t const d);
   static void initialise ();
   static void deinitialise ();
   struct rect
@@ -51,12 +56,14 @@ public:
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
-  static void pushTexturedQuad (float const x, float const y, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
-  static void pushUntexturedQuad (float const x, float const y, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushTexturedQuad (rect const & r);
+  static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushUntexturedQuad (rect const & r);
+  static void pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
 };
 struct bgfx_stb_glyph : public sttfont_glyph
 {
-  bgfx::TextureHandle mAtlas;
+  bgfx::TextureHandle mAtlasTexture;
   float x;
   float y;
   float w;
@@ -65,7 +72,7 @@ struct bgfx_stb_glyph : public sttfont_glyph
 };
 struct bgfx_stb_glyph_atlas
 {
-  bgfx::TextureHandle mAtlas;
+  bgfx::TextureHandle mAtlasTexture;
   stbrp_context mStbRectPackCtx;
   bool isFull;
   bool isNew;

@@ -36,7 +36,7 @@ public:
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
   void clearGlyphs ();
   void bindRenderer (SDL_Renderer * _mRenderer);
-  void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
   void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);

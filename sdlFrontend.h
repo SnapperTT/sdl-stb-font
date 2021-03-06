@@ -37,7 +37,7 @@ public:
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
   void clearGlyphs ();
   void bindRenderer (SDL_Renderer * _mRenderer);
-  void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
   void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
@@ -118,8 +118,8 @@ void sdl_stb_font_cache::bindRenderer (SDL_Renderer * _mRenderer)
                                                      {
 		mRenderer = _mRenderer;
 		}
-void sdl_stb_font_cache::genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
-                                                                                              {
+void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                        {
 		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
 		gOut2->mSdlSurface = SDL_CreateRGBSurfaceFrom(bitmap2, w, h, 32, 4*w, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
 		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);

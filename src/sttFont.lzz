@@ -405,7 +405,7 @@ public:
 			}
 		}
 	
-	virtual void genGlyph_writeData (sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
+	virtual void genGlyph_writeData (const uint32_t codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
 		// Make your own implmentation for your own frontend here
 		}
 	

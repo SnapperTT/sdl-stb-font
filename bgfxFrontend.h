@@ -7,24 +7,29 @@
 // SdlStbFont bgfxFrontend
 // By Liam Twigger - 2021
 // Public Domain
-#include "bgfxFrontendShaders.h"
+#include "bgfxh_embedded_shader.h"
 #define LZZ_INLINE inline
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
 {
   bgfx::TextureHandle mBgfxTexture;
   bgfx_stb_prerendered_text ();
   void freeTexture ();
-  int draw (int const x, int const y);
-  int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int draw (bgfx::ViewId mViewId, int const x, int const y);
+  int drawWithColorMod (bgfx::ViewId mViewId, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct bgfxsfh
 {
 public:
   static bgfx::ShaderHandle vert_passthrough;
+  static bgfx::ShaderHandle frag_passthrough;
+  static bgfx::ShaderHandle textured_vert_passthrough;
+  static bgfx::ShaderHandle textured_frag_passthrough;
+  static bgfx::ProgramHandle untexturedProgram;
   static bgfx::ProgramHandle texturedProgram;
   static bgfx::UniformHandle u_colour;
-  static bgfx::UniformHandle u_texture;
+  static bgfx::UniformHandle s_texture;
   static int refCount;
+  static float * toVec4 (uint8_t const a, uint8_t const b, uint8_t const c, uint8_t const d);
   static void initialise ();
   static void deinitialise ();
   struct rect
@@ -52,12 +57,14 @@ public:
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
-  static void pushTexturedQuad (float const x, float const y, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
-  static void pushUntexturedQuad (float const x, float const y, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushTexturedQuad (rect const & r);
+  static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushUntexturedQuad (rect const & r);
+  static void pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
 };
 struct bgfx_stb_glyph : public sttfont_glyph
 {
-  bgfx::TextureHandle mAtlas;
+  bgfx::TextureHandle mAtlasTexture;
   float x;
   float y;
   float w;
@@ -66,7 +73,7 @@ struct bgfx_stb_glyph : public sttfont_glyph
 };
 struct bgfx_stb_glyph_atlas
 {
-  bgfx::TextureHandle mAtlas;
+  bgfx::TextureHandle mAtlasTexture;
   stbrp_context mStbRectPackCtx;
   bool isFull;
   bool isNew;
@@ -117,59 +124,72 @@ bgfx_stb_prerendered_text::bgfx_stb_prerendered_text ()
                                                                                                      {}
 void bgfx_stb_prerendered_text::freeTexture ()
                             {
-		if (mBgfxTexture != BGFX_INVALID_HANDLE)
+		if (bgfx::isValid(mBgfxTexture))
 			bgfx::destroy(mBgfxTexture);
 		mBgfxTexture = BGFX_INVALID_HANDLE;
 		}
-int bgfx_stb_prerendered_text::draw (int const x, int const y)
-                                            {
+int bgfx_stb_prerendered_text::draw (bgfx::ViewId mViewId, int const x, int const y)
+                                                                  {
 		bgfxsfh::rect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
 		
-		bgfx::setUniform(bgfxsfh::u_texture, mBgfxTexture);
+		bgfx::setUniform(bgfxsfh::s_texture, &mBgfxTexture);
 		bgfxsfh::pushTexturedQuad(x,y,width,height);
-		bgfx::submit(bgfxsfh::texturedProgram);
-		
-		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		bgfx::submit(mViewId, bgfxsfh::texturedProgram);
 		return r.x + r.w;
 		}
-int bgfx_stb_prerendered_text::drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
-                                                                                                                                 {
-		bgfx::setUniform(bgfxsfh::u_colour, bx::Vec4(r/255.0,g/255.0,b/255.0,a/255.0));
-		return draw (x, y);
+int bgfx_stb_prerendered_text::drawWithColorMod (bgfx::ViewId mViewId, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                       {
+		bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(r/255.0,g/255.0,b/255.0,a/255.0));
+		return draw (mViewId, x, y);
 		}
-bgfx::ShaderHandle bgfxsfh::vert_passthrough = BGFX_INVALID_HANDLE
-	static bgfx::ShaderHandle frag_passthrough = BGFX_INVALID_HANDLE
-	static bgfx::ShaderHandle textured_frag_passthrough = BGFX_INVALID_HANDLE
-	static bgfx::ProgramHandle untexturedProgram = BGFX_INVALID_HANDLE;
+bgfx::ShaderHandle bgfxsfh::vert_passthrough = BGFX_INVALID_HANDLE;
+bgfx::ShaderHandle bgfxsfh::frag_passthrough = BGFX_INVALID_HANDLE;
+bgfx::ShaderHandle bgfxsfh::textured_vert_passthrough = BGFX_INVALID_HANDLE;
+bgfx::ShaderHandle bgfxsfh::textured_frag_passthrough = BGFX_INVALID_HANDLE;
+bgfx::ProgramHandle bgfxsfh::untexturedProgram = BGFX_INVALID_HANDLE;
 bgfx::ProgramHandle bgfxsfh::texturedProgram = BGFX_INVALID_HANDLE;
 bgfx::UniformHandle bgfxsfh::u_colour = BGFX_INVALID_HANDLE;
-bgfx::UniformHandle bgfxsfh::u_texture = BGFX_INVALID_HANDLE;
+bgfx::UniformHandle bgfxsfh::s_texture = BGFX_INVALID_HANDLE;
 int bgfxsfh::refCount = 0;
+float * bgfxsfh::toVec4 (uint8_t const a, uint8_t const b, uint8_t const c, uint8_t const d)
+                                                                                                 {
+		static float r[4];
+		r[0] = a;
+		r[1] = b;
+		r[2] = c;
+		r[3] = d;
+		return r;
+		}
 void bgfxsfh::initialise ()
                                  {
 		if (refCount == 0) {
+			#include "bgfxFrontendShaders.h"
+			
 			static const bgfx::EmbeddedShader s_embeddedShaders[] = {
-				BGFXH_EMBEDDED_SHADER(fs_textured_passthrough),
-				BGFXH_EMBEDDED_SHADER(vs_textured_passthrough),
-				BGFXH_EMBEDDED_SHADER(fs_texture_passthrough),
-				BGFXH_EMBEDDED_SHADER(vs_textured_passthrough),
+				BGFXH_EMBEDDED_SHADER(fs_textured_passthrough_bin),
+				BGFXH_EMBEDDED_SHADER(vs_textured_passthrough_bin),
+				BGFXH_EMBEDDED_SHADER(fs_untextured_passthrough_bin),
+				BGFXH_EMBEDDED_SHADER(vs_untextured_passthrough_bin),
 				
 				BGFX_EMBEDDED_SHADER_END()
 				};
 				
-			vert_passthrough = bgfx::createShader(vs_passthrough);
-			frag_passthrough = bgfx::createShader(fs_passthrough);
-			textured_frag_passthrough = bgfx::createShader(fs_texture_passthrough);
+			
+			bgfx::RendererType::Enum type = bgfx::getRendererType();
+			vert_passthrough = bgfx::createEmbeddedShader(s_embeddedShaders, type, "vs_textured_passthrough_bin");
+			frag_passthrough = bgfx::createEmbeddedShader(s_embeddedShaders, type, "fs_textured_passthrough_bin");
+			textured_vert_passthrough = bgfx::createEmbeddedShader(s_embeddedShaders, type, "vs_untextured_passthrough_bin");
+			textured_frag_passthrough = bgfx::createEmbeddedShader(s_embeddedShaders, type, "fs_untextured_passthrough_bin");
 			
 			untexturedProgram = bgfx::createProgram(vert_passthrough, frag_passthrough, false);
 			texturedProgram = bgfx::createProgram(vert_passthrough, textured_frag_passthrough, false);
 			
 			u_colour = bgfx::createUniform("u_colour", bgfx::UniformType::Vec4);
-			u_texture = bgfx::createUniform("u_texture", bgfx::UniformType::Sampler);
+			s_texture = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
 			}
 		refCount++;
 		}
@@ -185,7 +205,7 @@ void bgfxsfh::deinitialise ()
 			bgfx::destroy(textured_frag_passthrough); textured_frag_passthrough = BGFX_INVALID_HANDLE;
 			
 			bgfx::destroy(u_colour); 			u_colour = BGFX_INVALID_HANDLE;
-			bgfx::destroy(u_texture); 			u_texture = BGFX_INVALID_HANDLE;
+			bgfx::destroy(s_texture); 			s_texture = BGFX_INVALID_HANDLE;
 			}
 		}
 void bgfxsfh::PosTexCoord0Vertex::init ()
@@ -203,8 +223,10 @@ void bgfxsfh::PosVertex::init ()
 			.end();
 			}
 bgfx::VertexLayout bgfxsfh::PosVertex::ms_decl;
-void bgfxsfh::pushTexturedQuad (float const x, float const y, float const xSize, float const ySize, float const _framebufferWidth, float const _framebufferHeight)
-                                                                                                                                                                                    {
+void bgfxsfh::pushTexturedQuad (rect const & r)
+                                                     { pushTexturedQuad(r.x, r.y, r.w, r.h); }
+void bgfxsfh::pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth, float const _framebufferHeight)
+                                                                                                                                                                                                {
 		/*
 		* From the BGFX Examples, the following license applies to only this function:
 		* Copyright 2011-2018 Branimir Karadzic. All rights reserved.
@@ -284,8 +306,10 @@ void bgfxsfh::pushTexturedQuad (float const x, float const y, float const xSize,
 			bgfx::setVertexBuffer(0, &vb);
 			}
 		}
-void bgfxsfh::pushUntexturedQuad (float const x, float const y, float const xSize, float const ySize, float const _framebufferWidth, float const _framebufferHeight)
-                                                                                                                                                                                      {
+void bgfxsfh::pushUntexturedQuad (rect const & r)
+                                                       { pushUntexturedQuad(r.x, r.y, r.w, r.h); }
+void bgfxsfh::pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth, float const _framebufferHeight)
+                                                                                                                                                                                                  {
 		/*
 		* From the BGFX Examples, the following license applies to only this function:
 		* Copyright 2011-2018 Branimir Karadzic. All rights reserved.
@@ -354,30 +378,30 @@ void bgfxsfh::pushUntexturedQuad (float const x, float const y, float const xSiz
 			}
 		}
 bgfx_stb_glyph::bgfx_stb_glyph ()
-  : sttfont_glyph (), mAtlas (BGFX_INVALID_HANDLE), x (0), y (0), w (0), h (0)
-                                                                                                 {}
+  : sttfont_glyph (), mAtlasTexture (BGFX_INVALID_HANDLE), x (0), y (0), w (0), h (0)
+                                                                                                        {}
 bgfx_stb_glyph_atlas::bgfx_stb_glyph_atlas ()
-  : mAtlas (BGFX_INVALID_HANDLE), isFull (false), isNew (true)
-                                                                                         {}
+  : mAtlasTexture (BGFX_INVALID_HANDLE), isFull (false), isNew (true)
+                                                                                                {}
 bgfx_stb_font_cache::bgfx_stb_font_cache ()
   : sttfont_font_cache (), mViewId (0), mAtlasSize (1024)
                                                                                     {}
 bgfx_stb_font_cache::~ bgfx_stb_font_cache ()
                                 {		
 		clearGlyphs();
-		bgfxsfh::deinitalise();
+		bgfxsfh::deinitialise();
 		}
 void bgfx_stb_font_cache::clearGlyphs ()
                             {
 		for (auto & g : mAtlases)
-			bgfx::destroy(mAtlases.mAtlas);
+			bgfx::destroy(g.mAtlasTexture);
 			
 		mAtlases.clear();
 		mGlyphs.clear();
 		}
 void bgfx_stb_font_cache::bindRenderer ()
                             {
-		bgfxsfh::initalise();
+		bgfxsfh::initialise();
 		}
 bgfx_stb_glyph_atlas * bgfx_stb_font_cache::getGenAtlasPage ()
                                                 {
@@ -392,7 +416,7 @@ bgfx_stb_glyph_atlas * bgfx_stb_font_cache::getGenAtlasPage ()
 bgfx_stb_glyph_atlas * bgfx_stb_font_cache::createAtlasPage ()
                                                 {
 		bgfx_stb_glyph_atlas a;
-		a.atlas = bgfx::createTexture2D(mAtlasSize, mAtlasSize, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_NONE, NULL);
+		a.mAtlasTexture = bgfx::createTexture2D(mAtlasSize, mAtlasSize, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_NONE, NULL);
 		mAtlases.push_back(a);
 		return &mAtlases.back();
 		}
@@ -412,9 +436,10 @@ void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont
 		r.w = w;
 		r.h = h;
 		
-		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, &r, 1);
+		stbrp_pack_rects(&activeAtlas->mStbRectPackCtx, &r, 1);
 		if (r.was_packed) {
-			bgfx::updateTexture2D(activeAtlas, 0, 0, r.x, r.y, r.w, r.h, bitmap2, w);
+			const bgfx::Memory* mem = bgfx::copy(bitmap2, w*h*4);
+			bgfx::updateTexture2D(activeAtlas->mAtlasTexture, 0, 0, r.x, r.y, r.w, r.h, mem, w);
 			bOut->x = r.x;
 			bOut->y = r.y;
 			bOut->w = r.w;
@@ -463,13 +488,13 @@ void bgfx_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const cod
 			r.w = G->width;
 			r.h = G->height;
 			
-			if (G->mSdlTexture) {
+			if (true) {//bgfx::isValid(G->mAtlasTexture)) {
 				if (format) {
 					int charAdv = kerningAdv + G->xOffset;
 					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
 					uint8_t cr,cg,cb,ca;
 					
-					bgfx::setUniform(bgfxsfh::u_colour, format->r, format->g, format->b, format->r, format->g, format->a);
+					bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a));
 					
 					if (isColoured || formatCode) {
 						// Remove bleeding pixels
@@ -483,11 +508,11 @@ void bgfx_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const cod
 							}
 						overdraw = r.x + r.w;
 						
-						bgfxsfh::pushUntexturedQuad(mRenderer, &r2); //TODO: prevent overlapping!
-						bgfx::submit(viewId, bgfxsfh::untexturedProgram);
+						bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
+						bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
 						}
-					bgfxsfh::pushTexturedQuad(viewId, &r);
-					bgfx::submit(viewId, bgfxsfh::texturedProgram);
+					bgfxsfh::pushTexturedQuad(r);
+					bgfx::submit(mViewId, bgfxsfh::texturedProgram);
 					
 					if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
 						bgfxsfh::rect r2;
@@ -495,8 +520,8 @@ void bgfx_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const cod
 						if (r2.h < 1) r2.h = 1;
 						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
 						
-						bgfxsfh::pushUntexturedQuad(mRenderer, &r2);
-						bgfx::submit(viewId, bgfxsfh::untexturedProgram);
+						bgfxsfh::pushUntexturedQuad(r2);
+						bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
 						}
 					if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
 						bgfxsfh::rect r2;
@@ -505,13 +530,13 @@ void bgfx_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const cod
 						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
 						
 						bgfxsfh::pushUntexturedQuad(r2);
-						bgfx::submit(viewId, bgfxsfh::untexturedProgram);
+						bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
 						}
 					}
 				else {
 					overdraw = SSF_INT_MIN;
-					bgfxsfh::pushUntexturedQuad(mRenderer, &r);
-					bgfx::submit(viewId, bgfxsfh::texturedProgram);
+					bgfxsfh::pushTexturedQuad(r);
+					bgfx::submit(mViewId, bgfxsfh::texturedProgram);
 					}
 				}
 			}
@@ -552,11 +577,11 @@ bgfx::FrameBufferHandle
 		bgfx::ViewId viewId;
 		bgfx::setViewMode(viewId, bgfx::ViewMode::Sequential);
 		
-		const bgfx::Memory* mem = bgfx::alloc(bitmap, width*height*4);
-		bgfx::TextureHandle RT = bgfx::createTexture2D(w, h, false, 1, bgfx::TextureFormat::BGRA8, BGFX_SAMPLER_NONE, mem);
-		bgfx::FrameBufferHandler FB = bgfx::createFramebuffer(1, &RT, false);
+		const bgfx::Memory* mem = bgfx::alloc(width*height*4);
+		bgfx::TextureHandle RT = bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::BGRA8, BGFX_SAMPLER_NONE, mem);
+		bgfx::FrameBufferHandle FB = bgfx::createFrameBuffer(1, &RT, false);
 		
-		bgfx::setViewFrameBuffer(viewId, RT);
+		bgfx::setViewFrameBuffer(viewId, FB);
 		
 		if (formatted)
 			drawText(0, 0, *formatted);
