@@ -7,6 +7,10 @@
 // By Liam Twigger - 2021
 // Public Domain
 #include "bgfxh_embedded_shader.h"
+
+//#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
+#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
+
 #define LZZ_INLINE inline
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
 {
@@ -27,10 +31,8 @@ public:
   static bgfx::ProgramHandle texturedProgram;
   static bgfx::UniformHandle u_colour;
   static bgfx::UniformHandle s_texture;
+  static uint32_t const RENDER_STATE;
   static int refCount;
-  static float * toVec4 (uint8_t const a, uint8_t const b, uint8_t const c, uint8_t const d);
-  static void initialise ();
-  static void deinitialise ();
   struct rect
   {
     float x;
@@ -38,6 +40,15 @@ public:
     float w;
     float h;
   };
+  struct Vec4
+  {
+    float (v) [4];
+    Vec4 ();
+    static bgfxsfh::Vec4 fromUint8 (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
+  };
+  static Vec4 toVec4 (uint8_t const a, uint8_t const b, uint8_t const c, uint8_t const d);
+  static void initialise ();
+  static void deinitialise ();
   struct PosTexCoord0Vertex
   {
     float m_x;
@@ -56,8 +67,8 @@ public:
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
-  static void pushTexturedQuad (rect const & r);
-  static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushTexturedQuad (rect const & r, rect const & r2);
+  static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const texU, float const texV, float const uWidth, float const vHeight, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
   static void pushUntexturedQuad (rect const & r);
   static void pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
 };
@@ -74,6 +85,7 @@ struct bgfx_stb_glyph_atlas
 {
   bgfx::TextureHandle mAtlasTexture;
   stbrp_context mStbRectPackCtx;
+  stbrp_node * mNodes;
   bool isFull;
   bool isNew;
   bgfx_stb_glyph_atlas ();
@@ -88,7 +100,7 @@ public:
   ~ bgfx_stb_font_cache ();
   SSF_MAP <uint64_t, bgfx_stb_glyph> mGlyphs;
   void clearGlyphs ();
-  void bindRenderer ();
+  void bindRenderer (bgfx::ViewId const _viewId);
   bgfx_stb_glyph_atlas * getGenAtlasPage ();
   bgfx_stb_glyph_atlas * createAtlasPage ();
   void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
@@ -106,5 +118,16 @@ public:
   void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
 };
+LZZ_INLINE bgfxsfh::Vec4::Vec4 ()
+                             {}
+LZZ_INLINE bgfxsfh::Vec4 bgfxsfh::Vec4::fromUint8 (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                          {
+			Vec4 rv;
+			rv.v[0] = r/255.0;
+			rv.v[1] = g/255.0;
+			rv.v[2] = b/255.0;
+			rv.v[3] = a/255.0;
+			return rv;
+			}
 #undef LZZ_INLINE
 #endif
