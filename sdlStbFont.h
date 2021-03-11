@@ -197,6 +197,13 @@ public:
   sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL) const;
   void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\', bool const includeDelimiterInToken = false) const;
 };
+struct sttfont_uint32_t_range
+{
+  uint32_t start;
+  uint32_t end;
+  static void populateRangesLatin (SSF_VECTOR <sttfont_uint32_t_range> & mRanges);
+  static void populateRangesCyrillic (SSF_VECTOR <sttfont_uint32_t_range> & mRanges);
+};
 struct sttfont_prerendered_text
 {
   int width;
@@ -273,8 +280,8 @@ protected:
   };
   void addFont_worker (addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0);
 public:
-  void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut);
-  virtual void pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint8_t const format);
+  void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut = NULL);
+  virtual void pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format);
   virtual void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   virtual sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format);
@@ -958,6 +965,23 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 		sttfont_formatted_text d = stringIn.extract(segmentStart + offset, -1, &mHint);
 		arrOut.push_back(std::move(d));
 		}
+void sttfont_uint32_t_range::populateRangesLatin (SSF_VECTOR <sttfont_uint32_t_range> & mRanges)
+                                                                                       {
+		sttfont_uint32_t_range r;
+		r.start = 0x20;
+		r.end  = 0xff;
+		mRanges.push_back(r);
+		}
+void sttfont_uint32_t_range::populateRangesCyrillic (SSF_VECTOR <sttfont_uint32_t_range> & mRanges)
+                                                                                          {
+		sttfont_uint32_t_range r;
+		r.start = 0x0400; r.end  = 0x052F; // Cyrillic + Cyrillic Supplement
+		mRanges.push_back(r);
+		r.start = 0x2DE0; r.end  = 0x2DFF; // Cyrillic Extended-A
+		mRanges.push_back(r);
+		r.start = 0xA640; r.end  = 0xA69F; // Cyrillic Extended-B
+		mRanges.push_back(r);
+		}
 sttfont_prerendered_text::sttfont_prerendered_text ()
   : width (0), height (0)
                                                           {}
@@ -1140,8 +1164,8 @@ void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant
 		else
 			w->next = n;
 		}
-void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut)
-                                                                                             {
+void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut)
+                                                                                                                                {
 		// Fetch font and index - existance check for glyph in font
 		stbtt_fontinfo * mFontContaining;
 		int mIndex;
@@ -1156,20 +1180,35 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 		bitmap = stbtt_GetCodepointBitmap(mFontContaining, 0, scale, codepoint, &w, &h, &woff, &hoff);
 		
         // Convert bitmap to RGBA
-        unsigned int sz = w*h;
-        unsigned char bitmap2[sz*4];
-        for (unsigned int i = 0; i < sz; ++i) {
-        	bitmap2[i*4+0] = 255;
-        	bitmap2[i*4+1] = 255;
-        	bitmap2[i*4+2] = 255;
-        	bitmap2[i*4+3] = bitmap[i];
-        	}
-        
-        stbtt_FreeBitmap (bitmap, 0);
-        
-        if (w && h) {
-			genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
+		unsigned int sz = w*h;
+		if (sz) {
+			if (bitmapOut) {
+				//memcpy, the frontend will bulk store glyphs
+				(*bitmapOut) = SSF_NEW_ARR(unsigned char,sz*4);
+				unsigned char* bitmap2 = *bitmapOut;
+
+				for (unsigned int i = 0; i < sz; ++i) {
+					bitmap2[i*4+0] = 255;
+					bitmap2[i*4+1] = 255;
+					bitmap2[i*4+2] = 255;
+					bitmap2[i*4+3] = bitmap[i];
+					}
+				}
+			else {
+				// wirte single character directly
+				unsigned char bitmap2[sz*4];
+				for (unsigned int i = 0; i < sz; ++i) {
+					bitmap2[i*4+0] = 255;
+					bitmap2[i*4+1] = 255;
+					bitmap2[i*4+2] = 255;
+					bitmap2[i*4+3] = bitmap[i];
+					}
+				genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
+				}
 			}
+        
+			
+        stbtt_FreeBitmap (bitmap, 0);
 		
 		gOut->width = w;
 		gOut->height = h;
@@ -1178,12 +1217,14 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;
 		}
-void sttfont_font_cache::pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint8_t const format)
-                                                                                            {
+void sttfont_font_cache::pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format)
+                                                                                                      {
 		// Make your own implmentation for your own frontend here
-		for (uint32_t codepoint : mCodepoints) {
-			uint64_t target = codepoint | (uint64_t(format) << 32);
-			genGlyph_createAndInsert(target, codepoint, format);
+		for (const sttfont_uint32_t_range & r : mRanges) {
+			for (uint32_t codepoint = r.start; codepoint <= r.end; ++codepoint) {
+				uint64_t target = codepoint | (uint64_t(format) << 32);
+				genGlyph_createAndInsert(target, codepoint, format);
+				}
 			}
 		}
 void sttfont_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
@@ -1478,16 +1519,17 @@ bool sttfont_font_cache::isTofu (sttfont_glyph * G)
 		}
 sttfont_glyph * sttfont_font_cache::getGlyphOrTofu (uint32_t const codepoint, uint8_t const format)
                                                                                         {
-		sttfont_glyph * G = getGenGlyph(codepoint, format);
+		const uint8_t format_wo_underline_or_strike = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
+		sttfont_glyph * G = getGenGlyph(codepoint, format_wo_underline_or_strike);
 		if (!isTofu(G)) return G;
 		
-		G = getGenGlyph((uint32_t) 0xFFFD, format); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
+		G = getGenGlyph((uint32_t) 0xFFFD, format_wo_underline_or_strike); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
 		if (!isTofu(G)) return G;
 			
-		G = getGenGlyph((uint32_t) '?', format);
+		G = getGenGlyph((uint32_t) '?', format_wo_underline_or_strike);
 		if (!isTofu(G)) return G;
 		
-		if (format)
+		if (format_wo_underline_or_strike)
 			return getGlyphOrTofu(codepoint, 0);
 		
 		return NULL;

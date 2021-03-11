@@ -60,6 +60,15 @@ Formatted Text:
 * [Load Bold/Italic Font Variants?](#load-bold-italic_font-variants)
 * [Limitations](#limitations)
 
+## Use the BGFX Frontend?
+Include `bgfxFrontend.h` and create an instance of `bgfx_stb_font_cache`.
+
+See `bgfxExample.cpp` to see how to use this
+
+Some notes:
+* If you are prerendering text, be aware that `renderTextToTexture/renderTextToObject` calls `bgfx::frame()`. You should call `renderTextTo*` between frames.
+* The bgfx frontend uses texture atlases
+
 ## Use This Library?
 This is a header only library - no build system required
 

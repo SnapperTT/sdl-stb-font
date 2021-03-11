@@ -8,8 +8,8 @@
 // Public Domain
 #include "bgfxh_embedded_shader.h"
 
-//#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
-#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
+#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
+//#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
 
 #define LZZ_INLINE inline
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
@@ -18,6 +18,7 @@ struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
   bgfx_stb_prerendered_text ();
   void freeTexture ();
   int draw (bgfx::ViewId mViewId, int const x, int const y);
+  int draw_worker (bgfx::ViewId mViewId, int const x, int const y, bool const resetColour);
   int drawWithColorMod (bgfx::ViewId mViewId, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct bgfxsfh
@@ -32,6 +33,7 @@ public:
   static bgfx::UniformHandle u_colour;
   static bgfx::UniformHandle s_texture;
   static uint32_t const RENDER_STATE;
+  static uint32_t const RENDER_STATE_PRERENDER;
   static int refCount;
   struct rect
   {
@@ -67,8 +69,8 @@ public:
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
-  static void pushTexturedQuad (rect const & r, rect const & r2);
-  static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const texU, float const texV, float const uWidth, float const vHeight, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushTexturedQuad (rect const & r, rect const & r2, bool dontFilpY = false);
+  static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const texU, float const texV, float const uWidth, float const vHeight, bool const dontFilpY, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
   static void pushUntexturedQuad (rect const & r);
   static void pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
 };
@@ -96,6 +98,7 @@ public:
   bgfx::ViewId mViewId;
   int mAtlasSize;
   SSF_VECTOR <bgfx_stb_glyph_atlas> mAtlases;
+  bool isRenderingToTarget;
   bgfx_stb_font_cache ();
   ~ bgfx_stb_font_cache ();
   SSF_MAP <uint64_t, bgfx_stb_glyph> mGlyphs;
@@ -103,6 +106,13 @@ public:
   void bindRenderer (bgfx::ViewId const _viewId);
   bgfx_stb_glyph_atlas * getGenAtlasPage ();
   bgfx_stb_glyph_atlas * createAtlasPage ();
+  struct tempGlyph
+  {
+    unsigned char * bitmapData;
+    uint64_t target;
+  };
+  void pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format);
+  void pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs, SSF_VECTOR <stbrp_rect> & rects, bool force);
   void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   void genGlyph_writeData2 (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall);
   sttfont_glyph * getGlyph (uint64_t const target);

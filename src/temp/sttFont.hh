@@ -196,6 +196,13 @@ public:
   sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL) const;
   void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\', bool const includeDelimiterInToken = false) const;
 };
+struct sttfont_uint32_t_range
+{
+  uint32_t start;
+  uint32_t end;
+  static void populateRangesLatin (SSF_VECTOR <sttfont_uint32_t_range> & mRanges);
+  static void populateRangesCyrillic (SSF_VECTOR <sttfont_uint32_t_range> & mRanges);
+};
 struct sttfont_prerendered_text
 {
   int width;
@@ -272,8 +279,8 @@ protected:
   };
   void addFont_worker (addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0);
 public:
-  void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut);
-  virtual void pregenGlyphs (SSF_VECTOR <uint32_t> & mCodepoints, uint8_t const format);
+  void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut = NULL);
+  virtual void pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format);
   virtual void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   virtual sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format);
