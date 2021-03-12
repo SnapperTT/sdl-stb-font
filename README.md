@@ -1,6 +1,8 @@
 SDL STB Font Renderer
 =====================
-A header-only library for rendering text in [SDL2](https://www.libsdl.org/) with [STB_Truetype](https://github.com/nothings/stb). This caches glyphs as they are drawn allowing for fast text rendering. It also provides a couple of easy ways to render a string to texture for even faster text rendering.
+A header-only library for rendering text in pure [SDL2](https://www.libsdl.org/) with [STB_Truetype](https://github.com/nothings/stb). This caches glyphs as they are drawn allowing for fast text rendering. It also provides a couple of easy ways to render a string to texture for even faster text rendering.
+
+New (2021)! Can also render in [bgfx](https://github.com/bkaradzic/bgfx) with `bgfxFrontend.h`!
 
 ## Example Image:
 ![Example text test](example.png)
@@ -60,14 +62,9 @@ Formatted Text:
 * [Load Bold/Italic Font Variants?](#load-bold-italic_font-variants)
 * [Limitations](#limitations)
 
-## Use the BGFX Frontend?
-Include `bgfxFrontend.h` and create an instance of `bgfx_stb_font_cache`.
+Non-SDL Frontends:
+* [BGFX](#BGFX)
 
-See `bgfxExample.cpp` to see how to use this
-
-Some notes:
-* If you are prerendering text, be aware that `renderTextToTexture/renderTextToObject` calls `bgfx::frame()`. You should call `renderTextTo*` between frames.
-* The bgfx frontend uses texture atlases
 
 ## Use This Library?
 This is a header only library - no build system required
@@ -263,11 +260,16 @@ To make your own rendering frontend extend the relevent `sttfont_*` classes. See
 ## Pregenerate Glyphs
 You can use the `pregenGlyphs function`:
 ```c++
-std::vector<uint32_t> codepoints = { 1, 2, 3, ... };
-fc.pregenGlyphs(codepoints, 0);
+std::vector<sttfont_uint32_t_range> codepoint_ranges;
+sttfont_uint32_t_range customRange;
+customRange.start = 1337; customRange.end = 1444; // end is inclusive
+
+sttfont_uint32_t_range::populateRangesLatin(codepoint_ranges); // add the Latin character set
+sttfont_uint32_t_range::populateRangesCyrillic(codepoint_ranges); // add the Cyrillic character set
+fc.pregenGlyphs(codepoint_ranges, 0); // generatess the glyps
 ```
 
-If you are software rendering in SDL *this is not needed*. If you are using a custom frontend that uses texture atlases then this is recommended
+If you are software rendering in SDL *this is not needed*, and will just slow down startup. If you are using a custom frontend that uses texture atlases (such as bgfx) then this is recommended.
 
 
 Formatted Text
@@ -319,6 +321,20 @@ fc.addFontManaged(notoSansArmenian);	// Fallback fonts - addFont
 If you request a Bold or Italic string and there isn't a Bold or Italic variant availiable the regular variant will be used. If you request a Bold+Italic string and there is only one loaded (but not the combination) the last loaded variant will be used - so if you request Bold+Italic and you have loaded Bold then Italic (but not Bold+Italic) then Italic will be rendered.
 
 The library will draw Underline and Strikethrough variants itself, you do not need to provide these.
+
+Non-SDL Frontends
+=================
+
+## BGFX
+Include `bgfxFrontend.h` and create an instance of `bgfx_stb_font_cache`.
+
+See `bgfxExample.cpp` to see how to use this frontend.
+
+Some notes:
+* If you are prerendering text, be aware that `renderTextToTexture/renderTextToObject` calls `bgfx::frame()`. You should call `renderTextTo*` between frames.
+* The bgfx frontend uses texture atlases. It may be beneficial to call `sttfont_uint32_t_range::populateRangesLatin()` and similar to populate the atlas before rendering. If an atlas is filled with glyphs then the frontend will create a new atlas page.
+ 
+
 
 Contributing
 ============
