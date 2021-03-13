@@ -86,10 +86,9 @@ struct bgfx_stb_glyph : public sttfont_glyph
 struct bgfx_stb_glyph_atlas
 {
   bgfx::TextureHandle mAtlasTexture;
-  stbrp_context mStbRectPackCtx;
+  stbrp_context * mStbRectPackCtx;
   stbrp_node * mNodes;
   bool isFull;
-  bool isNew;
   bgfx_stb_glyph_atlas ();
 };
 class bgfx_stb_font_cache : public sttfont_font_cache

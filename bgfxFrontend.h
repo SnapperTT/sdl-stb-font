@@ -87,10 +87,9 @@ struct bgfx_stb_glyph : public sttfont_glyph
 struct bgfx_stb_glyph_atlas
 {
   bgfx::TextureHandle mAtlasTexture;
-  stbrp_context mStbRectPackCtx;
+  stbrp_context * mStbRectPackCtx;
   stbrp_node * mNodes;
   bool isFull;
-  bool isNew;
   bgfx_stb_glyph_atlas ();
 };
 class bgfx_stb_font_cache : public sttfont_font_cache
@@ -443,11 +442,11 @@ bgfx_stb_glyph::bgfx_stb_glyph ()
   : sttfont_glyph (), mAtlasTexture (BGFX_INVALID_HANDLE), x (0), y (0), w (1), h (1)
                                                                                                         {}
 bgfx_stb_glyph_atlas::bgfx_stb_glyph_atlas ()
-  : mAtlasTexture (BGFX_INVALID_HANDLE), mNodes (NULL), isFull (false), isNew (true)
-                                                                                                              {}
+  : mAtlasTexture (BGFX_INVALID_HANDLE), mStbRectPackCtx (NULL), mNodes (NULL), isFull (false)
+                                                                                                                        {}
 bgfx_stb_font_cache::bgfx_stb_font_cache ()
-  : sttfont_font_cache (), mViewId (0), mAtlasSize (512), isRenderingToTarget (false)
-                                                                                                               {}
+  : sttfont_font_cache (), mViewId (0), mAtlasSize (1024), isRenderingToTarget (false)
+                                                                                                                {}
 bgfx_stb_font_cache::~ bgfx_stb_font_cache ()
                                 {		
 		clearGlyphs();
@@ -458,6 +457,7 @@ void bgfx_stb_font_cache::clearGlyphs ()
 		for (auto & g : mAtlases) {
 			bgfx::destroy(g.mAtlasTexture);
 			SSF_DEL_ARR(g.mNodes);
+			SSF_DEL(g.mStbRectPackCtx);
 			}
 			
 		mAtlases.clear();
@@ -495,8 +495,17 @@ bgfx_stb_glyph_atlas * bgfx_stb_font_cache::createAtlasPage ()
 		bgfx::frame();
 		bgfx::frame();*/
 		
-		a.mNodes = SSF_NEW_ARR(stbrp_node, mAtlasSize);
-		stbrp_init_target(&a.mStbRectPackCtx, mAtlasSize, mAtlasSize, a.mNodes, mAtlasSize);
+		int nNodes = mAtlasSize;
+		a.mStbRectPackCtx = SSF_NEW(stbrp_context);
+		a.mNodes = SSF_NEW_ARR(stbrp_node, nNodes);
+		
+		for (int i = 0; i < nNodes; ++i) {
+			a.mNodes[i].x = 0;
+			a.mNodes[i].y = 0;
+			a.mNodes[i].next = NULL;
+			}
+		
+		stbrp_init_target(a.mStbRectPackCtx, mAtlasSize, mAtlasSize, a.mNodes, nNodes);
 		
 		mAtlases.push_back(a);
 		return &mAtlases.back();
@@ -552,7 +561,7 @@ void bgfx_stb_font_cache::pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mR
 void bgfx_stb_font_cache::pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs, SSF_VECTOR <stbrp_rect> & rects, bool force)
                                                                                                                {
 		bgfx_stb_glyph_atlas* activeAtlas = getGenAtlasPage();
-		stbrp_pack_rects(&activeAtlas->mStbRectPackCtx, rects.data(), rects.size());
+		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, rects.data(), rects.size());
 		
 		SSF_VECTOR<tempGlyph> glyphs_rejected;
 		SSF_VECTOR<stbrp_rect> rects_rejected;
@@ -597,6 +606,8 @@ void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont
 		bgfx_stb_glyph * bOut = (bgfx_stb_glyph*) gOut;
 		bgfx_stb_glyph_atlas * activeAtlas = getGenAtlasPage();
 		
+		std::cout << "genGlyph_writeData2 " << char(codepoint) << " #" << codepoint << ", firstCall: " << firstCall << ", activeAtlas "<< activeAtlas << std::endl;
+		
 		// try to pack
 		stbrp_rect r;
 		r.id = *((int*) &codepoint);
@@ -606,7 +617,7 @@ void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont
 		r.h = h;
 		r.was_packed = 0;
 		
-		stbrp_pack_rects(&activeAtlas->mStbRectPackCtx, &r, 1);
+		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, &r, 1);
 		if (r.was_packed) {
 			std::cout << "packing: " << r.x << ", " << r.y << ", " << r.w << ", " << r.h << std::endl;
 			const bgfx::Memory* mem = bgfx::copy(bitmap2, w*h*4);

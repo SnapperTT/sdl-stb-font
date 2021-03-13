@@ -200,7 +200,7 @@ int main(int argc, char**argv) {
 	std::vector<sttfont_uint32_t_range> r;
 	sttfont_uint32_t_range::populateRangesLatin(r);
 	sttfont_uint32_t_range::populateRangesCyrillic(r);
-	fc.pregenGlyphs(r, 0);
+	//fc.pregenGlyphs(r, 0);
 	
 	// Prerendering!
 	// Warning: renderTextToObject() will mess with views + call bgfx::frame
