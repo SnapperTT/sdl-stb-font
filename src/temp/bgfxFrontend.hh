@@ -8,8 +8,8 @@
 // Public Domain
 #include "bgfxh_embedded_shader.h"
 
-#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
-//#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
+//#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
+#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
 
 #define LZZ_INLINE inline
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text

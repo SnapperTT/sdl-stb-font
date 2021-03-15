@@ -37,7 +37,7 @@ int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewId, int const x, i
 		bgfx::setState(bgfxsfh::RENDER_STATE);
 		bgfx::submit(mViewId, bgfxsfh::texturedProgram);
 		
-		std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << std::endl;
+		//std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << std::endl;
 		BGFXSFH_IS_VALID(mBgfxTexture);
 		return r.x + r.w;
 		}

@@ -9,8 +9,8 @@
 // Public Domain
 #include "bgfxh_embedded_shader.h"
 
-#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
-//#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
+//#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
+#define BGFXSFH_IS_VALID(X) BX_NOOP(X)
 
 #define LZZ_INLINE inline
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
@@ -185,7 +185,7 @@ int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewId, int const x, i
 		bgfx::setState(bgfxsfh::RENDER_STATE);
 		bgfx::submit(mViewId, bgfxsfh::texturedProgram);
 		
-		std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << std::endl;
+		//std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << std::endl;
 		BGFXSFH_IS_VALID(mBgfxTexture);
 		return r.x + r.w;
 		}
