@@ -166,6 +166,7 @@ int bgfx_stb_prerendered_text::draw (bgfx::ViewId mViewId, int const x, int cons
 		}
 int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewId, int const x, int const y, bool const resetColour)
                                                                                                  {
+		if (!width) return 0; // don't print null texture
 		bgfxsfh::rect r;
 		r.x = x;
 		r.y = y;
@@ -766,6 +767,10 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		else
 			getTextSize(width, height, c, maxLen);
 			
+		if (width < 1) {
+			return BGFX_INVALID_HANDLE; // empty string
+			}
+			
 		bgfx::ViewId prv = 0;
 			
 		
@@ -780,6 +785,8 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		
 		bgfx::setViewClear(prv, BGFX_CLEAR_COLOR|BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
 		bgfx::setViewMode(prv, bgfx::ViewMode::Sequential);
+		bgfx::touch(prv);
+		bgfx::frame();	// needed here to flush & clear the screen
 		
 		isRenderingToTarget = true;
 		if (formatted)
@@ -789,7 +796,8 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		isRenderingToTarget = false;
 		
 		bgfx::blit(prv+1, RT, 0,0, bgfx::getTexture(FB, 0));
-		bgfx::frame();
+		bgfx::touch(prv);
+		bgfx::frame();	// needed here to execute the draw call & reset
 		bgfx::destroy(FB);
 		
 		// TBD: reuse framebuffer
