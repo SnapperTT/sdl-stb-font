@@ -55,8 +55,8 @@ bgfx::ProgramHandle bgfxsfh::untexturedProgram = BGFX_INVALID_HANDLE;
 bgfx::ProgramHandle bgfxsfh::texturedProgram = BGFX_INVALID_HANDLE;
 bgfx::UniformHandle bgfxsfh::u_colour = BGFX_INVALID_HANDLE;
 bgfx::UniformHandle bgfxsfh::s_texture = BGFX_INVALID_HANDLE;
-uint32_t const bgfxsfh::RENDER_STATE = BGFX_STATE_WRITE_RGB|BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-uint32_t const bgfxsfh::RENDER_STATE_PRERENDER = BGFX_STATE_WRITE_RGB|BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD);
+uint32_t const bgfxsfh::RENDER_STATE = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+uint32_t const bgfxsfh::RENDER_STATE_PRERENDER = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD);
 int bgfxsfh::refCount = 0;
 bgfxsfh::Vec4 bgfxsfh::toVec4 (uint8_t const a, uint8_t const b, uint8_t const c, uint8_t const d)
                                                                                                {
@@ -88,6 +88,8 @@ void bgfxsfh::initialise ()
 			
 			untexturedProgram = bgfx::createProgram(vert_passthrough, frag_passthrough, false);
 			texturedProgram = bgfx::createProgram(textured_vert_passthrough, textured_frag_passthrough, false);
+			//bgfx::setName(untexturedProgram, "stdStbFont_untexturedProgram"); // doesn't compile
+			//bgfx::setName(untexturedProgram, "stdStbFont_texturedProgram");
 			
 			u_colour = bgfx::createUniform("u_colour", bgfx::UniformType::Vec4);
 			s_texture = bgfx::createUniform("s_texture", bgfx::UniformType::Sampler);
@@ -335,6 +337,7 @@ bgfx_stb_glyph_atlas * bgfx_stb_font_cache::createAtlasPage ()
                                                 {
 		bgfx_stb_glyph_atlas a;
 		a.mAtlasTexture = bgfx::createTexture2D(mAtlasSize, mAtlasSize, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_NONE, NULL);
+		bgfx::setName(a.mAtlasTexture, ("sdlStbFont_atlasPg" + std::to_string(mAtlases.size())).c_str());
 		
 		/*	
 		const bgfx::Memory* mem = bgfx::alloc(mAtlasSize*mAtlasSize*4);
