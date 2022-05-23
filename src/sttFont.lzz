@@ -141,20 +141,29 @@ struct sttfont_glyph {
 /// Memory management
 struct sttfont_memory {
 	char * data;
+	size_t size;
 	bool ownsData;
 	
-	void alloc(const size_t size) {
-		data = SSF_NEW_ARR(char, size);
+	void alloc(const size_t _size) {
+		data = SSF_NEW_ARR(char, _size);
+		size = _size;
 		ownsData = true;
 		}
 		
 	void transferTo(sttfont_memory & destination) {
 		destination.data = data;
-		destination.ownsData = destination.data;
+		destination.size = size;
+		destination.ownsData = ownsData;
 		ownsData = false;
 		}
+		
+	void cloneTo(sttfont_memory& other) {
+		other.alloc(size);
+		memcpy(other.data, data, size);
+		other.ownsData = true;
+		}
 	
-	sttfont_memory () : data(NULL), ownsData(false) {}
+	sttfont_memory () : data(NULL), size(0), ownsData(false) {}
 	~sttfont_memory () {
 		if (ownsData) {
 			SSF_DEL_ARR(data);
@@ -763,9 +772,9 @@ public:
 		return NULL;
 		}
 	
-	virtual void processCodepoint (int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int kerningAdv, int & overdraw) {
+	// NOTE: 2022 - processCodepoint is no longer virtual - instead use drawCodepoint as your injection point for frontends
+	void processCodepoint (int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int kerningAdv, int & overdraw) {
 		// Draws the character, advances x & y to the next position
-		// NOTE: KErning
 		uint8_t formatCode = 0;
 		if (format)
 			formatCode = format->format;
@@ -776,9 +785,15 @@ public:
 			return;
 			}
 		if (isDrawing) {
-			// Make your own implmentation for your own frontend here
+			drawCodepoint(G, x, y, codePoint, format, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
+		}
+		
+	virtual void drawCodepoint (const sdl_stb_glyph * const G, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const int kerningAdv, int & overdraw) {
+		// Draws the character
+		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
+		// Make your own implmentation for your own frontend here
 		}
 		
 	/// Creates a SDL_Texture of a suitable size and renders an entire string to it

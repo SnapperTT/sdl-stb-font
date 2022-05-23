@@ -20,7 +20,8 @@ struct sttfont_format {
 	uint8_t r,g,b,a;
 	uint8_t format;
 	uint8_t flags;
-	uint8_t padding[2];
+	uint8_t cbIsUsed;	// for producerComsumerFrontend - if non-zero then this is formatted, otherwise this is NULL 
+	uint8_t padding;	// align to 64 bits
 	static const uint8_t FORMAT_NONE 		  = 0 << 0;
 	static const uint8_t FORMAT_BOLD 		  = 1 << 0;
 	static const uint8_t FORMAT_ITALIC 		  = 1 << 1;
@@ -30,15 +31,15 @@ struct sttfont_format {
 	
 	static const uint8_t FORMAT_FLAGS_COLOUR_SET 	   = 1 << 0;
 	
-	sttfont_format() : r(255), g(255), b(255), a(255), format(0), flags(0) {}
+	sttfont_format() : r(255), g(255), b(255), a(255), format(0), flags(0), cbIsUsed(0), padding(0) {}
 	sttfont_format(const uint8_t _format)
-					: r(255), g(255), b(255), a(255), format(_format), flags(0) {}
+					: r(255), g(255), b(255), a(255), format(_format), flags(0), cbIsUsed(0), padding(0) {}
 	sttfont_format(const uint8_t _format, const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255)
-					: r(_r), g(_g), b(_b), a(_a), format(_format), flags(FORMAT_FLAGS_COLOUR_SET) {}
+					: r(_r), g(_g), b(_b), a(_a), format(_format), flags(FORMAT_FLAGS_COLOUR_SET), cbIsUsed(0), padding(0) {}
 					
-	inline bool operator == (const sttfont_format & other) const {
-		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
-		}
+	//inline bool operator == (const sttfont_format & other) const { // use default operator
+	//	return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags) && other;
+	//	}
 	
 	void combine(const sttfont_format & other) {
 		format |= other.format;
@@ -146,6 +147,15 @@ struct sttfont_formatted_text {
 	sttfont_formatted_text(const SSF_STRING & text) { *this << text; }
 	sttfont_formatted_text(SSF_STRING_MS text) 		{ *this << text; }
 	sttfont_formatted_text(const char * text) 		{ *this << text; }
+	sttfont_formatted_text(const char * text, const uint32_t maxLen) {
+		if (maxLen == uint32_t(-1)) { *this << text; return; }
+		const char* p = text;
+		while (*p) p++;
+		uint32_t len = (p - text);
+		if (len > maxLen) len = maxLen;
+		*this << SFF_STRING(text, len);
+		}
+	
 	sttfont_formatted_text(sttfont_formatted_text_item_MS text)			{ *this << text; }
 	sttfont_formatted_text(const sttfont_formatted_text_item & text)	{ *this << text; }
 	sttfont_formatted_text(sttfont_formatted_text_MS obj){ mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); }

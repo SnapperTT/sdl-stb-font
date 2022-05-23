@@ -1,0 +1,279 @@
+
+// Used for when you want to update UI in one thread but issue draw commands in a seperate thread
+// this has a bit of work duplication
+// Example usage
+/*
+class pcfc_example {
+public:
+	producer_consumer_font_cache mPcCache;
+	sdl_stb_font_cache mRenderCache;
+	someKindOf mCommandBuffer; // an example of this is at https://github.com/SnapperTT/nanovg_command_buffer
+	
+	void initExample() {
+		mPcCache.consumer_font_cache = &mRenderCache;
+		
+		string s = load_font_from_file("foo.ttf");
+		sttfont_memory m;
+		m.data = s.data();
+		m.size = s.size();
+		m.ownsData = false;
+		
+		mPcCache.loadFontManagedBoth(m); // loads a copy of the font into both mPcCache and mRenderCache
+		}
+		
+	void shutdownExample() {
+		mCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
+		}
+		
+	void producerExample() {
+		// init
+		pcfc_prerendered_text prt;
+		mPcCache.renderTextToObject(prt, "Hello world!"); // prt now holds a token
+		mPcCache.submitToConsumer();
+		
+		// main loop - buffer draw commands somehow
+		while (true) {
+			mCommandBuffer.push_back(command(COMMAND_TYPE_RECT, 0, 0, 5, 5));
+			mCommandBuffer.push_back(command(COMMAND_TYPE_CIRCLE, 0, 0, 5));
+			mCommandBuffer.push_back(command(COMMAND_TYPE_PRETEXT, prt.token));
+			mCommandBuffer.push_back(command(COMMAND_TYPE_TEXT, "Direct Text"));
+			 
+			if (someUpdate) {
+				mPcCache.destroyPr
+				mPcCache.submitToConsumer();
+				}
+			
+			mCommandBuffer.submit();
+			}
+		}
+		
+	void consumerExample() {
+		someKindOf mOtherCommandBuffer;
+		while (true) {
+			mOtherCommandBuffer.wait_dequeue(mCommandBuffer);
+			mPcCache.receiveFromProducer();
+			
+			for (const auto & mCommand : mOtherCommandBuffer) {
+				if (mCommand.type == COMMAND_TYPE_PRETEXT) 
+					mPcCache.dispatchPrerendered(mCommand.token, mCommand.x, mCommand.y);
+				else if (mCommand.type == COMMAND_TYPE_TEXT) 
+					mPcCache.dispatchText(mCommand.token, mCommand.text, mCommand.x, mCommand.y);
+				else if () ...
+				}
+			
+			}
+		}
+	};
+*/
+
+typedef uint64_t pcfc_handle;
+
+struct pcfc_prerendered_text : public sttfont_prerendered_text {
+	pcfc_handle token;
+	producer_consumer_font_cache * owner;
+	}
+	
+struct pcfc_consumer_prerendered_text : public sttfont_prerendered_text {
+	pcfc_handle token;
+	sttfont_formatted_text text;
+	
+	pcfc_consumer_prerendered_text() {}
+	}
+
+struct pcfc_text {
+	SSF_STRING text;
+	int x, y;
+	sttfont_format format;
+	}
+	
+struct pcfc_formatted_text {
+	sttfont_formatted_text text;
+	int x, y;
+	sttfont_format format;
+	}
+	
+struct pcfc_glypth {
+	uint32_t codepoint;
+	int x, y, kerningAdv;
+	sttfont_format format;
+	}
+
+class producer_consumer_font_cache : public sttfont_font_cache {
+public:
+	sttfont_font_cache* consumer_font_cache;
+	pcfc_callback * userCallback;
+	
+protected:
+	std::atomic<pcfc_handle> nextPrerenderTokenId;
+	
+	// Consumer thread stuff
+	SFF_MAP<pcfc_handle, sttfont_prerendered_text*> prerenderMap;
+	
+	// Producer thread stuff
+	SFF_VECTOR<pcfc_consumer_prerendered_text> prerenderQueueProducer;
+	SFF_VECTOR<pcfc_consumer_prerendered_text> prerenderQueueTx;
+	SFF_VECTOR<pcfc_consumer_prerendered_text> prerenderQueueConsumer;
+	
+	SFF_VECTOR<pcfc_handle> destroyPrerenderQueueProducer;
+	SFF_VECTOR<pcfc_handle> destroyPrerenderQueueTx;
+	SFF_VECTOR<pcfc_handle> destroyPrerenderQueueConsumer;
+	
+	SFF_VECTOR<pcfc_glypth> glypthsProducer;
+	SFF_VECTOR<pcfc_glypth> glypthsTx;
+	SFF_VECTOR<pcfc_glypth> glypthsConsumer;
+	
+	SFF_VECTOR<pcfc_formatted_text> textProducer;
+	SFF_VECTOR<pcfc_formatted_text> textTx;
+	SFF_VECTOR<pcfc_formatted_text> textConsumer;
+	
+	pcfc_handle getNextPrerenderToken() {
+		return nextPrerenderTokenId++;
+		}
+		
+public:
+
+	producer_consumer_font_cache() : consumer_font_cache(NULL), userCallback(NULL), nextTokenId(0) {}
+	
+	void freeStoredPrerenderedText(const bool freeTextures) {
+		for (auto prt : prerenderMap) {
+			if (!prt) continue;
+			if (freeTextures) {
+				prt->freeTexture();
+				}
+			SSF_DEL(prt);
+			prerenderMap.clear();
+			}
+		}
+	
+	void loadFontManagedBoth (sttfont_memory & memory, int index = 0) {
+		sttfont_memory memory2;
+		memory.cloneTo(memory2);
+		
+		consumer_font_cache->loadFontManaged(memory2, index);
+		this->loadFontManaged(memory, index);
+		}
+		
+	void addFontManagedBoth (sttfont_memory & memory, int index = 0) {
+		sttfont_memory memory2;
+		memory.cloneTo(memory2);
+		
+		consumer_font_cache->addFontManaged(memory2, index);
+		this->addFontManaged(memory, index);
+		}
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Setup Functions (NOT thread safe -- you should use these on setup and then not after)
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Producer Functions
+	void drawString() {
+		
+		}
+	
+	void drawCodepoint (const sdl_stb_glyph * const G, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const int kerningAdv, int & overdraw) {
+		// Draws the character
+		// Make your own implmentation for your own frontend here
+		if (userCallback) {
+			userCallback->drawCodepoint(G, x, y, codepoint, format, isDrawing, kerningAdv); // we can't touch overdraw as it would create race conditions in MT enviroments
+			}
+		}
+	
+	void renderTextToObject (sttfont_prerendered_text * textOut, const char * c, const uint32_t maxLen = -1) {
+		sttfont_formatted_text tmp(c, maxLen);
+		renderTextToObject (textOut, tmp);
+		}
+	void renderTextToObject (sttfont_prerendered_text * textOut, const SSF_STRING & str) {
+		sttfont_formatted_text tmp(str);
+		renderTextToObject (textOut, tmp);
+		}
+	void renderTextToObject (sttfont_prerendered_text * textOut, const sttfont_formatted_text & str) {
+		pcfc_prerendered_text* p = (pcfc_prerendered_text*) textOut;
+		getTextSize(str, textOut->width, textOut->height);
+		p->token = pcfc_handle;
+		p->owner = this;
+		
+		pcfc_consumer_prerendered_text p2;
+		p2.width = p->width;
+		p2.height = p->height;
+		p2.token = p->token;
+		p2.text = str;
+		
+		prerenderQueueProducer.push_back(p2);
+		}
+		
+	void destoryPrerender(const pcfc_handle token) {
+		prerenderQueueProducer.push_back(token);
+		}
+		
+protected:
+	template <typename T>
+	void submitWorker(SSF_VECTOR<T>& vSrc, SSF_VECTOR<T>& vDst) {
+		vSrc.swap(prerenderQueueTx);
+		if (!vDst.size())
+			vDst.swap(vSrc);
+		else {
+			vDst.insert(vDst.end(), std::make_move_itterator(vSrc.begin()), std::make_move_itterator(vSrc.end()));
+			vSrc.clear();
+			}
+		}
+	
+public:
+	void submitToConsumer() {
+		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size())) return; // nothing to submit
+		mMutex.lock();
+		submitWorker(prerenderQueueProducer, prerenderQueueTx);
+		submitWorker(destroyPrerenderQueueProducer, destroyPrerenderQueueTx);
+		mMutex.unlock();
+		}
+		
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Consumer Functions
+	
+	void receiveFromProducer() {
+		mMutex.lock();
+		prerenderQueueConsumer.swap(prerenderQueueTx);
+		destroyPrerenderQueueConsumer.swap(destroyPrerenderQueueTx);
+		mMutex.unlock();
+		}
+	
+	template <typename T>
+	void dispatchPrerender(ss) {
+		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
+		for (pcfc_consumer_prerendered_text & p2 : prerenderQueueConsumer) {
+			auto itt = prerenderMap.find(p2.token);
+			if (itt != prerenderMap.end())
+				abort(); // Idx reusued, this will leak memory
+			T* t = SSF_NEW(T);
+			consumer_font_cache->renderTextToObject(t, p2.text);
+			prerenderMap[p2.token] = t;
+			}
+		}
+		
+	template <typename T>
+	void dispatchDestroy() {
+		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
+		for (const pcfc_handle idx : destroyPrerenderQueueConsumer) {
+			auto itt = prerenderMap.find(idx);
+			if (itt != prerenderMap.end()) {
+				SSF_DEL(itt->second);
+				prerenderMap.erase(itt);
+				}
+			}
+		}
+		
+	void dispatchPrerendered(const pcfc_handle prtId, int x, int y) {
+		auto itt = prerenderMap.find(prtId);
+		if (itt != prerenderMap.end()) {
+			itt->second.draw(x, y);
+			}
+		}
+		
+	void drawSingleText(const pcfc_text_token & t) {
+		
+		}
+		
+	void drawSingleGlypth(const pcfc_glypth_token & t) {
+		
+		}
+		
+	}
