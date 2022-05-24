@@ -109,8 +109,8 @@ public:
 		return getGlyph(target);
 		}
 		
-	
-	void drawCodepoint (const sdl_stb_glyph * const G, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const int kerningAdv, int & overdraw) {
+	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
+		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
 		// Draws the character
 		if (G->mSdlTexture) {
 			SDL_Rect r;

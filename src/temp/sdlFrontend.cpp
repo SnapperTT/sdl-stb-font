@@ -78,78 +78,66 @@ sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const tar
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
-void sdl_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw)
-                                                                                                                                                                {
-		// Draws the character, advances x & y to the next position
-		// NOTE: KErning
-		uint8_t formatCode = 0;
-		if (format)
-			formatCode = format->format;
-			
-		sdl_stb_glyph * G = (sdl_stb_glyph*) getGlyphOrTofu(codepoint, formatCode);
-		if (!G) {
-			x += faceSize/2;
-			return;
-			}
-		if (isDrawing) {
+void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                                                     {
+		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		// Draws the character
+		if (G->mSdlTexture) {
 			SDL_Rect r;
 			r.x = x + G->xOffset;
 			r.y = y + G->yOffset + baseline;
 			r.w = G->width;
 			r.h = G->height;
 			
-			if (G->mSdlTexture) {
-				if (format) {
-					int charAdv = kerningAdv + G->xOffset;
-					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
-					uint8_t cr,cg,cb,ca;
-					if (isColoured || formatCode) {
-						SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
-						SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
-						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
-						// Remove bleeding pixels
-						SDL_Rect r2;
-						r2.x = r.x; r2.y = r.y;
-						r2.w = r.w; r2.h = r.h;
-						if (r2.x < overdraw) {
-							int dx = overdraw - r2.x;
-							r2.x += dx;
-							r2.w -= dx;
-							}
-						overdraw = r.x + r.w;
-						SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+			if (format) {
+				int charAdv = kerningAdv + G->xOffset;
+				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+				uint8_t cr,cg,cb,ca;
+				if (isColoured || formatCode) {
+					SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
+					SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
+					// Remove bleeding pixels
+					SDL_Rect r2;
+					r2.x = r.x; r2.y = r.y;
+					r2.w = r.w; r2.h = r.h;
+					if (r2.x < overdraw) {
+						int dx = overdraw - r2.x;
+						r2.x += dx;
+						r2.w -= dx;
 						}
-					if (formatCode)
-						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
-					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
-					
-					if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
-						SDL_Rect r2;
-						r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
-						if (r2.h < 1) r2.h = 1;
-						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
-						SDL_RenderFillRect (mRenderer, &r2);
-						}
-					if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
-						SDL_Rect r2;
-						r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
-						if (r2.h < 1) r2.h = 1;
-						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
-						SDL_RenderFillRect (mRenderer, &r2);
-						}
-					
-					if (isColoured || formatCode) {
-						SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
-						SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
-						}
+					overdraw = r.x + r.w;
+					SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
 					}
-				else {
-					overdraw = SSF_INT_MIN;
-					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				if (formatCode)
+					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
+				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				
+				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
+					SDL_Rect r2;
+					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
+					if (r2.h < 1) r2.h = 1;
+					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
+					SDL_RenderFillRect (mRenderer, &r2);
+					}
+				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
+					SDL_Rect r2;
+					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
+					if (r2.h < 1) r2.h = 1;
+					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
+					SDL_RenderFillRect (mRenderer, &r2);
+					}
+				
+				if (isColoured || formatCode) {
+					SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
+					SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
 					}
 				}
+			else {
+				overdraw = SSF_INT_MIN;
+				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				}
 			}
-		x += scale*G->advance;
 		}
 SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
                                                                                                                                       {

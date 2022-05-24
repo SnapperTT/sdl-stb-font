@@ -92,6 +92,11 @@ struct bgfx_stb_glyph_atlas
   bool isFull;
   bgfx_stb_glyph_atlas ();
 };
+class deferred_stb_font_cache
+{
+public:
+  sttfont_font_cache * renderFontCache;
+};
 class bgfx_stb_font_cache : public sttfont_font_cache
 {
 public:
@@ -117,7 +122,7 @@ public:
   void genGlyph_writeData2 (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall);
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
-  void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
+  void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   bgfx::TextureHandle renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
   bgfx::TextureHandle renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
 protected:
@@ -656,103 +661,91 @@ sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const ta
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
-void bgfx_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw)
-                                                                                                                                                                {
-		// Draws the character, advances x & y to the next position
-		// NOTE: KErning
+void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                                                     {
+		const bgfx_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		// Draws the character
 		const uint64_t RSTATE = isRenderingToTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
 		
-		uint8_t formatCode = 0;
-		if (format)
-			formatCode = format->format;
-			
-		bgfx_stb_glyph * G = (bgfx_stb_glyph*) getGlyphOrTofu(codepoint, formatCode);
-		if (!G) {
-			x += faceSize/2;
-			return;
-			}
-		if (isDrawing) {
-			bgfxsfh::rect r;	// render coords
-			r.x = x + G->xOffset;
-			r.y = y + G->yOffset + baseline;
-			r.w = G->width;
-			r.h = G->height;
-			
-			bgfxsfh::rect rt;	// glyph texcoords
-			rt.x = G->x;
-			rt.y = G->y;
-			rt.w = G->w;
-			rt.h = G->h;
-			
-			if (true) {//bgfx::isValid(G->mAtlasTexture)) {
-				if (format) {
-					int charAdv = kerningAdv + G->xOffset;
-					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
-					uint8_t cr,cg,cb,ca;
-					
-					
-					if (false) { //isColoured || formatCode) { 
-						// Remove bleeding pixels
-						// not needed with the bgfx frontend
-						bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, 0).v);
-						bgfxsfh::rect r2;
-						r2.x = r.x; r2.y = r.y;
-						r2.w = r.w; r2.h = r.h;
-						if (r2.x < overdraw) {
-							int dx = overdraw - r2.x;
-							r2.x += dx;
-							r2.w -= dx;
-							}
-						overdraw = r.x + r.w;
-						
-						bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
-						bgfx::setState(bgfxsfh::RENDER_STATE);
-						bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+		bgfxsfh::rect r;	// render coords
+		r.x = x + G->xOffset;
+		r.y = y + G->yOffset + baseline;
+		r.w = G->width;
+		r.h = G->height;
+		
+		bgfxsfh::rect rt;	// glyph texcoords
+		rt.x = G->x;
+		rt.y = G->y;
+		rt.w = G->w;
+		rt.h = G->h;
+		
+		if (true) {//bgfx::isValid(G->mAtlasTexture)) {
+			if (format) {
+				int charAdv = kerningAdv + G->xOffset;
+				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+				uint8_t cr,cg,cb,ca;
+				
+				
+				if (false) { //isColoured || formatCode) { 
+					// Remove bleeding pixels
+					// not needed with the bgfx frontend
+					bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, 0).v);
+					bgfxsfh::rect r2;
+					r2.x = r.x; r2.y = r.y;
+					r2.w = r.w; r2.h = r.h;
+					if (r2.x < overdraw) {
+						int dx = overdraw - r2.x;
+						r2.x += dx;
+						r2.w -= dx;
 						}
-					bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
-					bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
-					bgfxsfh::pushTexturedQuad(r, rt, true);
-					bgfx::setState(RSTATE);
-					bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+					overdraw = r.x + r.w;
 					
-					if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
-						bgfxsfh::rect r2;
-						r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
-						if (r2.h < 1) r2.h = 1;
-						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
-						
-						bgfxsfh::pushUntexturedQuad(r2);
-						bgfx::setState(bgfxsfh::RENDER_STATE);
-						bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
-						}
-					if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
-						bgfxsfh::rect r2;
-						r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
-						if (r2.h < 1) r2.h = 1;
-						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
-						
-						bgfxsfh::pushUntexturedQuad(r2);
-						bgfx::setState(bgfxsfh::RENDER_STATE);
-						bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
-						}
+					bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
+					bgfx::setState(bgfxsfh::RENDER_STATE);
+					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
 					}
-				else {
-					static int ii = 0;
-					bgfx::setTexture(ii, bgfxsfh::s_texture, G->mAtlasTexture);
-					ii++;
-					if (ii > 4) ii = 0;
-					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
-					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+				bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
+				bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
+				bgfxsfh::pushTexturedQuad(r, rt, true);
+				bgfx::setState(RSTATE);
+				bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+				
+				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
+					bgfxsfh::rect r2;
+					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
+					if (r2.h < 1) r2.h = 1;
+					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
 					
-					overdraw = SSF_INT_MIN;
-					bgfxsfh::pushTexturedQuad(r, rt, true);
-					bgfx::setState(RSTATE);
-					bgfx::submit(mViewId, bgfxsfh::texturedProgram);
-					//std::cout << "submitting! " << char(codepoint) << std::endl;
+					bgfxsfh::pushUntexturedQuad(r2);
+					bgfx::setState(bgfxsfh::RENDER_STATE);
+					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+					}
+				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
+					bgfxsfh::rect r2;
+					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
+					if (r2.h < 1) r2.h = 1;
+					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
+					
+					bgfxsfh::pushUntexturedQuad(r2);
+					bgfx::setState(bgfxsfh::RENDER_STATE);
+					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
 					}
 				}
+			else {
+				static int ii = 0;
+				bgfx::setTexture(ii, bgfxsfh::s_texture, G->mAtlasTexture);
+				ii++;
+				if (ii > 4) ii = 0;
+				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
+				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+				
+				overdraw = SSF_INT_MIN;
+				bgfxsfh::pushTexturedQuad(r, rt, true);
+				bgfx::setState(RSTATE);
+				bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+				//std::cout << "submitting! " << char(codepoint) << std::endl;
+				}
 			}
-		x += scale*G->advance;
 		}
 bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
                                                                                                                                             {

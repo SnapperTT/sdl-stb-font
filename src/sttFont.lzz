@@ -274,6 +274,13 @@ public:
 	/// The size between rows, in the same coordinates as whatever you set faceSize as
 	int getScaledRowSize () const { return scale * rowSize; }
 	
+	/// Used by producer_consumer_font_cache to sync internal states
+	void syncFrom(const sttfont_font_cache & other) {
+		tabWidth = other.tabWidth;
+		faceSize = other.faceSize;
+		tabWidthInSpaces = other.tabWidthInSpaces;
+		}
+	
 	/// Loads the primary font
 	/// Also computes font properties (ascent/decent/basline/scale/rowSize/etc)
 	/// ttf_buffer must be null terminated
@@ -785,12 +792,12 @@ public:
 			return;
 			}
 		if (isDrawing) {
-			drawCodepoint(G, x, y, codePoint, format, kerningAdv, overdraw); //<--- implement your custom version of this
+			drawCodepoint(G, x, y, codepoint, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
 		}
 		
-	virtual void drawCodepoint (const sdl_stb_glyph * const G, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const int kerningAdv, int & overdraw) {
+	virtual void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
 		// Draws the character
 		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
 		// Make your own implmentation for your own frontend here

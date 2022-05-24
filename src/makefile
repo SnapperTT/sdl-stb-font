@@ -1,6 +1,6 @@
 # This makefile creates the .h files in the parent directory from .lzz files here
 LAZY=../tools/lzz -hx hh
-RAWSOURCES=bgfxFrontend.lzz sdlFrontend.lzz sttFont.lzz example.lzz
+RAWSOURCES=bgfxFrontend.lzz sdlFrontend.lzz sttFont.lzz producerConsumerFrontend.lzz example.lzz producerConsumerExample.lzz
 SUBSOURCES=sttFontFormattedText.lzz
 OUTPUTDIR=../
 TEMPDIR=temp/
@@ -9,6 +9,7 @@ SFI=$(addprefix $(OUTPUTDIR), $(RAWSOURCES:.lzz=.h))
 
 all: $(SOURCES) $(SFI)
 	mv ../example.h ../example.cpp
+	mv ../producerConsumerExample.h ../producerConsumerExample.cpp
 	cat ../sttFont.h ../sdlFrontend.h > ../sdlStbFont.h
 	cp bgfx_shaders/bgfxh_embedded_shader.h ..
 	cat bgfx_shaders/c/fs_textured_passthrough.bin.h \

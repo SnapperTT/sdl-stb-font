@@ -150,6 +150,7 @@ struct sttfont_formatted_text
   sttfont_formatted_text (SSF_STRING const & text);
   sttfont_formatted_text (SSF_STRING_MS text);
   sttfont_formatted_text (char const * text);
+  sttfont_formatted_text (char const * text, uint32_t const maxLen);
   sttfont_formatted_text (sttfont_formatted_text_item_MS text);
   sttfont_formatted_text (sttfont_formatted_text_item const & text);
   sttfont_formatted_text (sttfont_formatted_text_MS obj);
@@ -225,9 +226,11 @@ struct sttfont_glyph
 struct sttfont_memory
 {
   char * data;
+  size_t size;
   bool ownsData;
-  void alloc (size_t const size);
+  void alloc (size_t const _size);
   void transferTo (sttfont_memory & destination);
+  void cloneTo (sttfont_memory & other);
   sttfont_memory ();
   ~ sttfont_memory ();
 };
@@ -263,6 +266,7 @@ public:
   virtual ~ sttfont_font_cache ();
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
+  void syncFrom (sttfont_font_cache const & other);
   void loadFont (char const * ttf_buffer, int index = 0);
   void loadFontManaged (sttfont_memory & memory, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
@@ -308,13 +312,14 @@ public:
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   bool isTofu (sttfont_glyph * G);
   sttfont_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
-  virtual void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
+  void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
+  virtual void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
 };
 LZZ_INLINE bool sttfont_format::operator == (sttfont_format const & other) const
-                                                                     {
+                                                                     { // use default operator
 		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
 		}
 #undef LZZ_INLINE

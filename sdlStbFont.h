@@ -151,6 +151,7 @@ struct sttfont_formatted_text
   sttfont_formatted_text (SSF_STRING const & text);
   sttfont_formatted_text (SSF_STRING_MS text);
   sttfont_formatted_text (char const * text);
+  sttfont_formatted_text (char const * text, uint32_t const maxLen);
   sttfont_formatted_text (sttfont_formatted_text_item_MS text);
   sttfont_formatted_text (sttfont_formatted_text_item const & text);
   sttfont_formatted_text (sttfont_formatted_text_MS obj);
@@ -226,9 +227,11 @@ struct sttfont_glyph
 struct sttfont_memory
 {
   char * data;
+  size_t size;
   bool ownsData;
-  void alloc (size_t const size);
+  void alloc (size_t const _size);
   void transferTo (sttfont_memory & destination);
+  void cloneTo (sttfont_memory & other);
   sttfont_memory ();
   ~ sttfont_memory ();
 };
@@ -264,6 +267,7 @@ public:
   virtual ~ sttfont_font_cache ();
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
+  void syncFrom (sttfont_font_cache const & other);
   void loadFont (char const * ttf_buffer, int index = 0);
   void loadFontManaged (sttfont_memory & memory, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
@@ -309,13 +313,14 @@ public:
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   bool isTofu (sttfont_glyph * G);
   sttfont_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
-  virtual void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
+  void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
+  virtual void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
 };
 LZZ_INLINE bool sttfont_format::operator == (sttfont_format const & other) const
-                                                                     {
+                                                                     { // use default operator
 		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
 		}
 #undef LZZ_INLINE
@@ -473,6 +478,15 @@ sttfont_formatted_text::sttfont_formatted_text (SSF_STRING_MS text)
                                                                 { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (char const * text)
                                                                 { *this << text; }
+sttfont_formatted_text::sttfont_formatted_text (char const * text, uint32_t const maxLen)
+                                                                         {
+		if (maxLen == uint32_t(-1)) { *this << text; return; }
+		const char* p = text;
+		while (*p) p++;
+		uint32_t len = (p - text);
+		if (len > maxLen) len = maxLen;
+		*this << SSF_STRING(text, len);
+		}
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item_MS text)
                                                                                         { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item const & text)
@@ -999,20 +1013,28 @@ int sttfont_prerendered_text::drawWithColorMod (int const x, int const y, uint8_
 sttfont_glyph::sttfont_glyph ()
   : advance (0), leftSideBearing (0), width (0), height (0), xOffset (0), yOffset (0)
                                                                                                        {}
-void sttfont_memory::alloc (size_t const size)
-                                      {
-		data = SSF_NEW_ARR(char, size);
+void sttfont_memory::alloc (size_t const _size)
+                                       {
+		data = SSF_NEW_ARR(char, _size);
+		size = _size;
 		ownsData = true;
 		}
 void sttfont_memory::transferTo (sttfont_memory & destination)
                                                       {
 		destination.data = data;
-		destination.ownsData = destination.data;
+		destination.size = size;
+		destination.ownsData = ownsData;
 		ownsData = false;
 		}
+void sttfont_memory::cloneTo (sttfont_memory & other)
+                                            {
+		other.alloc(size);
+		memcpy(other.data, data, size);
+		other.ownsData = true;
+		}
 sttfont_memory::sttfont_memory ()
-  : data (NULL), ownsData (false)
-                                                        {}
+  : data (NULL), size (0), ownsData (false)
+                                                                 {}
 sttfont_memory::~ sttfont_memory ()
                            {
 		if (ownsData) {
@@ -1089,6 +1111,12 @@ void sttfont_font_cache::setFaceSize (int const _faceSize)
                                               { faceSize = _faceSize; }
 int sttfont_font_cache::getScaledRowSize () const
                                       { return scale * rowSize; }
+void sttfont_font_cache::syncFrom (sttfont_font_cache const & other)
+                                                        {
+		tabWidth = other.tabWidth;
+		faceSize = other.faceSize;
+		tabWidthInSpaces = other.tabWidthInSpaces;
+		}
 void sttfont_font_cache::loadFont (char const * ttf_buffer, int index)
                                                                {
 		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
@@ -1535,9 +1563,8 @@ sttfont_glyph * sttfont_font_cache::getGlyphOrTofu (uint32_t const codepoint, ui
 		return NULL;
 		}
 void sttfont_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw)
-                                                                                                                                                                        {
+                                                                                                                                                                {
 		// Draws the character, advances x & y to the next position
-		// NOTE: KErning
 		uint8_t formatCode = 0;
 		if (format)
 			formatCode = format->format;
@@ -1548,9 +1575,15 @@ void sttfont_font_cache::processCodepoint (int & x, int & y, uint32_t const code
 			return;
 			}
 		if (isDrawing) {
-			// Make your own implmentation for your own frontend here
+			drawCodepoint(G, x, y, codepoint, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
+		}
+void sttfont_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                                                             {
+		// Draws the character
+		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
+		// Make your own implmentation for your own frontend here
 		}
 void sttfont_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen)
                                                                                                                          {
@@ -1612,7 +1645,7 @@ public:
   void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
-  void processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw);
+  void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   SDL_Texture * renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
   SDL_Texture * renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
 protected:
@@ -1710,78 +1743,66 @@ sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const tar
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
-void sdl_stb_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw)
-                                                                                                                                                                {
-		// Draws the character, advances x & y to the next position
-		// NOTE: KErning
-		uint8_t formatCode = 0;
-		if (format)
-			formatCode = format->format;
-			
-		sdl_stb_glyph * G = (sdl_stb_glyph*) getGlyphOrTofu(codepoint, formatCode);
-		if (!G) {
-			x += faceSize/2;
-			return;
-			}
-		if (isDrawing) {
+void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                                                     {
+		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		// Draws the character
+		if (G->mSdlTexture) {
 			SDL_Rect r;
 			r.x = x + G->xOffset;
 			r.y = y + G->yOffset + baseline;
 			r.w = G->width;
 			r.h = G->height;
 			
-			if (G->mSdlTexture) {
-				if (format) {
-					int charAdv = kerningAdv + G->xOffset;
-					bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
-					uint8_t cr,cg,cb,ca;
-					if (isColoured || formatCode) {
-						SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
-						SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
-						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
-						// Remove bleeding pixels
-						SDL_Rect r2;
-						r2.x = r.x; r2.y = r.y;
-						r2.w = r.w; r2.h = r.h;
-						if (r2.x < overdraw) {
-							int dx = overdraw - r2.x;
-							r2.x += dx;
-							r2.w -= dx;
-							}
-						overdraw = r.x + r.w;
-						SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+			if (format) {
+				int charAdv = kerningAdv + G->xOffset;
+				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+				uint8_t cr,cg,cb,ca;
+				if (isColoured || formatCode) {
+					SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
+					SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
+					// Remove bleeding pixels
+					SDL_Rect r2;
+					r2.x = r.x; r2.y = r.y;
+					r2.w = r.w; r2.h = r.h;
+					if (r2.x < overdraw) {
+						int dx = overdraw - r2.x;
+						r2.x += dx;
+						r2.w -= dx;
 						}
-					if (formatCode)
-						SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
-					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
-					
-					if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
-						SDL_Rect r2;
-						r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
-						if (r2.h < 1) r2.h = 1;
-						r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
-						SDL_RenderFillRect (mRenderer, &r2);
-						}
-					if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
-						SDL_Rect r2;
-						r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
-						if (r2.h < 1) r2.h = 1;
-						r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
-						SDL_RenderFillRect (mRenderer, &r2);
-						}
-					
-					if (isColoured || formatCode) {
-						SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
-						SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
-						}
+					overdraw = r.x + r.w;
+					SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
 					}
-				else {
-					overdraw = SSF_INT_MIN;
-					SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				if (formatCode)
+					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
+				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				
+				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
+					SDL_Rect r2;
+					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
+					if (r2.h < 1) r2.h = 1;
+					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
+					SDL_RenderFillRect (mRenderer, &r2);
+					}
+				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
+					SDL_Rect r2;
+					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
+					if (r2.h < 1) r2.h = 1;
+					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
+					SDL_RenderFillRect (mRenderer, &r2);
+					}
+				
+				if (isColoured || formatCode) {
+					SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
+					SDL_SetTextureColorMod(G->mSdlTexture, 255,255,255);
 					}
 				}
+			else {
+				overdraw = SSF_INT_MIN;
+				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				}
 			}
-		x += scale*G->advance;
 		}
 SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
                                                                                                                                       {

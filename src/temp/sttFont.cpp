@@ -146,6 +146,15 @@ sttfont_formatted_text::sttfont_formatted_text (SSF_STRING_MS text)
                                                                 { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (char const * text)
                                                                 { *this << text; }
+sttfont_formatted_text::sttfont_formatted_text (char const * text, uint32_t const maxLen)
+                                                                         {
+		if (maxLen == uint32_t(-1)) { *this << text; return; }
+		const char* p = text;
+		while (*p) p++;
+		uint32_t len = (p - text);
+		if (len > maxLen) len = maxLen;
+		*this << SSF_STRING(text, len);
+		}
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item_MS text)
                                                                                         { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item const & text)
@@ -672,20 +681,28 @@ int sttfont_prerendered_text::drawWithColorMod (int const x, int const y, uint8_
 sttfont_glyph::sttfont_glyph ()
   : advance (0), leftSideBearing (0), width (0), height (0), xOffset (0), yOffset (0)
                                                                                                        {}
-void sttfont_memory::alloc (size_t const size)
-                                      {
-		data = SSF_NEW_ARR(char, size);
+void sttfont_memory::alloc (size_t const _size)
+                                       {
+		data = SSF_NEW_ARR(char, _size);
+		size = _size;
 		ownsData = true;
 		}
 void sttfont_memory::transferTo (sttfont_memory & destination)
                                                       {
 		destination.data = data;
-		destination.ownsData = destination.data;
+		destination.size = size;
+		destination.ownsData = ownsData;
 		ownsData = false;
 		}
+void sttfont_memory::cloneTo (sttfont_memory & other)
+                                            {
+		other.alloc(size);
+		memcpy(other.data, data, size);
+		other.ownsData = true;
+		}
 sttfont_memory::sttfont_memory ()
-  : data (NULL), ownsData (false)
-                                                        {}
+  : data (NULL), size (0), ownsData (false)
+                                                                 {}
 sttfont_memory::~ sttfont_memory ()
                            {
 		if (ownsData) {
@@ -762,6 +779,12 @@ void sttfont_font_cache::setFaceSize (int const _faceSize)
                                               { faceSize = _faceSize; }
 int sttfont_font_cache::getScaledRowSize () const
                                       { return scale * rowSize; }
+void sttfont_font_cache::syncFrom (sttfont_font_cache const & other)
+                                                        {
+		tabWidth = other.tabWidth;
+		faceSize = other.faceSize;
+		tabWidthInSpaces = other.tabWidthInSpaces;
+		}
 void sttfont_font_cache::loadFont (char const * ttf_buffer, int index)
                                                                {
 		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
@@ -1208,9 +1231,8 @@ sttfont_glyph * sttfont_font_cache::getGlyphOrTofu (uint32_t const codepoint, ui
 		return NULL;
 		}
 void sttfont_font_cache::processCodepoint (int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int kerningAdv, int & overdraw)
-                                                                                                                                                                        {
+                                                                                                                                                                {
 		// Draws the character, advances x & y to the next position
-		// NOTE: KErning
 		uint8_t formatCode = 0;
 		if (format)
 			formatCode = format->format;
@@ -1221,9 +1243,15 @@ void sttfont_font_cache::processCodepoint (int & x, int & y, uint32_t const code
 			return;
 			}
 		if (isDrawing) {
-			// Make your own implmentation for your own frontend here
+			drawCodepoint(G, x, y, codepoint, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
+		}
+void sttfont_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                                                             {
+		// Draws the character
+		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
+		// Make your own implmentation for your own frontend here
 		}
 void sttfont_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen)
                                                                                                                          {

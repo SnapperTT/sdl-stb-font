@@ -603,7 +603,8 @@ public:
 		return getGlyph(target);
 		}
 	
-	void drawCodepoint (const sdl_stb_glyph * const G, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const int kerningAdv, int & overdraw) {
+	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
+		const bgfx_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
 		// Draws the character
 		const uint64_t RSTATE = isRenderingToTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
 		
@@ -762,16 +763,6 @@ public:
 		bgfx_stb_prerendered_text * textOut2 = (bgfx_stb_prerendered_text*) textOut;
 		textOut2->mBgfxTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
-	
-	// For two stage rendering (eg, 1 thread updates, 2nd thread draws)
-	void prerenderToTexture() {
-		bgfx_stb_prerendered_text * textOut2 = (bgfx_stb_prerendered_text*) textOut;
-		textOut2->mBgfxTexture = bgfx::INVALID_HANDLE;
-		getTextSize()
-		}
-		
-	void
-	
-	
+				
 	}
 
