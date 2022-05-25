@@ -277,7 +277,7 @@ Use `producerConsumerExample.h`. See `producerConsumerExample.cpp` for a worked 
 
 The idea is that you instantiate a `producer_consumer_font_cache` object that is shared between your producer and consumer threads. This object has a member that points to the actual frontend used by the consumer:
 
-Initalising
+Initalising:
 ```c++
 producer_consumer_font_cache mPcCache;
 sdl_stb_font_cache mSdlFontCache;
@@ -294,7 +294,7 @@ mPcCache.faceSize = 24;
 mPcCache.loadFontManagedBoth(m); // Loads the font into both frontends
 ```
 
-Producing
+Producing:
 ```c++
 pcfc_prerendered_text prt;
 mPcCache.renderTextToObject(&prt, "Prerendered text from Producer Thread!"); // prt.handle now holds a handle
@@ -302,7 +302,7 @@ pcfc_handle h = mPcCache.pushText(5,5, "Hello World!"); // use this instead of "
 mPcCache.submitToConsumer(); // sends to consumer
 ```
 
-Consuming
+Consuming:
 ```c++
 // <somehow send prt.handle and h to consumer thread>
 // Suggestion: use a concurrentqueue (https://github.com/cameron314/concurrentqueue)
@@ -314,7 +314,7 @@ mPcCache.dispatchSinglePrerendered(prt.handle, 5, 5); // actually draws the prer
 mPcCache.dispatchSingleText(h); // Renders "hello world" at 5,5
 ```
 
-Cleanup
+Cleanup:
 ```c++
 // Cleanup - just let mPcCache fall out of scope
 mPcCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
