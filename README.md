@@ -277,11 +277,12 @@ Use `producerConsumerExample.h`. See `producerConsumerExample.cpp` for a worked 
 
 The idea is that you instantiate a `producer_consumer_font_cache` object that is shared between your producer and consumer threads. This object has a member that points to the actual frontend used by the consumer:
 
-```
+Initalising
+```c++
 producer_consumer_font_cache mPcCache;
 sdl_stb_font_cache mSdlFontCache;
 
-// initialising
+
 mPcCache.consumer_font_cache = &mSdlFontCache;
 	
 sttfont_memory m;
@@ -291,29 +292,30 @@ m.ownsData = false;
 	
 mPcCache.faceSize = 24;		
 mPcCache.loadFontManagedBoth(m); // Loads the font into both frontends
+```
 
-...
-
-// producing
+Producing
+```c++
 pcfc_prerendered_text prt;
 mPcCache.renderTextToObject(&prt, "Prerendered text from Producer Thread!"); // prt.handle now holds a handle
 pcfc_handle h = mPcCache.pushText(5,5, "Hello World!"); // use this instead of "drawText"
 mPcCache.submitToConsumer(); // sends to consumer
+```
 
-...
-
-// consuming
+Consuming
+```c++
 // <somehow send prt.handle and h to consumer thread>
 // Suggestion: use a concurrentqueue (https://github.com/cameron314/concurrentqueue)
-// and some kind of command buffer (https://github.com/SnapperTT/nanovg_command_buffer)
+// and/or some kind of command buffer (https://github.com/SnapperTT/nanovg_command_buffer)
 mPcCache.receiveFromProducer();
 mPcCache.dispatchPrerenderJobs<sdl_stb_prerendered_text>(); // takes the prerended text and creates sdl_stb_prerended_text objects (invokes mPcCache.consumer_font_cache->renderTextToObject)
 
 mPcCache.dispatchSinglePrerendered(prt.handle, 5, 5); // actually draws the prerendered text
 mPcCache.dispatchSingleText(h); // Renders "hello world" at 5,5
+```
 
-...
-
+Cleanup
+```c++
 // Cleanup - just let mPcCache fall out of scope
 mPcCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
 										  // this is manual destruction as destroying a large number of objects can be expensive, esp. when you want to exit quickly
@@ -328,7 +330,7 @@ Formatted Text
 ![Example formatting](example2.png)
 
 First create a `sttfont_formatted_text`. The above example was created with:
-```
+```c++
 sttfont_formatted_text formattedText;
 formattedText << sttfont_format::black << "Plain text "
 << sttfont_format::bold << "bold text "
@@ -354,7 +356,7 @@ For Bold/Italic variants to work you must load a Bold/Italic variant of the font
 
 To load a variant use `addFormatFont` or `addFormatFontManaged` after loading a base font. This also should be done for fallback fonts (for multilingual support) if you care about those fonts being availiable in bold/italic.
 
-```
+```c++
 fc.loadFontManaged(notoSans);	// First font - loadFont
 	fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansBold);
 	fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansItalic);
