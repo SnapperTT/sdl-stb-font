@@ -103,7 +103,7 @@ void producer_consumer_font_cache::destroyPrerender (pcfc_handle const handle)
 		}
 void producer_consumer_font_cache::submitToConsumer ()
                                 {
-		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size())) return; // nothing to submit
+		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size() || textProducer.size())) return; // nothing to submit
 		mMutex.lock();
 		submitWorker(prerenderQueueProducer, prerenderQueueTx);
 		submitWorker(destroyPrerenderQueueProducer, destroyPrerenderQueueTx);

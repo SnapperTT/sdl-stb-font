@@ -14,6 +14,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <sstream>
 
 #define SDL_STB_FONT_IMPL
 #include "sdlStbFont.h"
@@ -25,6 +26,7 @@ void readFileRaw (const std::string & fullPath, std::string & output) {
 	
 	if (!fs.is_open()) {
 		std::cout << "readFileRaw: " << fullPath << " -- " << "WARNING: Could not open file." << std::endl;
+		exit(1);
 		return;
 		}
 	else {
@@ -43,6 +45,7 @@ void readFileRaw (const std::string & fullPath, std::string & output) {
 ////////////////////////////////////////////////////////////////////////
 // Example command buffer
 
+#define COMMAND_TYPE_SUB_ID 0
 #define COMMAND_TYPE_RECT 1
 #define COMMAND_TYPE_PRETEXT 2
 #define COMMAND_TYPE_TEXT 3
@@ -96,16 +99,18 @@ public:
 	producer_consumer_font_cache mPcCache;
 	sdl_stb_font_cache mSdlFontCache;
 	CommandBuffer mCommandBuffer; // an example of this is at https://github.com/SnapperTT/nanovg_command_buffer
+	std::atomic<int> killFlag;
 	
 	void initExample(std::string & fontData) {
 		mPcCache.consumer_font_cache = &mSdlFontCache;
+		killFlag = 0;
 		
 		sttfont_memory m;
 		m.data = &fontData[0];
 		m.size = fontData.size();
 		m.ownsData = false;
 		
-		mPcCache.faceSize = 10;		
+		mPcCache.faceSize = 24;		
 		mPcCache.loadFontManagedBoth(m); // loads a copy of the font into both mPcCache and mRenderCache
 										 // note: faceSize, etc are sync'ed between both copies in here
 		}
@@ -117,11 +122,16 @@ public:
 		mPcCache.renderTextToObject(&prt, "Prerendered text from Producer Thread!"); // prt now holds a handle
 		mPcCache.submitToConsumer();
 		
+		int submissionCounter = 0;
+		
 		// main loop - buffer draw commands somehow
-		while (true) {
-			mCommandBuffer.push_back(command(COMMAND_TYPE_RECT, -1, 0, 0, 50, 50));
-			mCommandBuffer.push_back(command(COMMAND_TYPE_PRETEXT, prt.handle, 10, 10));
-			pcfc_handle textHandle = mPcCache.pushText(5,5, "Direct Text from Producer Thread");
+		while (!killFlag) {
+			mCommandBuffer.push_back(command(COMMAND_TYPE_SUB_ID, submissionCounter));
+			mCommandBuffer.push_back(command(COMMAND_TYPE_RECT, -1, 0, 0, 450, 100));
+			mCommandBuffer.push_back(command(COMMAND_TYPE_PRETEXT, prt.handle, 5, 35));
+			std::stringstream ss;
+			ss << "Direct Text from Producer Thread, Submission id: " << submissionCounter;
+			pcfc_handle textHandle = mPcCache.pushText(5,5, ss.str());
 			mCommandBuffer.push_back(command(COMMAND_TYPE_TEXT, textHandle));
 			 
 			//if (someUpdate) {
@@ -131,7 +141,9 @@ public:
 			
 			mPcCache.submitToConsumer();
 			mCommandBuffer.submitToConsumer();
+			submissionCounter++;
 			}
+		std::cout << "Producer thread exited" << std::endl;
 		}
 	
 	static void producer_thread_main(void* data) {
@@ -141,10 +153,16 @@ public:
 	
 	void consumerExample() {
 		// example render thread
+		int frameCounter = 0;
+		int lastSubCounter = 0;
+		
+		uint64_t NOW = SDL_GetPerformanceCounter();
+		uint64_t LAST = 0;
+		
 		while (true) {
 			// Receive from producer thread
 			mPcCache.receiveFromProducer();
-			mPcCahce.dispatchPrerenders<sdl_stb_prerendered_text>(); // must be called to actually prerender the text
+			mPcCache.dispatchPrerenderJobs<sdl_stb_prerendered_text>(); // must be called to actually prerender the text
 			mCommandBuffer.receiveFromProducer();
 			
 			// Handle SDL events
@@ -152,8 +170,13 @@ public:
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
 					case SDL_QUIT:
+						{
+						killFlag = 1;
+						mCommandBuffer.workFlag = 0;
+						SDL_Delay(10);
 						return;
 						break;
+						}
 					}
 				}
 			
@@ -161,20 +184,25 @@ public:
 			SDL_Renderer* mSdlRenderer = mSdlFontCache.mRenderer;
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255); // Grey background to test glyph artefacts
 			SDL_RenderClear(mSdlRenderer);
-			
+						
 			// Process command buffer
 			for (const command & mCommand : mCommandBuffer.mCommandsConsumer) {
 				switch (mCommand.type) {
+					case COMMAND_TYPE_SUB_ID:
+						lastSubCounter = mCommand.handle;
+						continue;
 					case COMMAND_TYPE_PRETEXT: 
-						mPcCache.dispatchPrerendered(mCommand.x, mCommand.y, mCommand.xs);
+						mPcCache.dispatchSinglePrerendered(mCommand.handle, mCommand.x, mCommand.y);
 						continue;
-					case COMMAND_TYPE_TEXT
-						mPcCache.dispatchText(mCommand.x);
+					case COMMAND_TYPE_TEXT:
+						mPcCache.dispatchSingleText(mCommand.handle);
 						continue;
-					case COMMAND_TYPE_RECT
+					case COMMAND_TYPE_RECT:
 						{
-						SDL_Rect
-						drawRectangle(mCommand.x, mCommand.y, mCommand.w, mCommand.h);
+						SDL_SetRenderDrawColor(mSdlRenderer, 55, 55, 55, 255); // dark grey rectangle
+						SDL_Rect r;
+						r.x = mCommand.x; r.y = mCommand.y; r.w = mCommand.w; r.h = mCommand.h;
+						SDL_RenderDrawRect(mSdlRenderer, &r);
 						continue;
 						}
 					default:
@@ -182,7 +210,20 @@ public:
 					}
 				}
 			
+			std::stringstream ss;
+			ss << "Text from consumer thread! Submission id: " << lastSubCounter;
+			mSdlFontCache.drawText(5, 65, ss.str());
+			
 			SDL_RenderPresent(mSdlRenderer);
+			frameCounter++;
+			//SDL_Delay(13);
+			
+			if (frameCounter % 100 == 0) {
+				LAST = NOW;
+				NOW = SDL_GetPerformanceCounter();
+				const double deltaTime = (double)((NOW - LAST)*1000 / (double)SDL_GetPerformanceFrequency() ) / 100.0;
+				std::cout << "Producer Consumer - Consumer Thread - 100 Frames Average - Frametime: " << deltaTime << "ms \t FPS: " << (1000.0/deltaTime) << std::endl;
+				}
 			}
 		}
 	};
@@ -202,17 +243,19 @@ int main(int argc, char**argv) {
 	
 	{
 	std::string fontData;
-	readFileRaw("sdlStbFont/fonts/NotoSans-Regular.ttf", fontData);
-	ex.init(fontData);
+	readFileRaw("fonts/NotoSans-Regular.ttf", fontData);
+	ex.initExample(fontData);
 	}
 	
 	// spawn a producer thread
 	std::thread producerThread(pcfc_example::producer_thread_main, &ex);
 	ex.consumerExample();
+	producerThread.join();
 	
 	// Cleanup - just let ex.mPcCache fall out of scope
 	ex.mPcCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
 
+	std::cout << "Consumer thread exited" << std::endl;
 	return 1;
 	}
 

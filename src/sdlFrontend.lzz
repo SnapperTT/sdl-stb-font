@@ -221,14 +221,17 @@ public:
 	void renderTextToObject (sttfont_prerendered_text * textOut, const char * c, const uint32_t maxLen = -1) {
 		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
 		textOut2->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
+		textOut2->mRenderer = mRenderer;
 		}
 	void renderTextToObject (sttfont_prerendered_text * textOut, const SSF_STRING & str) {
 		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
 		textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		textOut2->mRenderer = mRenderer;
 		}
 	void renderTextToObject (sttfont_prerendered_text * textOut, const sttfont_formatted_text & str) {
 		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
 		textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		textOut2->mRenderer = mRenderer;
 		}
 	
 	

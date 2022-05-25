@@ -70,7 +70,7 @@ public:
   void submitToConsumer ();
   void receiveFromProducer ();
   template <typename T>
-  void dispatchPrerenders ();
+  void dispatchPrerenderJobs ();
   template <typename T>
   void dispatchDestroy ();
   void dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y);
@@ -87,8 +87,8 @@ void producer_consumer_font_cache::submitWorker (SSF_VECTOR <T> & vSrc, SSF_VECT
 			}
 		}
 template <typename T>
-void producer_consumer_font_cache::dispatchPrerenders ()
-                                  {
+void producer_consumer_font_cache::dispatchPrerenderJobs ()
+                                     {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
 		for (pcfc_consumer_prerendered_text & p2 : prerenderQueueConsumer) {
 			auto itt = prerenderMap.find(p2.handle);
@@ -225,7 +225,7 @@ void producer_consumer_font_cache::destroyPrerender (pcfc_handle const handle)
 		}
 void producer_consumer_font_cache::submitToConsumer ()
                                 {
-		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size())) return; // nothing to submit
+		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size() || textProducer.size())) return; // nothing to submit
 		mMutex.lock();
 		submitWorker(prerenderQueueProducer, prerenderQueueTx);
 		submitWorker(destroyPrerenderQueueProducer, destroyPrerenderQueueTx);

@@ -172,7 +172,7 @@ protected:
 	
 public:
 	void submitToConsumer() {
-		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size())) return; // nothing to submit
+		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size() || textProducer.size())) return; // nothing to submit
 		mMutex.lock();
 		submitWorker(prerenderQueueProducer, prerenderQueueTx);
 		submitWorker(destroyPrerenderQueueProducer, destroyPrerenderQueueTx);
@@ -193,7 +193,7 @@ public:
 		}
 	
 	template <typename T>
-	void dispatchPrerenders() {
+	void dispatchPrerenderJobs() {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
 		for (pcfc_consumer_prerendered_text & p2 : prerenderQueueConsumer) {
 			auto itt = prerenderMap.find(p2.handle);

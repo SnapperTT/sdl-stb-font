@@ -190,15 +190,18 @@ void sdl_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut,
                                                                                                                  {
 		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
 		textOut2->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
+		textOut2->mRenderer = mRenderer;
 		}
 void sdl_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str)
                                                                                              {
 		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
 		textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		textOut2->mRenderer = mRenderer;
 		}
 void sdl_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str)
                                                                                                          {
 		sdl_stb_prerendered_text * textOut2 = (sdl_stb_prerendered_text*) textOut;
 		textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		textOut2->mRenderer = mRenderer;
 		}
 #undef LZZ_INLINE
