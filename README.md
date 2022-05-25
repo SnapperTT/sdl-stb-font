@@ -3,6 +3,7 @@ SDL STB Font Renderer
 A header-only library for rendering text in pure [SDL2](https://www.libsdl.org/) with [STB_Truetype](https://github.com/nothings/stb). This caches glyphs as they are drawn allowing for fast text rendering. It also provides a couple of easy ways to render a string to texture for even faster text rendering.
 
 New (2022)! Can prerender in multithreaded enviroments with `producerConsumerFrontend.h`!
+
 New (2021)! Can also render in [bgfx](https://github.com/bkaradzic/bgfx) with `bgfxFrontend.h`!
 
 ## Example Image:
@@ -57,6 +58,7 @@ How Do I?
 * [Handle Tabs](#handle-tabs)
 * [Pregenerate Glyphs](#pregenerate-glyphs)
 * [Write A Custom Frontend](#write-a-custom-backend)
+* [Generate Text From One Thread and Render In Another](#generate-text-from-one-thread-and-render-in-another)
 
 Formatted Text:
 * [Print Formatted Text?](#print-formatted-text)
@@ -65,7 +67,6 @@ Formatted Text:
 
 Non-SDL Frontends:
 * [BGFX](#BGFX)
-
 
 ## Use This Library?
 This is a header only library - no build system required
@@ -257,7 +258,6 @@ This library consists of two parts - a font handling backend (classes named `stt
 
 To make your own rendering frontend extend the relevent `sttfont_*` classes. See the SDL implementation for details. Its ~200 lines of code, all you have to do is take out the SDL specific stuff and put in your renderer specific stuff. In your application, include `sttFont.h` instead of `sdlStbFont.h`
 
-
 ## Pregenerate Glyphs
 You can use the `pregenGlyphs function`:
 ```c++
@@ -271,6 +271,53 @@ fc.pregenGlyphs(codepoint_ranges, 0); // generatess the glyps
 ```
 
 If you are software rendering in SDL *this is not needed*, and will just slow down startup. If you are using a custom frontend that uses texture atlases (such as bgfx) then this is recommended.
+
+## Generate Text From One Thread and Render In Another
+Use `producerConsumerExample.h`. See `producerConsumerExample.cpp` for a worked example.
+
+The idea is that you instantiate a `producer_consumer_font_cache` object that is shared between your producer and consumer threads. This object has a member that points to the actual frontend used by the consumer:
+
+```
+producer_consumer_font_cache mPcCache;
+sdl_stb_font_cache mSdlFontCache;
+
+// initialising
+mPcCache.consumer_font_cache = &mSdlFontCache;
+	
+sttfont_memory m;
+m.data = &fontData[0];
+m.size = fontData.size();
+m.ownsData = false;
+	
+mPcCache.faceSize = 24;		
+mPcCache.loadFontManagedBoth(m); // Loads the font into both frontends
+
+...
+
+// producing
+pcfc_prerendered_text prt;
+mPcCache.renderTextToObject(&prt, "Prerendered text from Producer Thread!"); // prt.handle now holds a handle
+pcfc_handle h = mPcCache.pushText(5,5, "Hello World!"); // use this instead of "drawText"
+mPcCache.submitToConsumer(); // sends to consumer
+
+...
+
+// consuming
+// <somehow send prt.handle and h to consumer thread>
+// Suggestion: use a concurrentqueue (https://github.com/cameron314/concurrentqueue)
+// and some kind of command buffer (https://github.com/SnapperTT/nanovg_command_buffer)
+mPcCache.receiveFromProducer();
+mPcCache.dispatchPrerenderJobs<sdl_stb_prerendered_text>(); // takes the prerended text and creates sdl_stb_prerended_text objects (invokes mPcCache.consumer_font_cache->renderTextToObject)
+
+mPcCache.dispatchSinglePrerendered(prt.handle, 5, 5); // actually draws the prerendered text
+mPcCache.dispatchSingleText(h); // Renders "hello world" at 5,5
+
+...
+
+// Cleanup - just let mPcCache fall out of scope
+mPcCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
+										  // this is manual destruction as destroying a large number of objects can be expensive, esp. when you want to exit quickly
+```
 
 
 Formatted Text

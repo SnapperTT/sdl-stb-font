@@ -254,6 +254,7 @@ int main(int argc, char**argv) {
 	
 	// Cleanup - just let ex.mPcCache fall out of scope
 	ex.mPcCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
+												// this is manual destruction as destroying a large number of objects can be expensive, esp. when you want to exit quickly
 
 	std::cout << "Consumer thread exited" << std::endl;
 	return 1;
