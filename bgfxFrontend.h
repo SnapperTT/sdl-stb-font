@@ -663,7 +663,7 @@ sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const ta
 		}
 void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
                                                                                                                                                                                                                      {
-		const bgfx_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
 		// Draws the character
 		const uint64_t RSTATE = isRenderingToTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
 		

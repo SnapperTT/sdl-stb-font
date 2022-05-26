@@ -604,7 +604,7 @@ public:
 		}
 	
 	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
-		const bgfx_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
 		// Draws the character
 		const uint64_t RSTATE = isRenderingToTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
 		
