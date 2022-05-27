@@ -18,6 +18,7 @@ struct pcfc_prerendered_text : public sttfont_prerendered_text
 {
   pcfc_handle handle;
   producer_consumer_font_cache * owner;
+  void freeTexture ();
 };
 class producer_consumer_font_cache : public sttfont_font_cache
 {
@@ -36,7 +37,7 @@ protected:
   };
 public:
   sttfont_font_cache * consumer_font_cache;
-protected:
+public:
   pcfc_handle nextPrerenderTokenId;
   SSF_MUTEX mMutex;
   SSF_MAP <pcfc_handle, sttfont_prerendered_text*> prerenderMap;
@@ -73,7 +74,8 @@ public:
   void dispatchPrerenderJobs ();
   template <typename T>
   void dispatchDestroy ();
-  void dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y);
+  void dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y) const;
+  void dispatchSinglePrerenderedWColorMod (pcfc_handle const prtId, int x, int y, int const r, int const g, int const b, int const a) const;
   void dispatchSingleText (pcfc_handle const texId);
 };
 template <typename T>
@@ -125,6 +127,11 @@ void producer_consumer_font_cache::dispatchDestroy ()
 //
 
 #define LZZ_INLINE inline
+void pcfc_prerendered_text::freeTexture ()
+                           {
+		if (owner)
+			owner->destroyPrerender(handle);
+		}
 producer_consumer_font_cache::pcfc_consumer_prerendered_text::pcfc_consumer_prerendered_text ()
                                                  {}
 pcfc_handle producer_consumer_font_cache::getNextPrerenderToken ()
@@ -241,11 +248,18 @@ void producer_consumer_font_cache::receiveFromProducer ()
 		textConsumer.swap(textTx);
 		mMutex.unlock();
 		}
-void producer_consumer_font_cache::dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y)
-                                                                              {
+void producer_consumer_font_cache::dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y) const
+                                                                                    {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
 			itt->second->draw(x, y);
+			}
+		}
+void producer_consumer_font_cache::dispatchSinglePrerenderedWColorMod (pcfc_handle const prtId, int x, int y, int const r, int const g, int const b, int const a) const
+                                                                                                                                                 {
+		auto itt = prerenderMap.find(prtId);
+		if (itt != prerenderMap.end()) {
+			itt->second->drawWithColorMod(x, y, r, g, b, a);
 			}
 		}
 void producer_consumer_font_cache::dispatchSingleText (pcfc_handle const texId)

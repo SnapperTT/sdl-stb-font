@@ -13,6 +13,11 @@ struct producer_consumer_font_cache;
 struct pcfc_prerendered_text : public sttfont_prerendered_text {
 	pcfc_handle handle;
 	producer_consumer_font_cache * owner;
+	
+	void freeTexture() {
+		if (owner)
+			owner->destroyPrerender(handle);
+		}
 	}
 
 class producer_consumer_font_cache : public sttfont_font_cache {
@@ -33,7 +38,8 @@ protected:
 public:
 	sttfont_font_cache* consumer_font_cache;
 	
-protected:
+public:
+	// These members should be "protected", but making them public makes debugging easier
 	pcfc_handle nextPrerenderTokenId;
 	SSF_MUTEX mMutex;
 	
@@ -219,13 +225,21 @@ public:
 			}
 		}
 		
-	void dispatchSinglePrerendered(const pcfc_handle prtId, int x, int y) {
+	void dispatchSinglePrerendered(const pcfc_handle prtId, int x, int y) const {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
 			itt->second->draw(x, y);
 			}
 		}
-	
+		
+		
+	void dispatchSinglePrerenderedWColorMod(const pcfc_handle prtId, int x, int y, const int r, const int g, const int b, const int a) const {
+		auto itt = prerenderMap.find(prtId);
+		if (itt != prerenderMap.end()) {
+			itt->second->drawWithColorMod(x, y, r, g, b, a);
+			}
+		}
+			
 	void dispatchSingleText(const pcfc_handle texId) {
 		if (texId < textConsumer.size() && texId >= 0) {
 			pcfc_formatted_text & pcf = textConsumer[texId];
