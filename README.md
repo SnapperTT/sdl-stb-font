@@ -59,6 +59,7 @@ How Do I?
 * [Pregenerate Glyphs](#pregenerate-glyphs)
 * [Write A Custom Frontend](#write-a-custom-backend)
 * [Generate Text From One Thread and Render In Another](#generate-text-from-one-thread-and-render-in-another)
+* [Lock Free Producer Consumer Queue](#lock-free-producer-consumer-queue)
 
 Formatted Text:
 * [Print Formatted Text?](#print-formatted-text)
@@ -319,8 +320,39 @@ Cleanup:
 // Cleanup - just let mPcCache fall out of scope
 mPcCache.freeStoredPrerenderedText(true); // deletes all prerendered text objects stored. true == also calls prt->freeTexture() for all prerendered text
 										  // this is manual destruction as destroying a large number of objects can be expensive, esp. when you want to exit quickly
+// Don't forget to delete mPcCache.consumer_font_cache if it was heap allocated
+delete mPcCache.consumer_font_cache;
 ```
 
+Userdata:
+You can submit a raw pointer along with your text.
+```
+mPcCahce.pushUserdata(void*); // producer
+void* foo = mPcCahce.getUserdata(); // consumer
+```
+
+## Lock Free Producer Consumer Queue
+If you don't do this a `std::mutex` is used to pass state from producer to consumer. There is only one slot in the transitory buffer. You must have some mechanisim to stop, eg, the producer running faster than the consumer.
+
+If you want to use a queue I recommend [moodycamel::ReaderWriterQueue](https://github.com/cameron314/readerwriterqueue). You can enable it with `producer_consumer_font_cache` by:
+```
+#define SSF_CONCURRENT_QUEUE moodycamel::ReaderWriterQueue
+```
+
+Polling for changes:
+```
+if (mPcCache.receiveFromProducer()) { // wraps moodycamel::ReaderWriterQueue::try_dequeue()
+	// have dequeued!
+	}
+```
+
+Cleanup (flush the queue)
+```
+while (mPcCache.receiveFromProducer()) {
+	// pulls stuff from the queue until its empty
+	delete mPcCache.getUserdata(); // if we're using heap allocated userdata here is how to clear it
+	}
+```
 
 Formatted Text
 ==============

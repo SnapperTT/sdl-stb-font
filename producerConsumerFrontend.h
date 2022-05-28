@@ -13,6 +13,12 @@
 
 typedef uint32_t pcfc_handle;
 struct producer_consumer_font_cache;
+
+#ifdef SSF_CONCURRENT_QUEUE
+	#define SSF_STATE_TRANSFER SSF_CONCURRENT_QUEUE<state_t*>
+#else
+	#define SSF_STATE_TRANSFER SSF_MUTEX mMutex; state_t
+#endif
 #define LZZ_INLINE inline
 struct pcfc_prerendered_text : public sttfont_prerendered_text
 {
@@ -39,17 +45,20 @@ public:
   sttfont_font_cache * consumer_font_cache;
 public:
   pcfc_handle nextPrerenderTokenId;
-  SSF_MUTEX mMutex;
   SSF_MAP <pcfc_handle, sttfont_prerendered_text*> prerenderMap;
-  SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerenderQueueProducer;
-  SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerenderQueueTx;
-  SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerenderQueueConsumer;
-  SSF_VECTOR <pcfc_handle> destroyPrerenderQueueProducer;
-  SSF_VECTOR <pcfc_handle> destroyPrerenderQueueTx;
-  SSF_VECTOR <pcfc_handle> destroyPrerenderQueueConsumer;
-  SSF_VECTOR <producer_consumer_font_cache::pcfc_formatted_text> textProducer;
-  SSF_VECTOR <producer_consumer_font_cache::pcfc_formatted_text> textTx;
-  SSF_VECTOR <producer_consumer_font_cache::pcfc_formatted_text> textConsumer;
+  struct state_t
+  {
+    SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerender;
+    SSF_VECTOR <pcfc_handle> destroyPrerender;
+    SSF_VECTOR <producer_consumer_font_cache::pcfc_formatted_text> text;
+    void * userdata;
+    state_t ();
+    void swap (state_t & s);
+    void clear ();
+  };
+  state_t producerState;
+  SSF_STATE_TRANSFER txQueue;
+  state_t consumerState;
   pcfc_handle getNextPrerenderToken ();
 public:
   producer_consumer_font_cache ();
@@ -64,12 +73,9 @@ public:
   void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
   void destroyPrerender (pcfc_handle const handle);
-protected:
-  template <typename T>
-  void submitWorker (SSF_VECTOR <T> & vSrc, SSF_VECTOR <T> & vDst);
-public:
+  void pushUserdata (void * data);
   void submitToConsumer ();
-  void receiveFromProducer ();
+  bool receiveFromProducer ();
   template <typename T>
   void dispatchPrerenderJobs ();
   template <typename T>
@@ -77,22 +83,13 @@ public:
   void dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y) const;
   void dispatchSinglePrerenderedWColorMod (pcfc_handle const prtId, int x, int y, int const r, int const g, int const b, int const a) const;
   void dispatchSingleText (pcfc_handle const texId);
+  void * getUserdata ();
 };
-template <typename T>
-void producer_consumer_font_cache::submitWorker (SSF_VECTOR <T> & vSrc, SSF_VECTOR <T> & vDst)
-                                                                    {
-		if (!vDst.size())
-			vDst.swap(vSrc);
-		else {
-			vDst.insert(vDst.end(), std::make_move_iterator(vSrc.begin()), std::make_move_iterator(vSrc.end()));
-			vSrc.clear();
-			}
-		}
 template <typename T>
 void producer_consumer_font_cache::dispatchPrerenderJobs ()
                                      {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
-		for (pcfc_consumer_prerendered_text & p2 : prerenderQueueConsumer) {
+		for (pcfc_consumer_prerendered_text & p2 : consumerState.prerender) {
 			auto itt = prerenderMap.find(p2.handle);
 			if (itt != prerenderMap.end())
 				abort(); // Idx reusued, this will leak memory
@@ -100,13 +97,13 @@ void producer_consumer_font_cache::dispatchPrerenderJobs ()
 			consumer_font_cache->renderTextToObject(t, p2.text);
 			prerenderMap[p2.handle] = t;
 			}
-		prerenderQueueConsumer.clear();
+		consumerState.prerender.clear();
 		}
 template <typename T>
 void producer_consumer_font_cache::dispatchDestroy ()
                                {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
-		for (const pcfc_handle idx : destroyPrerenderQueueConsumer) {
+		for (const pcfc_handle idx : consumerState.destroyPrerender) {
 			auto itt = prerenderMap.find(idx);
 			if (itt != prerenderMap.end()) {
 				itt->second->freeTexture();
@@ -114,6 +111,7 @@ void producer_consumer_font_cache::dispatchDestroy ()
 				prerenderMap.erase(itt);
 				}
 			}
+		consumerState.destroyPrerender.clear();
 		}
 #undef LZZ_INLINE
 #endif
@@ -134,6 +132,25 @@ void pcfc_prerendered_text::freeTexture ()
 		}
 producer_consumer_font_cache::pcfc_consumer_prerendered_text::pcfc_consumer_prerendered_text ()
                                                  {}
+producer_consumer_font_cache::state_t::state_t ()
+  : userdata (NULL)
+                                           {}
+void producer_consumer_font_cache::state_t::swap (state_t & s)
+                                       {
+			prerender.swap(s.prerender);
+			destroyPrerender.swap(s.destroyPrerender);
+			text.swap(s.text);
+			void * tmp = s.userdata;
+			s.userdata = userdata;
+			userdata = tmp;
+			}
+void producer_consumer_font_cache::state_t::clear ()
+                             {
+			prerender.clear();
+			destroyPrerender.clear();
+			text.clear();
+			userdata = NULL;
+			}
 pcfc_handle producer_consumer_font_cache::getNextPrerenderToken ()
                                             {
 		return nextPrerenderTokenId++;
@@ -193,8 +210,8 @@ pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, st
 		p.text = str;
 		p.x = x;
 		p.y = y;
-		textProducer.push_back(std::move(p));
-		return textProducer.size() - 1; 
+		producerState.text.push_back(std::move(p));
+		return producerState.text.size() - 1; 
 		}
 void producer_consumer_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
                                                                                                                                                                                                                      {
@@ -224,29 +241,46 @@ void producer_consumer_font_cache::renderTextToObject (sttfont_prerendered_text 
 		p2.handle = p->handle;
 		p2.text = str;
 		
-		prerenderQueueProducer.push_back(p2);
+		producerState.prerender.push_back(p2);
 		}
 void producer_consumer_font_cache::destroyPrerender (pcfc_handle const handle)
                                                         {
-		destroyPrerenderQueueProducer.push_back(handle);
+		producerState.destroyPrerender.push_back(handle);
+		}
+void producer_consumer_font_cache::pushUserdata (void * data)
+                                      {
+		producerState.userdata = data;
 		}
 void producer_consumer_font_cache::submitToConsumer ()
                                 {
-		if (!(prerenderQueueProducer.size() || destroyPrerenderQueueProducer.size() || textProducer.size())) return; // nothing to submit
-		mMutex.lock();
-		submitWorker(prerenderQueueProducer, prerenderQueueTx);
-		submitWorker(destroyPrerenderQueueProducer, destroyPrerenderQueueTx);
-		submitWorker(textProducer, textTx);
-		mMutex.unlock();
+		#ifdef SSF_CONCURRENT_QUEUE
+			state_t * s = new state_t;
+			s->swap(producerState);
+			txQueue.enqueue(s);
+		#else
+			mMutex.lock();
+			txQueue.clear();
+			txQueue.swap(producerState);
+			mMutex.unlock();
+		#endif
 		}
-void producer_consumer_font_cache::receiveFromProducer ()
+bool producer_consumer_font_cache::receiveFromProducer ()
                                    {
-		textConsumer.clear();
-		mMutex.lock();
-		prerenderQueueConsumer.swap(prerenderQueueTx);
-		destroyPrerenderQueueConsumer.swap(destroyPrerenderQueueTx);
-		textConsumer.swap(textTx);
-		mMutex.unlock();
+		#ifdef SSF_CONCURRENT_QUEUE
+			state_t * s = NULL;
+			if (txQueue.try_dequeue(s)) {
+				s->swap(consumerState);
+				delete s;
+				return true;
+				}
+			return false;
+		#else
+			consumerState.clear();
+			mMutex.lock();
+			consumerState.swap(txQueue);
+			mMutex.unlock();
+			return true;
+		#endif
 		}
 void producer_consumer_font_cache::dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y) const
                                                                                     {
@@ -264,10 +298,14 @@ void producer_consumer_font_cache::dispatchSinglePrerenderedWColorMod (pcfc_hand
 		}
 void producer_consumer_font_cache::dispatchSingleText (pcfc_handle const texId)
                                                          {
-		if (texId < textConsumer.size() && texId >= 0) {
-			pcfc_formatted_text & pcf = textConsumer[texId];
+		if (texId < consumerState.text.size() && texId >= 0) {
+			pcfc_formatted_text & pcf = consumerState.text[texId];
 			consumer_font_cache->drawText(pcf.x, pcf.y, pcf.text);
 			}
+		}
+void * producer_consumer_font_cache::getUserdata ()
+                            {
+		return consumerState.userdata;
 		}
 #undef LZZ_INLINE
 #endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_producerConsumerFrontend
