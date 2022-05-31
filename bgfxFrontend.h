@@ -16,11 +16,14 @@
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
 {
   bgfx::TextureHandle mBgfxTexture;
+  bgfx::ViewId mViewId;
   bgfx_stb_prerendered_text ();
   void freeTexture ();
-  int draw (bgfx::ViewId mViewId, int const x, int const y);
-  int draw_worker (bgfx::ViewId mViewId, int const x, int const y, bool const resetColour);
-  int drawWithColorMod (bgfx::ViewId mViewId, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int draw (int const x, int const y);
+  int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int drawWithView (bgfx::ViewId mViewIdOverride, int const x, int const y);
+  int draw_worker (bgfx::ViewId mViewIdOverride, int const x, int const y, bool const resetColour);
+  int drawWithViewColorMod (bgfx::ViewId mViewIdOverride, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
 };
 struct bgfxsfh
 {
@@ -165,12 +168,20 @@ void bgfx_stb_prerendered_text::freeTexture ()
 			bgfx::destroy(mBgfxTexture);
 		mBgfxTexture = BGFX_INVALID_HANDLE;
 		}
-int bgfx_stb_prerendered_text::draw (bgfx::ViewId mViewId, int const x, int const y)
-                                                                  {
-		return draw_worker(mViewId, x, y, true);
+int bgfx_stb_prerendered_text::draw (int const x, int const y)
+                                            {
+		return drawWithView(mViewId, x, y);
 		}
-int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewId, int const x, int const y, bool const resetColour)
-                                                                                                 {
+int bgfx_stb_prerendered_text::drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                 {
+		return drawWithViewColorMod(mViewId, x, y, r, g, b, a);
+		}
+int bgfx_stb_prerendered_text::drawWithView (bgfx::ViewId mViewIdOverride, int const x, int const y)
+                                                                                  {
+		return draw_worker(mViewIdOverride, x, y, true);
+		}
+int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewIdOverride, int const x, int const y, bool const resetColour)
+                                                                                                         {
 		if (!width) return 0; // don't print null texture
 		bgfxsfh::rect r;
 		r.x = x;
@@ -189,16 +200,16 @@ int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewId, int const x, i
 		bgfx::setTexture(0, bgfxsfh::s_texture, mBgfxTexture);
 		bgfxsfh::pushTexturedQuad(r, rt);
 		bgfx::setState(bgfxsfh::RENDER_STATE);
-		bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+		bgfx::submit(mViewIdOverride, bgfxsfh::texturedProgram);
 		
 		//std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << std::endl;
 		BGFXSFH_IS_VALID(mBgfxTexture);
 		return r.x + r.w;
 		}
-int bgfx_stb_prerendered_text::drawWithColorMod (bgfx::ViewId mViewId, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
-                                                                                                                                                       {
+int bgfx_stb_prerendered_text::drawWithViewColorMod (bgfx::ViewId mViewIdOverride, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                                   {
 		bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(r,g,b,a).v);
-		return draw_worker(mViewId, x, y, false);
+		return draw_worker(mViewIdOverride, x, y, false);
 		}
 bgfx::ShaderHandle bgfxsfh::vert_passthrough = BGFX_INVALID_HANDLE;
 bgfx::ShaderHandle bgfxsfh::frag_passthrough = BGFX_INVALID_HANDLE;
@@ -666,6 +677,7 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
 		// Draws the character
 		const uint64_t RSTATE = isRenderingToTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
+		const bgfx::ViewId _viewId = isRenderingToTarget ? 0 : mViewId; 
 		
 		bgfxsfh::rect r;	// render coords
 		r.x = x + G->xOffset;
@@ -702,13 +714,13 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 					
 					bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
 					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
 				bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
 				bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
 				bgfxsfh::pushTexturedQuad(r, rt, true);
 				bgfx::setState(RSTATE);
-				bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+				bgfx::submit(_viewId, bgfxsfh::texturedProgram);
 				
 				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
 					bgfxsfh::rect r2;
@@ -718,7 +730,7 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 					
 					bgfxsfh::pushUntexturedQuad(r2);
 					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
 				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
 					bgfxsfh::rect r2;
@@ -728,21 +740,18 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 					
 					bgfxsfh::pushUntexturedQuad(r2);
 					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
 				}
 			else {
-				static int ii = 0;
-				bgfx::setTexture(ii, bgfxsfh::s_texture, G->mAtlasTexture);
-				ii++;
-				if (ii > 4) ii = 0;
+				bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
 				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
 				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
 				
 				overdraw = SSF_INT_MIN;
 				bgfxsfh::pushTexturedQuad(r, rt, true);
 				bgfx::setState(RSTATE);
-				bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+				bgfx::submit(_viewId, bgfxsfh::texturedProgram);
 				//std::cout << "submitting! " << char(codepoint) << std::endl;
 				}
 			}
@@ -768,10 +777,15 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 			}
 			
 		bgfx::ViewId prv = 0;
-			
+		bgfx::resetView(prv);
+		bgfx::resetView(prv+1);
+		bgfx::setViewName(prv, "ssf_bgfx_prt_draw");
+		bgfx::setViewName(prv+1, "ssf_bgfx_prt_blit");
 		
 		bgfx::FrameBufferHandle FB = bgfx::createFrameBuffer(width, height, bgfx::TextureFormat::BGRA8, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 		bgfx::TextureHandle RT = bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_BLIT_DST, NULL);
+		
+		bgfx::setName(RT, "ssf_prt");
 		
 		bgfx::setViewFrameBuffer(prv, FB);
 		float orthoProj[16];	// Ortho matrix for rendering screenspace quads
@@ -781,8 +795,8 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		
 		bgfx::setViewClear(prv, BGFX_CLEAR_COLOR|BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
 		bgfx::setViewMode(prv, bgfx::ViewMode::Sequential);
-		bgfx::touch(prv);
-		bgfx::frame();	// needed here to flush & clear the screen
+		//bgfx::touch(prv);
+		//bgfx::frame();	// needed here to flush & clear the screen
 		
 		isRenderingToTarget = true;
 		if (formatted)
@@ -791,8 +805,8 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 			drawText(0, 0, c, maxLen);
 		isRenderingToTarget = false;
 		
-		bgfx::blit(prv+1, RT, 0,0, bgfx::getTexture(FB, 0));
 		bgfx::touch(prv);
+		bgfx::blit(prv+1, RT, 0,0, bgfx::getTexture(FB, 0));
 		bgfx::frame();	// needed here to execute the draw call & reset
 		bgfx::destroy(FB);
 		
@@ -812,16 +826,19 @@ void bgfx_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut
                                                                                                                  {
 		bgfx_stb_prerendered_text * textOut2 = (bgfx_stb_prerendered_text*) textOut;
 		textOut2->mBgfxTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
+		textOut2->mViewId = mViewId;
 		}
 void bgfx_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str)
                                                                                              {
 		bgfx_stb_prerendered_text * textOut2 = (bgfx_stb_prerendered_text*) textOut;
 		textOut2->mBgfxTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		textOut2->mViewId = mViewId;
 		}
 void bgfx_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str)
                                                                                                          {
 		bgfx_stb_prerendered_text * textOut2 = (bgfx_stb_prerendered_text*) textOut;
 		textOut2->mBgfxTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		textOut2->mViewId = mViewId;
 		}
 #undef LZZ_INLINE
 #endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_bgfxFrontend

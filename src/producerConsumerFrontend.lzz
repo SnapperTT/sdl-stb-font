@@ -226,8 +226,9 @@ public:
 		}
 	
 	template <typename T>
-	void dispatchPrerenderJobs() {
+	int dispatchPrerenderJobs() {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
+		int nDone = 0;
 		for (pcfc_consumer_prerendered_text & p2 : consumerState.prerender) {
 			auto itt = prerenderMap.find(p2.handle);
 			if (itt != prerenderMap.end())
@@ -235,28 +236,36 @@ public:
 			T* t = SSF_NEW(T);
 			consumer_font_cache->renderTextToObject(t, p2.text);
 			prerenderMap[p2.handle] = t;
+			nDone++;
 			}
 		consumerState.prerender.clear();
+		return nDone;
 		}
 		
 	template <typename T>
-	void dispatchDestroy() {
+	int dispatchDestroy() {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
+		int nDone = 0;
 		for (const pcfc_handle idx : consumerState.destroyPrerender) {
 			auto itt = prerenderMap.find(idx);
 			if (itt != prerenderMap.end()) {
 				itt->second->freeTexture();
 				SSF_DEL(itt->second);
 				prerenderMap.erase(itt);
+				nDone++;
 				}
 			}
 		consumerState.destroyPrerender.clear();
+		return nDone;
 		}
 		
 	void dispatchSinglePrerendered(const pcfc_handle prtId, int x, int y) const {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
 			itt->second->draw(x, y);
+			}
+		else {
+			//std::cout << "Could not find prerendered text #" << prtId << std::endl;
 			}
 		}
 		

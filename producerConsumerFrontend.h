@@ -77,18 +77,19 @@ public:
   void submitToConsumer ();
   bool receiveFromProducer ();
   template <typename T>
-  void dispatchPrerenderJobs ();
+  int dispatchPrerenderJobs ();
   template <typename T>
-  void dispatchDestroy ();
+  int dispatchDestroy ();
   void dispatchSinglePrerendered (pcfc_handle const prtId, int x, int y) const;
   void dispatchSinglePrerenderedWColorMod (pcfc_handle const prtId, int x, int y, int const r, int const g, int const b, int const a) const;
   void dispatchSingleText (pcfc_handle const texId);
   void * getUserdata ();
 };
 template <typename T>
-void producer_consumer_font_cache::dispatchPrerenderJobs ()
-                                     {
+int producer_consumer_font_cache::dispatchPrerenderJobs ()
+                                    {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
+		int nDone = 0;
 		for (pcfc_consumer_prerendered_text & p2 : consumerState.prerender) {
 			auto itt = prerenderMap.find(p2.handle);
 			if (itt != prerenderMap.end())
@@ -96,22 +97,27 @@ void producer_consumer_font_cache::dispatchPrerenderJobs ()
 			T* t = SSF_NEW(T);
 			consumer_font_cache->renderTextToObject(t, p2.text);
 			prerenderMap[p2.handle] = t;
+			nDone++;
 			}
 		consumerState.prerender.clear();
+		return nDone;
 		}
 template <typename T>
-void producer_consumer_font_cache::dispatchDestroy ()
-                               {
+int producer_consumer_font_cache::dispatchDestroy ()
+                              {
 		// T is the sttfont_prerendered_text subclass that is used by consumer_font_cache
+		int nDone = 0;
 		for (const pcfc_handle idx : consumerState.destroyPrerender) {
 			auto itt = prerenderMap.find(idx);
 			if (itt != prerenderMap.end()) {
 				itt->second->freeTexture();
 				SSF_DEL(itt->second);
 				prerenderMap.erase(itt);
+				nDone++;
 				}
 			}
 		consumerState.destroyPrerender.clear();
+		return nDone;
 		}
 #undef LZZ_INLINE
 #endif
@@ -287,6 +293,9 @@ void producer_consumer_font_cache::dispatchSinglePrerendered (pcfc_handle const 
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
 			itt->second->draw(x, y);
+			}
+		else {
+			//std::cout << "Could not find prerendered text #" << prtId << std::endl;
 			}
 		}
 void producer_consumer_font_cache::dispatchSinglePrerenderedWColorMod (pcfc_handle const prtId, int x, int y, int const r, int const g, int const b, int const a) const

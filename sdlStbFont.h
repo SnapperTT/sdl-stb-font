@@ -210,6 +210,7 @@ struct sttfont_prerendered_text
   int width;
   int height;
   sttfont_prerendered_text ();
+  virtual ~ sttfont_prerendered_text ();
   virtual void freeTexture ();
   virtual int draw (int const x, int const y);
   virtual int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
@@ -999,6 +1000,8 @@ void sttfont_uint32_t_range::populateRangesCyrillic (SSF_VECTOR <sttfont_uint32_
 sttfont_prerendered_text::sttfont_prerendered_text ()
   : width (0), height (0)
                                                           {}
+sttfont_prerendered_text::~ sttfont_prerendered_text ()
+                                            {}
 void sttfont_prerendered_text::freeTexture ()
                                    {
 		// Make your own implmentation for your own frontend here

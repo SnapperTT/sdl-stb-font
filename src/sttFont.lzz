@@ -115,6 +115,7 @@ struct sttfont_prerendered_text {
 	int width, height;
 	sttfont_prerendered_text () : width(0), height(0) {}
 	
+	virtual ~sttfont_prerendered_text() {}
 	virtual void freeTexture() {
 		// Make your own implmentation for your own frontend here
 		// Used to clear any resources held here
