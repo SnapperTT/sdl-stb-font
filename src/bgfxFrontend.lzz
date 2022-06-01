@@ -63,7 +63,7 @@ struct bgfx_stb_prerendered_text : public sttfont_prerendered_text {
 		bgfx::setState(bgfxsfh::RENDER_STATE);
 		bgfx::submit(mViewIdOverride, bgfxsfh::texturedProgram);
 		
-		std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << ", viewId: " << mViewId << " " << mViewIdOverride << std::endl;
+		//std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << ", viewId: " << mViewId << " " << mViewIdOverride << std::endl;
 		BGFXSFH_IS_VALID(mBgfxTexture);
 		return r.x + r.w;
 		}
