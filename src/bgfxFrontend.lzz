@@ -63,7 +63,7 @@ struct bgfx_stb_prerendered_text : public sttfont_prerendered_text {
 		bgfx::setState(bgfxsfh::RENDER_STATE);
 		bgfx::submit(mViewIdOverride, bgfxsfh::texturedProgram);
 		
-		//std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << std::endl;
+		std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << ", viewId: " << mViewId << " " << mViewIdOverride << std::endl;
 		BGFXSFH_IS_VALID(mBgfxTexture);
 		return r.x + r.w;
 		}
@@ -720,7 +720,7 @@ protected:
 		// Possible improvements
 		// 1. Store all glpyhs on cpu, make texture by copying to buffer
 		// 2. Have an atlas-page system for prerenders. The object created will have to keep track of bits of the atlas being used and clear pages not used anymore
-		// 3. Accumulate view slots + call frame() automatically when some limit is reached. Have some kind of dispatchRenderToTexture() to call frame() and reset the view counter
+		// 3. Accumulate view slots + call frame() automatically when some limit is reached. Have some kind of dispatchRenderToTexture() to call frame() and reset the view counter when done
 		// 4. Reusue the damn framebuffer. Only regenerate it if we need a bigger one on at least one axis
 		
 			

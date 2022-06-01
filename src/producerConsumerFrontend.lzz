@@ -50,6 +50,7 @@ public:
 	
 	// Consumer thread stuff
 	SSF_MAP<pcfc_handle, sttfont_prerendered_text*> prerenderMap;
+	SSF_MAP<uint64_t, sttfont_glyph> mGlyphs;
 	
 	struct state_t {
 		SSF_VECTOR<producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerender;
@@ -96,8 +97,24 @@ public:
 				prt->freeTexture();
 				}
 			SSF_DEL(prt);
-			prerenderMap.clear();
 			}
+		prerenderMap.clear();
+		}
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Internal functions
+	sttfont_glyph * getGlyph(const uint64_t target) {
+		auto it = mGlyphs.find(target);
+		if (it == mGlyphs.end())
+			return NULL;
+		return &((*it).second);
+		}
+		
+	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
+		sttfont_glyph g;
+		genGlyph(codepoint, format, &g);
+		mGlyphs[target] = g;
+		return getGlyph(target);
 		}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////

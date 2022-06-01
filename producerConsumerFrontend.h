@@ -46,6 +46,7 @@ public:
 public:
   pcfc_handle nextPrerenderTokenId;
   SSF_MAP <pcfc_handle, sttfont_prerendered_text*> prerenderMap;
+  SSF_MAP <uint64_t, sttfont_glyph> mGlyphs;
   struct state_t
   {
     SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerender;
@@ -63,6 +64,8 @@ public:
 public:
   producer_consumer_font_cache ();
   void freeStoredPrerenderedText (bool const freeTextures);
+  sttfont_glyph * getGlyph (uint64_t const target);
+  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
   void loadFontManagedBoth (sttfont_memory & memory, int index = 0);
   void addFontManagedBoth (sttfont_memory & memory, int index = 0);
   pcfc_handle pushText (int const x, int const y, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
@@ -173,8 +176,22 @@ void producer_consumer_font_cache::freeStoredPrerenderedText (bool const freeTex
 				prt->freeTexture();
 				}
 			SSF_DEL(prt);
-			prerenderMap.clear();
 			}
+		prerenderMap.clear();
+		}
+sttfont_glyph * producer_consumer_font_cache::getGlyph (uint64_t const target)
+                                                        {
+		auto it = mGlyphs.find(target);
+		if (it == mGlyphs.end())
+			return NULL;
+		return &((*it).second);
+		}
+sttfont_glyph * producer_consumer_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
+                                                                                                                        {
+		sttfont_glyph g;
+		genGlyph(codepoint, format, &g);
+		mGlyphs[target] = g;
+		return getGlyph(target);
 		}
 void producer_consumer_font_cache::loadFontManagedBoth (sttfont_memory & memory, int index)
                                                                           {
