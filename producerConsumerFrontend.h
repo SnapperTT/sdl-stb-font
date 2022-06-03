@@ -68,6 +68,7 @@ public:
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
   void loadFontManagedBoth (sttfont_memory & memory, int index = 0);
   void addFontManagedBoth (sttfont_memory & memory, int index = 0);
+  void addFormatFontManagedBoth (uint8_t formatMask, sttfont_memory & memory, int index = 0);
   pcfc_handle pushText (int const x, int const y, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   pcfc_handle pushText (int const x, int const y, SSF_STRING const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   pcfc_handle pushText (int const x, int const y, sttfont_formatted_text const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
@@ -212,6 +213,16 @@ void producer_consumer_font_cache::addFontManagedBoth (sttfont_memory & memory, 
 		consumer_font_cache->addFontManaged(memory2, index);
 		this->syncFrom(*consumer_font_cache);
 		this->addFontManaged(memory, index);
+		}
+void producer_consumer_font_cache::addFormatFontManagedBoth (uint8_t formatMask, sttfont_memory & memory, int index)
+                                                                                                   {
+		sttfont_memory memory2;
+		memory.cloneTo(memory2);
+		
+		consumer_font_cache->syncFrom(*this);
+		consumer_font_cache->addFormatFontManaged(formatMask, memory2, index);
+		this->syncFrom(*consumer_font_cache);
+		this->addFormatFontManaged(formatMask, memory, index);
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                  {

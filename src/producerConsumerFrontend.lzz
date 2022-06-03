@@ -139,6 +139,16 @@ public:
 		this->syncFrom(*consumer_font_cache);
 		this->addFontManaged(memory, index);
 		}
+		
+	void addFormatFontManagedBoth (uint8_t formatMask, sttfont_memory & memory, int index = 0) {
+		sttfont_memory memory2;
+		memory.cloneTo(memory2);
+		
+		consumer_font_cache->syncFrom(*this);
+		consumer_font_cache->addFormatFontManaged(formatMask, memory2, index);
+		this->syncFrom(*consumer_font_cache);
+		this->addFormatFontManaged(formatMask, memory, index);
+		}
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Producer Functions
