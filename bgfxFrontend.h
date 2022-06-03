@@ -69,6 +69,22 @@ public:
   static void pushUntexturedQuad (rect const & r);
   static void pushUntexturedQuadWScissor (rect const & r, rect const & scissor);
   static void pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  struct cpuBuffer
+  {
+    uint8_t * buff;
+    int w;
+    int h;
+    uint32_t sz;
+    bool flipY;
+    cpuBuffer ();
+    ~ cpuBuffer ();
+    void allocate ();
+    void clearBuff ();
+    void blend (uint8_t * dst, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
+    void writeRGBA (int const x, int const y, uint8_t const * const src, int const bw, int const bh);
+    void writeA (int const x, int const y, uint8_t const * const src, int const bw, int const bh, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
+    void writeFill (int const x, int const y, int const bw, int const bh, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
+  };
 };
 struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
 {
@@ -89,6 +105,7 @@ struct bgfx_stb_glyph : public sttfont_glyph
   float y;
   float w;
   float h;
+  SSF_STRING glypthData;
   bgfx_stb_glyph ();
 };
 struct bgfx_stb_glyph_atlas
@@ -110,8 +127,8 @@ public:
   bgfx::ViewId mViewId;
   int mAtlasSize;
   SSF_VECTOR <bgfx_stb_glyph_atlas> mAtlases;
-  bool isRenderingToTarget;
   bgfxsfh::rect scissor;
+  bgfxsfh::cpuBuffer * renderTarget;
   bgfx_stb_font_cache ();
   ~ bgfx_stb_font_cache ();
   SSF_MAP <uint64_t, bgfx_stb_glyph> mGlyphs;
@@ -131,6 +148,7 @@ public:
   void pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format);
   void pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs, SSF_VECTOR <stbrp_rect> & rects, bool force);
   void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void populateGlyphData (bgfx_stb_glyph * bOut, unsigned char * bitmap2, int w, int h);
   void genGlyph_writeData2 (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall);
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
@@ -462,6 +480,81 @@ void bgfxsfh::pushUntexturedQuad (float const xOffset, float const yOffset, floa
 			bgfx::setVertexBuffer(0, &vb);
 			}
 		}
+bgfxsfh::cpuBuffer::cpuBuffer ()
+  : buff (NULL), w (0), h (0), sz (0), flipY (false)
+                                                                          {}
+bgfxsfh::cpuBuffer::~ cpuBuffer ()
+                             {
+			if (buff)
+				SSF_DEL_ARR(buff);
+			}
+void bgfxsfh::cpuBuffer::allocate ()
+                                {
+			sz = w*h*4;
+			buff = SSF_NEW_ARR(uint8_t, sz);
+			}
+void bgfxsfh::cpuBuffer::clearBuff ()
+                                 {
+			memset(buff, 0, sz);
+			}
+void bgfxsfh::cpuBuffer::blend (uint8_t * dst, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                             {
+			float srcf = 255.f/a;
+			if (a == 255 || dst[3] == 0) { 
+				dst[0] = bx::min(255.f, float(dst[0]) + r*srcf);
+				dst[1] = bx::min(255.f, float(dst[1]) + g*srcf);
+				dst[2] = bx::min(255.f, float(dst[2]) + b*srcf);
+				dst[3] = bx::max(dst[3], a);
+				}
+				
+			}
+void bgfxsfh::cpuBuffer::writeRGBA (int const x, int const y, uint8_t const * const src, int const bw, int const bh)
+                                                                                                              {
+			for (int i = 0; i < bw; ++i) {
+				for (int j = 0; j < bh; ++j) {
+					int lx = x + i;
+					int ly = y + j;
+					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+						uint32_t idst = (lx+ly*w)*4;
+						if (flipY) idst = (lx+(h-ly-1)*w)*4;
+						uint32_t isrc = (i+j*bw)*4;
+						blend(&buff[idst], src[isrc+0], src[isrc+1], src[isrc+2], src[isrc+3]);
+						}
+					}
+				}
+			}
+void bgfxsfh::cpuBuffer::writeA (int const x, int const y, uint8_t const * const src, int const bw, int const bh, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                                               {
+			if (!a) return;
+			float f = 255.f/a;
+			for (int i = 0; i < bw; ++i) {
+				for (int j = 0; j < bh; ++j) {
+					int lx = x + i;
+					int ly = y + j;
+					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+						uint32_t idst = (lx+ly*w)*4;
+						if (flipY) idst = (lx+(h-ly-1)*w)*4;
+						uint32_t isrc = (i+j*bw);
+						blend(&buff[idst], r, g, b, f*src[isrc]);
+						}
+					}
+				}
+			}
+void bgfxsfh::cpuBuffer::writeFill (int const x, int const y, int const bw, int const bh, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                         {
+			for (int i = 0; i < bw; ++i) {
+				for (int j = 0; j < bh; ++j) {
+					int lx = x + i;
+					int ly = y + j;
+					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+						uint32_t idst = (lx+ly*w)*4;
+						if (flipY) idst = (lx+(h-ly-1)*w)*4;
+						uint32_t isrc = (i+j*bw);
+						blend(&buff[idst], r, g, b, a);
+						}
+					}
+				}
+			}
 bgfx_stb_prerendered_text::bgfx_stb_prerendered_text ()
   : sttfont_prerendered_text (), mBgfxTexture (BGFX_INVALID_HANDLE)
                                                                                                      {}
@@ -531,12 +624,12 @@ bgfx_stb_glyph_atlas::bgfx_stb_glyph_atlas ()
   : mAtlasTexture (BGFX_INVALID_HANDLE), mStbRectPackCtx (NULL), mNodes (NULL), isFull (false)
                                                                                                                         {}
 bgfx_stb_font_cache::bgfx_stb_font_cache ()
-  : sttfont_font_cache (), mViewId (0), mAtlasSize (1024), isRenderingToTarget (false)
-                                                                                                                {
+  : sttfont_font_cache (), mViewId (0), mAtlasSize (1024), renderTarget (NULL)
+                                                                                                        {
 		resetScissor();
 		}
 bgfx_stb_font_cache::~ bgfx_stb_font_cache ()
-                                {		
+                                {
 		clearGlyphs();
 		bgfxsfh::deinitialise();
 		}
@@ -592,7 +685,7 @@ bgfx_stb_glyph_atlas * bgfx_stb_font_cache::getGenAtlasPage ()
 bgfx_stb_glyph_atlas * bgfx_stb_font_cache::createAtlasPage ()
                                                 {
 		bgfx_stb_glyph_atlas a;
-		a.mAtlasTexture = bgfx::createTexture2D(mAtlasSize, mAtlasSize, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_NONE, NULL);
+		a.mAtlasTexture = bgfx::createTexture2D(mAtlasSize, mAtlasSize, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_NONE, NULL);
 		bgfx::setName(a.mAtlasTexture, ("sdlStbFont_atlasPg" + std::to_string(mAtlases.size())).c_str());
 		
 		/*	
@@ -693,6 +786,7 @@ void bgfx_stb_font_cache::pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs
 				bOut->w = r.w/float(mAtlasSize);
 				bOut->h = r.h/float(mAtlasSize); 
 				bOut->mAtlasTexture = activeAtlas->mAtlasTexture;
+				populateGlyphData(bOut, t.bitmapData, r.w, r.h);
 				}
 			else {
 				glyphs_rejected.push_back(std::move(t));
@@ -711,6 +805,15 @@ void bgfx_stb_font_cache::pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs
 void bgfx_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
                                                                                                                         {
 		genGlyph_writeData2(codepoint, gOut, bitmap2, w, h, true);
+		}
+void bgfx_stb_font_cache::populateGlyphData (bgfx_stb_glyph * bOut, unsigned char * bitmap2, int w, int h)
+                                                                                           {
+		int sz = w*h;
+		//bOut->glypthData = SSF_STRING();
+		bOut->glypthData.resize(sz);
+		for (int i = 0; i < sz; ++i) {
+			bOut->glypthData[i] = bitmap2[i*4+3];
+			}
 		}
 void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall)
                                                                                                                                          {
@@ -739,6 +842,7 @@ void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont
 			bOut->w = r.w/float(mAtlasSize);
 			bOut->h = r.h/float(mAtlasSize); 
 			bOut->mAtlasTexture = activeAtlas->mAtlasTexture;
+			populateGlyphData(bOut, bitmap2, r.w, r.h);
 			BGFXSFH_IS_VALID(bOut->mAtlasTexture);
 			return;
 			}
@@ -768,8 +872,8 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
                                                                                                                                                                                                                      {
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
 		// Draws the character
-		const uint64_t RSTATE = isRenderingToTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
-		const bgfx::ViewId _viewId = isRenderingToTarget ? 0 : mViewId; 
+		const uint64_t RSTATE = renderTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
+		const bgfx::ViewId _viewId = renderTarget ? 0 : mViewId; 
 		
 		bgfxsfh::rect r;	// render coords
 		r.x = x + G->xOffset;
@@ -785,7 +889,7 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 		
 		bool st = true;
 		bool useScissor = false;
-		if (!isRenderingToTarget) {
+		if (!renderTarget) {
 			if (doScissorTest()) {
 				st = scissorTest(r);
 				useScissor = true;
@@ -796,8 +900,8 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 			if (format) {
 				int charAdv = kerningAdv + G->xOffset;
 				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+				#if 0
 				uint8_t cr,cg,cb,ca;
-				
 				
 				if (false) { //isColoured || formatCode) { 
 					// Remove bleeding pixels
@@ -820,56 +924,77 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 					bgfx::setState(bgfxsfh::RENDER_STATE);
 					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
-				bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
-				bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
+				#endif
 				
-				if (useScissor)
-					bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
-				else
-					bgfxsfh::pushTexturedQuad(r, rt, true);
-				bgfx::setState(RSTATE);
-				bgfx::submit(_viewId, bgfxsfh::texturedProgram);
+				// Draw the glypth
+				if (!renderTarget) {
+					bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
+					bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
+					
+					if (useScissor)
+						bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
+					else
+						bgfxsfh::pushTexturedQuad(r, rt, true);
+					bgfx::setState(RSTATE);
+					bgfx::submit(_viewId, bgfxsfh::texturedProgram);
+					}
+				else {
+					renderTarget->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, format->r, format->g, format->b, format->a);
+					}
 				
 				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
 					bgfxsfh::rect r2;
 					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
-					
-					if (useScissor)
-						bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
-					else
-						bgfxsfh::pushUntexturedQuad(r2);
-					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+					if (!renderTarget) {
+						if (useScissor)
+							bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
+						else
+							bgfxsfh::pushUntexturedQuad(r2);
+						bgfx::setState(bgfxsfh::RENDER_STATE);
+						bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+						}
+					else {
+						renderTarget->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
+						}
 					}
 				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
 					bgfxsfh::rect r2;
 					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
-					
-					if (useScissor)
-						bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
-					else
-						bgfxsfh::pushUntexturedQuad(r2);
-					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+					if (!renderTarget) {
+						if (useScissor)
+							bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
+						else
+							bgfxsfh::pushUntexturedQuad(r2);
+						bgfx::setState(bgfxsfh::RENDER_STATE);
+						bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+						}
+					else {
+						renderTarget->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
+						}
 					}
 				}
 			else {
-				bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
-				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
-				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
-				
-				overdraw = SSF_INT_MIN;
-				if (useScissor)
-					bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
-				else
-					bgfxsfh::pushTexturedQuad(r, rt, true);
-				bgfx::setState(RSTATE);
-				bgfx::submit(_viewId, bgfxsfh::texturedProgram);
-				//std::cout << "submitting! " << char(codepoint) << std::endl;
+				if (!renderTarget) {
+					bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
+					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
+					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+					
+					overdraw = SSF_INT_MIN;
+					if (useScissor)
+						bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
+					else
+						bgfxsfh::pushTexturedQuad(r, rt, true);
+					bgfx::setState(RSTATE);
+					bgfx::submit(_viewId, bgfxsfh::texturedProgram);
+					//std::cout << "submitting! " << char(codepoint) << std::endl;
+					}
+				else {
+					renderTarget->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, 255, 255, 255, 255);
+					}
 				}
 			}
 		}
@@ -900,43 +1025,31 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		// 3. Accumulate view slots + call frame() automatically when some limit is reached. Have some kind of dispatchRenderToTexture() to call frame() and reset the view counter when done
 		// 4. Reusue the damn framebuffer. Only regenerate it if we need a bigger one on at least one axis
 		
-			
-		bgfx::ViewId prv = 0;
-		bgfx::resetView(prv);
-		bgfx::resetView(prv+1);
-		bgfx::setViewName(prv, "ssf_bgfx_prt_draw");
-		bgfx::setViewName(prv+1, "ssf_bgfx_prt_blit");
 		
-		bgfx::FrameBufferHandle FB = bgfx::createFrameBuffer(width, height, bgfx::TextureFormat::BGRA8, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
-		bgfx::TextureHandle RT = bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::BGRA8, BGFX_TEXTURE_BLIT_DST, NULL);
-		
-		bgfx::setName(RT, "ssf_prt");
-		
-		bgfx::setViewFrameBuffer(prv, FB);
-		float orthoProj[16];	// Ortho matrix for rendering screenspace quads
-		bx::mtxOrtho(orthoProj, 0.0f, width, height, 0.0f, 0.0f, 100.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
-		bgfx::setViewRect(prv, 0, 0, width, height);
-		bgfx::setViewTransform(prv, NULL, orthoProj);
-		
-		bgfx::setViewClear(prv, BGFX_CLEAR_COLOR|BGFX_CLEAR_DEPTH, 0x00000000, 1.0f, 0);
-		bgfx::setViewMode(prv, bgfx::ViewMode::Sequential);
-		
-		isRenderingToTarget = true;
+		bgfxsfh::cpuBuffer buff;
+		buff.w = width;
+		buff.h = height;
+		buff.sz = buff.w*buff.h*4;
+		uint8_t chr[buff.sz];
+		buff.buff = &chr[0];
+		buff.clearBuff();
+		buff.flipY = bgfx::getCaps()->originBottomLeft;
+		renderTarget = &buff;
 		if (formatted)
 			drawText(0, 0, *formatted);
 		else
 			drawText(0, 0, c, maxLen);
-		isRenderingToTarget = false;
+			
+		const bgfx::Memory* mem = bgfx::copy(buff.buff, buff.sz);
+			
+		bgfx::TextureHandle RT = bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_NONE, mem);
+		bgfx::setName(RT, "ssf_prt");
 		
-		bgfx::touch(prv);
-		bgfx::blit(prv+1, RT, 0,0, bgfx::getTexture(FB, 0));
-		bgfx::frame();	// needed here to execute the draw call & reset
-		bgfx::destroy(FB);
+		buff.buff = NULL;
+		renderTarget = NULL;
 		
-		//std::cout << "Prerendering done! " << bgfx::isValid(RT) << " " << width << ", " << height << " caps " << (bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_BLIT)  << std::endl;
-		
-		*widthOut = width;
-		*heightOut = height;
+		if (widthOut)  *widthOut = width;
+		if (heightOut) *heightOut = height;
 		return RT;
 		}
 bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture (SSF_STRING const & str, int * widthOut, int * heightOut)
