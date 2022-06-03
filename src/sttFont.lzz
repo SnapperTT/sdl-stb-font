@@ -70,6 +70,7 @@ namespace sttr {
 	#define SSF_INT_MIN 0x8000000;
 #endif
 struct sttfont_formatted_text;
+class sttfont_font_cache;
 #end
 
 #src
@@ -127,6 +128,9 @@ struct sttfont_prerendered_text {
 	virtual int drawWithColorMod(const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a = 255) {
 		return x + width;
 		}
+		
+	virtual int draw(sttfont_font_cache* fc, const int x, const int y) { return draw(x, y); }
+	virtual int drawWithColorMod(sttfont_font_cache* fc, const int x, const int y, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) { return drawWithColorMod(x,y,r,g,b,a); }
 		
 	};
 

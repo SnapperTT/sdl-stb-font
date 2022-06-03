@@ -69,6 +69,7 @@ namespace sttr {
 	#define SSF_INT_MIN 0x8000000;
 #endif
 struct sttfont_formatted_text;
+class sttfont_font_cache;
 #define LZZ_INLINE inline
 struct sttfont_lookupHint
 {
@@ -214,6 +215,8 @@ struct sttfont_prerendered_text
   virtual void freeTexture ();
   virtual int draw (int const x, int const y);
   virtual int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  virtual int draw (sttfont_font_cache * fc, int const x, int const y);
+  virtual int drawWithColorMod (sttfont_font_cache * fc, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
 };
 struct sttfont_glyph
 {
@@ -1013,6 +1016,10 @@ int sttfont_prerendered_text::drawWithColorMod (int const x, int const y, uint8_
                                                                                                                                          {
 		return x + width;
 		}
+int sttfont_prerendered_text::draw (sttfont_font_cache * fc, int const x, int const y)
+                                                                           { return draw(x, y); }
+int sttfont_prerendered_text::drawWithColorMod (sttfont_font_cache * fc, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                           { return drawWithColorMod(x,y,r,g,b,a); }
 sttfont_glyph::sttfont_glyph ()
   : advance (0), leftSideBearing (0), width (0), height (0), xOffset (0), yOffset (0)
                                                                                                        {}

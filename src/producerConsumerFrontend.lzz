@@ -279,7 +279,7 @@ public:
 	void dispatchSinglePrerendered(const pcfc_handle prtId, int x, int y) const {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
-			itt->second->draw(x, y);
+			itt->second->draw(consumer_font_cache, x, y);
 			}
 		else {
 			//std::cout << "Could not find prerendered text #" << prtId << std::endl;
@@ -290,7 +290,7 @@ public:
 	void dispatchSinglePrerenderedWColorMod(const pcfc_handle prtId, int x, int y, const int r, const int g, const int b, const int a) const {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
-			itt->second->drawWithColorMod(x, y, r, g, b, a);
+			itt->second->drawWithColorMod(consumer_font_cache, x, y, r, g, b, a);
 			}
 		}
 			

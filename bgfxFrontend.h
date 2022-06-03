@@ -13,18 +13,6 @@
 #define BGFXSFH_IS_VALID(X) BX_NOOP(X)
 
 #define LZZ_INLINE inline
-struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
-{
-  bgfx::TextureHandle mBgfxTexture;
-  bgfx::ViewId mViewId;
-  bgfx_stb_prerendered_text ();
-  void freeTexture ();
-  int draw (int const x, int const y);
-  int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
-  int drawWithView (bgfx::ViewId mViewIdOverride, int const x, int const y);
-  int draw_worker (bgfx::ViewId mViewIdOverride, int const x, int const y, bool const resetColour);
-  int drawWithViewColorMod (bgfx::ViewId mViewIdOverride, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
-};
 struct bgfxsfh
 {
 public:
@@ -73,10 +61,26 @@ public:
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
-  static void pushTexturedQuad (rect const & r, rect const & r2, bool dontFilpY = false);
+  static rect scissorIntersect (rect const & r, rect const & scissor);
+  static rect scissorIntersectTexCoord (rect const & r, rect const & uv, rect const & rIntersect, bool const dontFlipY);
+  static void pushTexturedQuad (rect const & r, rect const & r2, bool dontFlipY = false);
+  static void pushTexturedQuadWScissor (rect const & r, rect const & r2, rect const & scissor, bool dontFlipY = false);
   static void pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const texU, float const texV, float const uWidth, float const vHeight, bool const dontFilpY, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
   static void pushUntexturedQuad (rect const & r);
+  static void pushUntexturedQuadWScissor (rect const & r, rect const & scissor);
   static void pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+};
+struct bgfx_stb_prerendered_text : public sttfont_prerendered_text
+{
+  bgfx::TextureHandle mBgfxTexture;
+  bgfx::ViewId mViewId;
+  bgfx_stb_prerendered_text ();
+  void freeTexture ();
+  int draw (sttfont_font_cache * fc, int const x, int const y);
+  int draw (int const x, int const y);
+  int drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int drawWithColorMod (sttfont_font_cache * fc, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a = 255);
+  int draw_worker (bgfx::ViewId mViewIdOverride, bgfxsfh::rect * scissor, int const x, int const y, bool const resetColour);
 };
 struct bgfx_stb_glyph : public sttfont_glyph
 {
@@ -107,9 +111,14 @@ public:
   int mAtlasSize;
   SSF_VECTOR <bgfx_stb_glyph_atlas> mAtlases;
   bool isRenderingToTarget;
+  bgfxsfh::rect scissor;
   bgfx_stb_font_cache ();
   ~ bgfx_stb_font_cache ();
   SSF_MAP <uint64_t, bgfx_stb_glyph> mGlyphs;
+  void setScissor (float const x, float const y, float const w, float const h);
+  void resetScissor ();
+  bool doScissorTest () const;
+  bool scissorTest (bgfxsfh::rect const & t);
   void clearGlyphs ();
   void bindRenderer (bgfx::ViewId const _viewId);
   bgfx_stb_glyph_atlas * getGenAtlasPage ();
@@ -147,6 +156,10 @@ LZZ_INLINE bgfxsfh::Vec4 bgfxsfh::Vec4::fromUint8 (uint8_t const r, uint8_t cons
 			rv.v[3] = a/255.0;
 			return rv;
 			}
+LZZ_INLINE bool bgfx_stb_font_cache::doScissorTest () const
+                                          {
+		return !(scissor.x == 0 && scissor.y == 0 && scissor.w == 0 && scissor.h == 0);
+		}
 #undef LZZ_INLINE
 #endif
 
@@ -159,58 +172,6 @@ LZZ_INLINE bgfxsfh::Vec4 bgfxsfh::Vec4::fromUint8 (uint8_t const r, uint8_t cons
 //
 
 #define LZZ_INLINE inline
-bgfx_stb_prerendered_text::bgfx_stb_prerendered_text ()
-  : sttfont_prerendered_text (), mBgfxTexture (BGFX_INVALID_HANDLE)
-                                                                                                     {}
-void bgfx_stb_prerendered_text::freeTexture ()
-                            {
-		if (bgfx::isValid(mBgfxTexture))
-			bgfx::destroy(mBgfxTexture);
-		mBgfxTexture = BGFX_INVALID_HANDLE;
-		}
-int bgfx_stb_prerendered_text::draw (int const x, int const y)
-                                            {
-		return drawWithView(mViewId, x, y);
-		}
-int bgfx_stb_prerendered_text::drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
-                                                                                                                                 {
-		return drawWithViewColorMod(mViewId, x, y, r, g, b, a);
-		}
-int bgfx_stb_prerendered_text::drawWithView (bgfx::ViewId mViewIdOverride, int const x, int const y)
-                                                                                  {
-		return draw_worker(mViewIdOverride, x, y, true);
-		}
-int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewIdOverride, int const x, int const y, bool const resetColour)
-                                                                                                         {
-		if (!width) return 0; // don't print null texture
-		bgfxsfh::rect r;
-		r.x = x;
-		r.y = y;
-		r.w = width;
-		r.h = height;
-		
-		bgfxsfh::rect rt;
-		rt.x = 0;
-		rt.y = 0;
-		rt.w = 1;
-		rt.h = 1;
-		
-		if (resetColour)
-			bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(255,255,255,255).v);
-		bgfx::setTexture(0, bgfxsfh::s_texture, mBgfxTexture);
-		bgfxsfh::pushTexturedQuad(r, rt);
-		bgfx::setState(bgfxsfh::RENDER_STATE);
-		bgfx::submit(mViewIdOverride, bgfxsfh::texturedProgram);
-		
-		std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << ", viewId: " << mViewId << " " << mViewIdOverride << std::endl;
-		BGFXSFH_IS_VALID(mBgfxTexture);
-		return r.x + r.w;
-		}
-int bgfx_stb_prerendered_text::drawWithViewColorMod (bgfx::ViewId mViewIdOverride, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
-                                                                                                                                                                   {
-		bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(r,g,b,a).v);
-		return draw_worker(mViewIdOverride, x, y, false);
-		}
 bgfx::ShaderHandle bgfxsfh::vert_passthrough = BGFX_INVALID_HANDLE;
 bgfx::ShaderHandle bgfxsfh::frag_passthrough = BGFX_INVALID_HANDLE;
 bgfx::ShaderHandle bgfxsfh::textured_vert_passthrough = BGFX_INVALID_HANDLE;
@@ -301,8 +262,47 @@ void bgfxsfh::PosVertex::init ()
 			.end();
 			}
 bgfx::VertexLayout bgfxsfh::PosVertex::ms_decl;
-void bgfxsfh::pushTexturedQuad (rect const & r, rect const & r2, bool dontFilpY)
-                                                                                              { pushTexturedQuad(r.x, r.y, r.w, r.h, r2.x, r2.y, r2.w, r2.h, dontFilpY); }
+bgfxsfh::rect bgfxsfh::scissorIntersect (rect const & r, rect const & scissor)
+                                                                           {
+		rect rIntersect;
+		rIntersect.x = bx::max(r.x, scissor.x);
+		rIntersect.y = bx::max(r.y, scissor.y);
+		rIntersect.w = bx::max(0.f, bx::min(r.x + r.w, scissor.x + scissor.w) - rIntersect.x);
+		rIntersect.h = bx::max(0.f, bx::min(r.y + r.h, scissor.y + scissor.h) - rIntersect.y);
+	
+		return rIntersect;
+		}
+bgfxsfh::rect bgfxsfh::scissorIntersectTexCoord (rect const & r, rect const & uv, rect const & rIntersect, bool const dontFlipY)
+                                                                                                                             {
+		// it doesn't know if we've chopped the bottom off r or the top
+		rect uvi = uv;
+		if (r.w < 0.000001f || r.h < 0.000001f) return uvi;
+		uvi.w *= (rIntersect.w / r.w);
+		uvi.h *= (rIntersect.h / r.h);
+		float offx = (rIntersect.x - r.x) / r.w;
+		float offy;
+		
+		bool _originBottomLeft = false; 
+		if (!dontFlipY)
+			_originBottomLeft = bgfx::getCaps()->originBottomLeft; // Prevent double flipping
+			
+		if (_originBottomLeft)
+			offy = -(rIntersect.y + rIntersect.h - r.y - r.h) / r.h;
+		else
+			offy = (rIntersect.y - r.y) / r.h;
+			
+		uvi.x = uvi.x + uv.w*offx;
+		uvi.y = uvi.y + uv.h*offy;
+		return uvi;
+		}
+void bgfxsfh::pushTexturedQuad (rect const & r, rect const & r2, bool dontFlipY)
+                                                                                              { pushTexturedQuad(r.x, r.y, r.w, r.h, r2.x, r2.y, r2.w, r2.h, dontFlipY); }
+void bgfxsfh::pushTexturedQuadWScissor (rect const & r, rect const & r2, rect const & scissor, bool dontFlipY)
+                                                                                                                            { 
+		rect rIntersect = bgfxsfh::scissorIntersect(r, scissor);
+		rect uvi = bgfxsfh::scissorIntersectTexCoord(r, r2, rIntersect, dontFlipY);
+		pushTexturedQuad(rIntersect, uvi, dontFlipY);
+		}
 void bgfxsfh::pushTexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const texU, float const texV, float const uWidth, float const vHeight, bool const dontFilpY, float const _framebufferWidth, float const _framebufferHeight)
                                                                                                                                                                                                                                                                                                    {
 		/*
@@ -388,6 +388,11 @@ void bgfxsfh::pushTexturedQuad (float const xOffset, float const yOffset, float 
 		}
 void bgfxsfh::pushUntexturedQuad (rect const & r)
                                                        { pushUntexturedQuad(r.x, r.y, r.w, r.h); }
+void bgfxsfh::pushUntexturedQuadWScissor (rect const & r, rect const & scissor)
+                                                                                     {
+		rect rIntersect = scissorIntersect(r, scissor);
+		pushUntexturedQuad(rIntersect.x, rIntersect.y, rIntersect.w, rIntersect.h);
+		}
 void bgfxsfh::pushUntexturedQuad (float const xOffset, float const yOffset, float const xSize, float const ySize, float const _framebufferWidth, float const _framebufferHeight)
                                                                                                                                                                                                   {
 		/*
@@ -457,6 +462,68 @@ void bgfxsfh::pushUntexturedQuad (float const xOffset, float const yOffset, floa
 			bgfx::setVertexBuffer(0, &vb);
 			}
 		}
+bgfx_stb_prerendered_text::bgfx_stb_prerendered_text ()
+  : sttfont_prerendered_text (), mBgfxTexture (BGFX_INVALID_HANDLE)
+                                                                                                     {}
+void bgfx_stb_prerendered_text::freeTexture ()
+                            {
+		if (bgfx::isValid(mBgfxTexture))
+			bgfx::destroy(mBgfxTexture);
+		mBgfxTexture = BGFX_INVALID_HANDLE;
+		}
+int bgfx_stb_prerendered_text::draw (sttfont_font_cache * fc, int const x, int const y)
+                                                                    {
+		bgfx_stb_font_cache* bc = (bgfx_stb_font_cache*) fc;
+		return draw_worker(mViewId, bc->doScissorTest() ? &bc->scissor : NULL, x, y, true);
+		}
+int bgfx_stb_prerendered_text::draw (int const x, int const y)
+                                            {
+		return draw_worker(mViewId, NULL, x, y, true);
+		}
+int bgfx_stb_prerendered_text::drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                 {
+		bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(r,g,b,a).v);
+		return draw_worker(mViewId, NULL, x, y, false);
+		}
+int bgfx_stb_prerendered_text::drawWithColorMod (sttfont_font_cache * fc, int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                                                                         {
+		bgfx_stb_font_cache* bc = (bgfx_stb_font_cache*) fc;
+		bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(r,g,b,a).v);
+		return draw_worker(mViewId, bc->doScissorTest() ? &bc->scissor : NULL, x, y, false);
+		}
+int bgfx_stb_prerendered_text::draw_worker (bgfx::ViewId mViewIdOverride, bgfxsfh::rect * scissor, int const x, int const y, bool const resetColour)
+                                                                                                                                  {
+		if (!width) return 0; // don't print null texture
+		bgfxsfh::rect r;
+		r.x = x;
+		r.y = y;
+		r.w = width;
+		r.h = height;
+		
+		bgfxsfh::rect rt;
+		rt.x = 0;
+		rt.y = 0;
+		rt.w = 1;
+		rt.h = 1;
+		
+		if (scissor) {
+			bgfxsfh::rect rIntersect = bgfxsfh::scissorIntersect(r, *scissor);
+			bgfxsfh::rect uvi = bgfxsfh::scissorIntersectTexCoord(r, rt, rIntersect, false);
+			r = rIntersect;
+			rt = uvi;
+			}
+		
+		if (resetColour)
+			bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(255,255,255,255).v);
+		bgfx::setTexture(0, bgfxsfh::s_texture, mBgfxTexture);
+		bgfxsfh::pushTexturedQuad(r, rt);
+		bgfx::setState(bgfxsfh::RENDER_STATE);
+		bgfx::submit(mViewIdOverride, bgfxsfh::texturedProgram);
+		
+		//std::cout << "drawing prerendered!!! " << x << ", " << y << ", "  << width << ", " << height << ", viewId: " << mViewId << " " << mViewIdOverride << std::endl;
+		BGFXSFH_IS_VALID(mBgfxTexture);
+		return r.x + r.w;
+		}
 bgfx_stb_glyph::bgfx_stb_glyph ()
   : sttfont_glyph (), mAtlasTexture (BGFX_INVALID_HANDLE), x (0), y (0), w (1), h (1)
                                                                                                         {}
@@ -465,11 +532,36 @@ bgfx_stb_glyph_atlas::bgfx_stb_glyph_atlas ()
                                                                                                                         {}
 bgfx_stb_font_cache::bgfx_stb_font_cache ()
   : sttfont_font_cache (), mViewId (0), mAtlasSize (1024), isRenderingToTarget (false)
-                                                                                                                {}
+                                                                                                                {
+		resetScissor();
+		}
 bgfx_stb_font_cache::~ bgfx_stb_font_cache ()
                                 {		
 		clearGlyphs();
 		bgfxsfh::deinitialise();
+		}
+void bgfx_stb_font_cache::setScissor (float const x, float const y, float const w, float const h)
+                                                                                    {
+		scissor.x = x;
+		scissor.y = y;
+		scissor.w = w;
+		scissor.h = h;
+		}
+void bgfx_stb_font_cache::resetScissor ()
+                            {
+		scissor.x = 0;
+		scissor.y = 0;
+		scissor.w = 0;
+		scissor.h = 0;
+		}
+bool bgfx_stb_font_cache::scissorTest (bgfxsfh::rect const & t)
+                                                  {
+		// returns false if culled
+		return !(  (scissor.x > t.x + t.w)
+				|| (scissor.y > t.y + t.h)
+				|| (scissor.x + scissor.w < t.x)
+				|| (scissor.y + scissor.h < t.y)
+				);
 		}
 void bgfx_stb_font_cache::clearGlyphs ()
                             {
@@ -626,7 +718,7 @@ void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont
 		bgfx_stb_glyph * bOut = (bgfx_stb_glyph*) gOut;
 		bgfx_stb_glyph_atlas * activeAtlas = getGenAtlasPage();
 		
-		std::cout << "genGlyph_writeData2 " << char(codepoint) << " #" << codepoint << ", firstCall: " << firstCall << ", activeAtlas "<< activeAtlas << std::endl;
+		//std::cout << "genGlyph_writeData2 " << char(codepoint) << " #" << codepoint << ", firstCall: " << firstCall << ", activeAtlas "<< activeAtlas << std::endl;
 		
 		// try to pack
 		stbrp_rect r;
@@ -639,7 +731,7 @@ void bgfx_stb_font_cache::genGlyph_writeData2 (uint32_t const codepoint, sttfont
 		
 		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, &r, 1);
 		if (r.was_packed) {
-			std::cout << "packing: " << r.x << ", " << r.y << ", " << r.w << ", " << r.h << std::endl;
+			//std::cout << "packing: " << r.x << ", " << r.y << ", " << r.w << ", " << r.h << std::endl;
 			const bgfx::Memory* mem = bgfx::copy(bitmap2, w*h*4);
 			bgfx::updateTexture2D(activeAtlas->mAtlasTexture, 0, 0, r.x, r.y, r.w, r.h, mem);
 			bOut->x = r.x/float(mAtlasSize);
@@ -691,7 +783,16 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 		rt.w = G->w;
 		rt.h = G->h;
 		
-		if (true) {//bgfx::isValid(G->mAtlasTexture)) {
+		bool st = true;
+		bool useScissor = false;
+		if (!isRenderingToTarget) {
+			if (doScissorTest()) {
+				st = scissorTest(r);
+				useScissor = true;
+				}
+			}
+		
+		if (st) {//bgfx::isValid(G->mAtlasTexture)) {
 			if (format) {
 				int charAdv = kerningAdv + G->xOffset;
 				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
@@ -712,13 +813,20 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 						}
 					overdraw = r.x + r.w;
 					
-					bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
+					if (useScissor)
+						bgfxsfh::pushUntexturedQuadWScissor(r2, scissor); //TODO: prevent overlapping!
+					else
+						bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
 					bgfx::setState(bgfxsfh::RENDER_STATE);
 					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
 				bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
 				bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
-				bgfxsfh::pushTexturedQuad(r, rt, true);
+				
+				if (useScissor)
+					bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
+				else
+					bgfxsfh::pushTexturedQuad(r, rt, true);
 				bgfx::setState(RSTATE);
 				bgfx::submit(_viewId, bgfxsfh::texturedProgram);
 				
@@ -728,7 +836,10 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
 					
-					bgfxsfh::pushUntexturedQuad(r2);
+					if (useScissor)
+						bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
+					else
+						bgfxsfh::pushUntexturedQuad(r2);
 					bgfx::setState(bgfxsfh::RENDER_STATE);
 					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
@@ -738,7 +849,10 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
 					
-					bgfxsfh::pushUntexturedQuad(r2);
+					if (useScissor)
+						bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
+					else
+						bgfxsfh::pushUntexturedQuad(r2);
 					bgfx::setState(bgfxsfh::RENDER_STATE);
 					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
 					}
@@ -749,7 +863,10 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
 				
 				overdraw = SSF_INT_MIN;
-				bgfxsfh::pushTexturedQuad(r, rt, true);
+				if (useScissor)
+					bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
+				else
+					bgfxsfh::pushTexturedQuad(r, rt, true);
 				bgfx::setState(RSTATE);
 				bgfx::submit(_viewId, bgfxsfh::texturedProgram);
 				//std::cout << "submitting! " << char(codepoint) << std::endl;

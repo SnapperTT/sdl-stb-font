@@ -309,7 +309,7 @@ void producer_consumer_font_cache::dispatchSinglePrerendered (pcfc_handle const 
                                                                                     {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
-			itt->second->draw(x, y);
+			itt->second->draw(consumer_font_cache, x, y);
 			}
 		else {
 			//std::cout << "Could not find prerendered text #" << prtId << std::endl;
@@ -319,7 +319,7 @@ void producer_consumer_font_cache::dispatchSinglePrerenderedWColorMod (pcfc_hand
                                                                                                                                                  {
 		auto itt = prerenderMap.find(prtId);
 		if (itt != prerenderMap.end()) {
-			itt->second->drawWithColorMod(x, y, r, g, b, a);
+			itt->second->drawWithColorMod(consumer_font_cache, x, y, r, g, b, a);
 			}
 		}
 void producer_consumer_font_cache::dispatchSingleText (pcfc_handle const texId)
