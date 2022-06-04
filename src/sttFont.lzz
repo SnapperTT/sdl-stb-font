@@ -537,10 +537,27 @@ public:
 	int drawText (const int x, const int y, const SSF_STRING & str) {
 		return drawText(x,y,str.data(),str.size());
 		}
+	
+	/// With formatting for the entire string
+	int drawText(const int x, const int y, const sttfont_format format, const char * c, const uint32_t maxLen = -1) {
+		return processString(x, y, c, maxLen, &format, true);
+		}
+	
+	int drawText (const int x, const int y, const sttfont_format format, const SSF_STRING & str) {
+		return drawText(x,y,format, str.data(),str.size());
+		}
 
 	/// These overloads return the width and height of the drawn string
 	int drawText(const int x, const int y, int & widthOut, int & heightOut, const char * c, const uint32_t maxLen = -1) {
 		return processString(x, y, c, maxLen, NULL, true, &widthOut, &heightOut);
+		}
+	
+	int drawText (const int x, const int y, const sttfont_format format, const SSF_STRING & str, int & widthOut, int & heightOut) {
+		return drawText(x,y,widthOut, heightOut, format, str.data(),str.size());
+		}
+		
+	int drawText(const int x, const int y, int & widthOut, int & heightOut, const sttfont_format format, const char * c, const uint32_t maxLen = -1) {
+		return processString(x, y, c, maxLen, &format, true, &widthOut, &heightOut);
 		}
 	
 	int drawText (const int x, const int y, const SSF_STRING & str, int & widthOut, int & heightOut) {

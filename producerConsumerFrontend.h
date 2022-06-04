@@ -71,6 +71,8 @@ public:
   void addFormatFontManagedBoth (uint8_t formatMask, sttfont_memory & memory, int index = 0);
   pcfc_handle pushText (int const x, int const y, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   pcfc_handle pushText (int const x, int const y, SSF_STRING const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
+  pcfc_handle pushText (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
+  pcfc_handle pushText (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   pcfc_handle pushText (int const x, int const y, sttfont_formatted_text const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
@@ -232,6 +234,18 @@ pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, ch
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                               {
 		sttfont_formatted_text tmp(str);
+		return pushText(x, y, tmp, xOut, widthOut, heightOut);
+		}
+pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                                                              {
+		sttfont_formatted_text tmp;
+		tmp << format; tmp.appendCBuff(c, maxLen);
+		return pushText(x, y, tmp, xOut, widthOut, heightOut);
+		}
+pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                                           {
+		sttfont_formatted_text tmp;
+		tmp << format << str;
 		return pushText(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, sttfont_formatted_text const & str, int * xOut, int * widthOut, int * heightOut)

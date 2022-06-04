@@ -166,6 +166,18 @@ public:
 		return pushText(x, y, tmp, xOut, widthOut, heightOut);
 		}
 		
+	pcfc_handle pushText(const int x, const int y, const sttfont_format format, const char* c, const uint32_t maxLen = -1, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		sttfont_formatted_text tmp;
+		tmp << format; tmp.appendCBuff(c, maxLen);
+		return pushText(x, y, tmp, xOut, widthOut, heightOut);
+		}
+		
+	pcfc_handle pushText(const int x, const int y, const sttfont_format format, const SSF_STRING & str, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		sttfont_formatted_text tmp;
+		tmp << format << str;
+		return pushText(x, y, tmp, xOut, widthOut, heightOut);
+		}
+		
 	pcfc_handle pushText(const int x, const int y, const sttfont_formatted_text & str, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
 		if (xOut || widthOut || heightOut) {
 			int xx = processFormatted(str, x, y, false, widthOut, heightOut);

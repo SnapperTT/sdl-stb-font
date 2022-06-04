@@ -146,14 +146,7 @@ struct sttfont_formatted_text {
 	sttfont_formatted_text(const SSF_STRING & text) { *this << text; }
 	sttfont_formatted_text(SSF_STRING_MS text) 		{ *this << text; }
 	sttfont_formatted_text(const char * text) 		{ *this << text; }
-	sttfont_formatted_text(const char * text, const uint32_t maxLen) {
-		if (maxLen == uint32_t(-1)) { *this << text; return; }
-		const char* p = text;
-		while (*p) p++;
-		uint32_t len = (p - text);
-		if (len > maxLen) len = maxLen;
-		*this << SSF_STRING(text, len);
-		}
+	sttfont_formatted_text(const char * text, const uint32_t maxLen) { appendCBuff(text, maxLen); }
 	
 	sttfont_formatted_text(sttfont_formatted_text_item_MS text)			{ *this << text; }
 	sttfont_formatted_text(const sttfont_formatted_text_item & text)	{ *this << text; }
@@ -172,7 +165,15 @@ struct sttfont_formatted_text {
 	sttfont_formatted_text& operator << (const sttfont_format_reset & reset) 	{ resetFormat(); return *this; }
 	sttfont_formatted_text& operator << (const sttfont_formatted_text_item & obj) { mItems.push_back(obj); return *this; }
 	sttfont_formatted_text& operator << (sttfont_formatted_text_item_MS obj) 	{ mItems.push_back(obj); return *this; }
-	
+	sttfont_formatted_text& appendCBuff(const char * text, const uint32_t maxLen) {
+		if (maxLen == uint32_t(-1)) { *this << text; return *this; }
+		const char* p = text;
+		while (*p) p++;
+		uint32_t len = (p - text);
+		if (len > maxLen) len = maxLen;
+		*this << SSF_STRING(text, len);
+		return *this;
+		}
 
 	static void sttr_register() {
 		#ifdef STTR_ENABLED

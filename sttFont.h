@@ -169,6 +169,7 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator << (sttfont_format_reset const & reset);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item const & obj);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item_MS obj);
+  sttfont_formatted_text & appendCBuff (char const * text, uint32_t const maxLen);
   static void sttr_register ();
   virtual void * sttr_getClassSig () const;
   virtual char const * const sttr_getClassName () const;
@@ -300,7 +301,11 @@ public:
   static uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
   int drawText (int const x, int const y, char const * c, uint32_t const maxLen = -1);
   int drawText (int const x, int const y, SSF_STRING const & str);
+  int drawText (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen = -1);
+  int drawText (int const x, int const y, sttfont_format const format, SSF_STRING const & str);
   int drawText (int const x, int const y, int & widthOut, int & heightOut, char const * c, uint32_t const maxLen = -1);
+  int drawText (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int & widthOut, int & heightOut);
+  int drawText (int const x, int const y, int & widthOut, int & heightOut, sttfont_format const format, char const * c, uint32_t const maxLen = -1);
   int drawText (int const x, int const y, SSF_STRING const & str, int & widthOut, int & heightOut);
   int drawText (int const x, int const y, sttfont_formatted_text const & text);
   int drawText (int const x, int const y, sttfont_formatted_text const & text, int & widthOut, int & heightOut);
@@ -483,14 +488,7 @@ sttfont_formatted_text::sttfont_formatted_text (SSF_STRING_MS text)
 sttfont_formatted_text::sttfont_formatted_text (char const * text)
                                                                 { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (char const * text, uint32_t const maxLen)
-                                                                         {
-		if (maxLen == uint32_t(-1)) { *this << text; return; }
-		const char* p = text;
-		while (*p) p++;
-		uint32_t len = (p - text);
-		if (len > maxLen) len = maxLen;
-		*this << SSF_STRING(text, len);
-		}
+                                                                         { appendCBuff(text, maxLen); }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item_MS text)
                                                                                         { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item const & text)
@@ -523,6 +521,16 @@ sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_
                                                                                       { mItems.push_back(obj); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_text_item_MS obj)
                                                                                         { mItems.push_back(obj); return *this; }
+sttfont_formatted_text & sttfont_formatted_text::appendCBuff (char const * text, uint32_t const maxLen)
+                                                                                      {
+		if (maxLen == uint32_t(-1)) { *this << text; return *this; }
+		const char* p = text;
+		while (*p) p++;
+		uint32_t len = (p - text);
+		if (len > maxLen) len = maxLen;
+		*this << SSF_STRING(text, len);
+		return *this;
+		}
 void sttfont_formatted_text::sttr_register ()
                                     {
 		#ifdef STTR_ENABLED
@@ -1331,9 +1339,25 @@ int sttfont_font_cache::drawText (int const x, int const y, SSF_STRING const & s
                                                                         {
 		return drawText(x,y,str.data(),str.size());
 		}
+int sttfont_font_cache::drawText (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen)
+                                                                                                                        {
+		return processString(x, y, c, maxLen, &format, true);
+		}
+int sttfont_font_cache::drawText (int const x, int const y, sttfont_format const format, SSF_STRING const & str)
+                                                                                                     {
+		return drawText(x,y,format, str.data(),str.size());
+		}
 int sttfont_font_cache::drawText (int const x, int const y, int & widthOut, int & heightOut, char const * c, uint32_t const maxLen)
                                                                                                                             {
 		return processString(x, y, c, maxLen, NULL, true, &widthOut, &heightOut);
+		}
+int sttfont_font_cache::drawText (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int & widthOut, int & heightOut)
+                                                                                                                                      {
+		return drawText(x,y,widthOut, heightOut, format, str.data(),str.size());
+		}
+int sttfont_font_cache::drawText (int const x, int const y, int & widthOut, int & heightOut, sttfont_format const format, char const * c, uint32_t const maxLen)
+                                                                                                                                                         {
+		return processString(x, y, c, maxLen, &format, true, &widthOut, &heightOut);
 		}
 int sttfont_font_cache::drawText (int const x, int const y, SSF_STRING const & str, int & widthOut, int & heightOut)
                                                                                                          {
