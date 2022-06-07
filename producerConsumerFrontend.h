@@ -43,7 +43,7 @@ protected:
   };
 public:
   sttfont_font_cache * consumer_font_cache;
-public:
+protected:
   pcfc_handle nextPrerenderTokenId;
   SSF_MAP <pcfc_handle, sttfont_prerendered_text*> prerenderMap;
   SSF_MAP <uint64_t, sttfont_glyph> mGlyphs;
@@ -81,6 +81,11 @@ public:
   void destroyPrerender (pcfc_handle const handle);
   void pushUserdata (void * data);
   void submitToConsumer ();
+  pcfc_handle pushTextConsumerSide (int const x, int const y, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
+  pcfc_handle pushTextConsumerSide (int const x, int const y, SSF_STRING const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
+  pcfc_handle pushTextConsumerSide (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
+  pcfc_handle pushTextConsumerSide (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
+  pcfc_handle pushTextConsumerSide (int const x, int const y, sttfont_formatted_text const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   bool receiveFromProducer ();
   template <typename T>
   int dispatchPrerenderJobs ();
@@ -311,6 +316,41 @@ void producer_consumer_font_cache::submitToConsumer ()
 			txQueue.swap(producerState);
 			mMutex.unlock();
 		#endif
+		}
+pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                                             {
+		sttfont_formatted_text tmp(c, maxLen);
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                          {
+		sttfont_formatted_text tmp(str);
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                                                                          {
+		sttfont_formatted_text tmp;
+		tmp << format; tmp.appendCBuff(c, maxLen);
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                                                       {
+		sttfont_formatted_text tmp;
+		tmp << format << str;
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, sttfont_formatted_text const & str, int * xOut, int * widthOut, int * heightOut)
+                                                                                                                                                                      {
+		if (xOut || widthOut || heightOut) {
+			int xx = processFormatted(str, x, y, false, widthOut, heightOut);
+			if (xOut) *xOut = xx;
+			}
+		pcfc_formatted_text p;
+		p.text = str;
+		p.x = x;
+		p.y = y;
+		consumerState.text.push_back(std::move(p));
+		return consumerState.text.size() - 1; 
 		}
 bool producer_consumer_font_cache::receiveFromProducer ()
                                    {

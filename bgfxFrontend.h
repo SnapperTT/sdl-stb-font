@@ -549,7 +549,6 @@ void bgfxsfh::cpuBuffer::writeFill (int const x, int const y, int const bw, int 
 					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
 						uint32_t idst = (lx+ly*w)*4;
 						if (flipY) idst = (lx+(h-ly-1)*w)*4;
-						uint32_t isrc = (i+j*bw);
 						blend(&buff[idst], r, g, b, a);
 						}
 					}

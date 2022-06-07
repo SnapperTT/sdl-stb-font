@@ -44,7 +44,7 @@ protected:
 public:
 	sttfont_font_cache* consumer_font_cache;
 	
-public:
+protected:
 	// These members should be "protected", but making them public makes debugging easier
 	pcfc_handle nextPrerenderTokenId;
 	
@@ -86,7 +86,6 @@ public:
 		}
 		
 public:
-
 	producer_consumer_font_cache() : consumer_font_cache(NULL), nextPrerenderTokenId(0) {}
 	
 	void freeStoredPrerenderedText(const bool freeTextures) {
@@ -244,6 +243,41 @@ public:
 		
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Consumer Functions
+	
+	pcfc_handle pushTextConsumerSide(const int x, const int y, const char* c, const uint32_t maxLen = -1, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		sttfont_formatted_text tmp(c, maxLen);
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+		
+	pcfc_handle pushTextConsumerSide(const int x, const int y, const SSF_STRING & str, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		sttfont_formatted_text tmp(str);
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+		
+	pcfc_handle pushTextConsumerSide(const int x, const int y, const sttfont_format format, const char* c, const uint32_t maxLen = -1, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		sttfont_formatted_text tmp;
+		tmp << format; tmp.appendCBuff(c, maxLen);
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+		
+	pcfc_handle pushTextConsumerSide(const int x, const int y, const sttfont_format format, const SSF_STRING & str, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		sttfont_formatted_text tmp;
+		tmp << format << str;
+		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
+		}
+		
+	pcfc_handle pushTextConsumerSide(const int x, const int y, const sttfont_formatted_text & str, int* xOut = NULL, int* widthOut = NULL, int* heightOut = NULL) {
+		if (xOut || widthOut || heightOut) {
+			int xx = processFormatted(str, x, y, false, widthOut, heightOut);
+			if (xOut) *xOut = xx;
+			}
+		pcfc_formatted_text p;
+		p.text = str;
+		p.x = x;
+		p.y = y;
+		consumerState.text.push_back(std::move(p));
+		return consumerState.text.size() - 1; 
+		}
 	
 	/// Returns true if something produced is received. Returns false if there is nothing to consume
 	bool receiveFromProducer() {
