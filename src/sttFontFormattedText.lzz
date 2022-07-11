@@ -20,7 +20,7 @@ struct sttfont_format {
 	uint8_t r,g,b,a;
 	uint8_t format;
 	uint8_t flags;
-	uint8_t padding[2];	// align to 64 bits
+	uint16_t padding;	// align to 64 bits
 	static const uint8_t FORMAT_NONE 		  = 0 << 0;
 	static const uint8_t FORMAT_BOLD 		  = 1 << 0;
 	static const uint8_t FORMAT_ITALIC 		  = 1 << 1;
@@ -30,11 +30,11 @@ struct sttfont_format {
 	
 	static const uint8_t FORMAT_FLAGS_COLOUR_SET 	   = 1 << 0;
 	
-	sttfont_format() : r(255), g(255), b(255), a(255), format(0), flags(0) {}
-	sttfont_format(const uint8_t _format)
-					: r(255), g(255), b(255), a(255), format(_format), flags(0) {}
-	sttfont_format(const uint8_t _format, const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255)
-					: r(_r), g(_g), b(_b), a(_a), format(_format), flags(FORMAT_FLAGS_COLOUR_SET) {}
+	inline sttfont_format() : r(255), g(255), b(255), a(255), format(0), flags(0), padding(0) {}
+	inline sttfont_format(const uint8_t _format)
+					: r(255), g(255), b(255), a(255), format(_format), flags(0), padding(0) {}
+	inline sttfont_format(const uint8_t _format, const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255)
+					: r(_r), g(_g), b(_b), a(_a), format(_format), flags(FORMAT_FLAGS_COLOUR_SET), padding(0) {}
 					
 	inline bool operator == (const sttfont_format & other) const { // use default operator
 		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);

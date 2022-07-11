@@ -96,7 +96,7 @@ struct sttfont_format
   uint8_t a;
   uint8_t format;
   uint8_t flags;
-  uint8_t (padding) [2];
+  uint16_t padding;
   static uint8_t const FORMAT_NONE;
   static uint8_t const FORMAT_BOLD;
   static uint8_t const FORMAT_ITALIC;
@@ -328,6 +328,15 @@ public:
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
 };
+LZZ_INLINE sttfont_format::sttfont_format ()
+  : r (255), g (255), b (255), a (255), format (0), flags (0), padding (0)
+                                                                                                  {}
+LZZ_INLINE sttfont_format::sttfont_format (uint8_t const _format)
+  : r (255), g (255), b (255), a (255), format (_format), flags (0), padding (0)
+                                                                                                                {}
+LZZ_INLINE sttfont_format::sttfont_format (uint8_t const _format, uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
+  : r (_r), g (_g), b (_b), a (_a), format (_format), flags (FORMAT_FLAGS_COLOUR_SET), padding (0)
+                                                                                                                                  {}
 LZZ_INLINE bool sttfont_format::operator == (sttfont_format const & other) const
                                                                      { // use default operator
 		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
@@ -370,15 +379,6 @@ uint8_t const sttfont_format::FORMAT_UNDERLINE = 1 << 2;
 uint8_t const sttfont_format::FORMAT_STRIKETHROUGH = 1 << 3;
 uint8_t const sttfont_format::FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS = 1 << 7;
 uint8_t const sttfont_format::FORMAT_FLAGS_COLOUR_SET = 1 << 0;
-sttfont_format::sttfont_format ()
-  : r (255), g (255), b (255), a (255), format (0), flags (0)
-                                                                               {}
-sttfont_format::sttfont_format (uint8_t const _format)
-  : r (255), g (255), b (255), a (255), format (_format), flags (0)
-                                                                                                    {}
-sttfont_format::sttfont_format (uint8_t const _format, uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
-  : r (_r), g (_g), b (_b), a (_a), format (_format), flags (FORMAT_FLAGS_COLOUR_SET)
-                                                                                                                      {}
 void sttfont_format::combine (sttfont_format const & other)
                                                    {
 		format |= other.format;
