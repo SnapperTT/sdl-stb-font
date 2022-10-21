@@ -413,7 +413,6 @@ Include `bgfxFrontend.h` and create an instance of `bgfx_stb_font_cache`.
 See `bgfxExample.cpp` to see how to use this frontend.
 
 Some notes:
-* If you are prerendering text, be aware that `renderTextToTexture/renderTextToObject` calls `bgfx::frame()`. You should call `renderTextTo*` between frames.
 * The bgfx frontend uses texture atlases. It may be beneficial to call `sttfont_uint32_t_range::populateRangesLatin()` and similar to populate the atlas before rendering. If an atlas is filled with glyphs then the frontend will create a new atlas page.
  
 
