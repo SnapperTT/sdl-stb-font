@@ -609,7 +609,17 @@ public:
 		return scale*rowSize*getNumberOfRows(str);
 		}
 		
+	virtual void onStartDrawing() {}
+	virtual void onCompletedDrawing() {}
+	
 	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+		onStartDrawing();
+		int r = processString_worker(x, y, c, maxLen, format, isDrawing, widthOut, heightOut, maxWidth, mHint, threshX, threshY, caretPosition, initialXOffset);
+		onCompletedDrawing();
+		return r;
+		}
+		
+	int processString_worker (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut, int * const heightOut, const int * const maxWidth, sttfont_lookupHint * mHint, const int * const threshX, const int * const threshY, int * const caretPosition, int initialXOffset) {
 		// Scan through function and extract the glyphs
 		// returns the x position at the end
 		uint32_t seek = 0;
@@ -708,6 +718,8 @@ public:
 		}
 
 	int processFormatted(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
+		onStartDrawing();
+		
 		int xOffset = initialXOffset;
 		int yOffset = 0;
 		
@@ -741,7 +753,8 @@ public:
 					mHint->workingY = 0;
 					}
 				}
-			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, maxHeight, mHint, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
+				
+			xOffset = processString_worker(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, maxHeight, mHint, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
 			
 			if (caretPosition) {
 				if (carretPosition2 >= 0)
@@ -759,7 +772,10 @@ public:
 			if (ssfti.callback)
 				ssfti.callback->callbackOnDraw(text, i, x, y, xOffsetBefore, xOffset, widthWorking, heightWorking);
 			}
-		return xOffset + x;
+		
+		int ret = xOffset + x; 
+		onCompletedDrawing();
+		return ret;
 		}
 	
 	

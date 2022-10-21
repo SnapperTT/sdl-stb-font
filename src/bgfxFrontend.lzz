@@ -7,6 +7,7 @@
 //#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
 #define BGFXSFH_IS_VALID(X) BX_NOOP(X)
 
+#define SSF_UINT32_ALIASING uint32_t __attribute((__may_alias__))
 #end
 
 #src
@@ -33,6 +34,68 @@ public:
 		float x,y,w,h;
 		};
 		
+	typedef SSF_UINT32_ALIASING uint32_aliasing_t;
+	
+	inline static bool compareColoursLt(const uint8_t rgba1[4], const uint8_t rgba2[4]) {
+		const uint32_aliasing_t rgba1_c = *((uint32_aliasing_t*) rgba1);
+		const uint32_aliasing_t rgba2_c = *((uint32_aliasing_t*) rgba2);
+		return rgba1_c < rgba2_c;
+		}
+		
+	inline static bool compareColoursEq(const uint8_t rgba1[4], const uint8_t rgba2[4]) {
+		const uint32_aliasing_t rgba1_c = *((uint32_aliasing_t*) rgba1);
+		const uint32_aliasing_t rgba2_c = *((uint32_aliasing_t*) rgba2);
+		return rgba1_c == rgba2_c;
+		} 
+	
+	struct draw_quad {
+		bgfx::TextureHandle textureId;
+		uint8_t colour[4];
+		bgfxsfh::rect drawRect;
+		bgfxsfh::rect texRect;
+		
+		inline void setColour(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
+			colour[0] = r;
+			colour[1] = g;
+			colour[2] = b;
+			colour[3] = a;
+			}
+		
+		inline bool operator < (const draw_quad & other) const {
+			// sort by texture, then by colour
+			if (textureId.idx == other.textureId.idx) {
+				return compareColoursLt(colour, other.colour);
+				}
+			return (textureId.idx < other.textureId.idx);
+			}
+			
+		inline bool stateChange (const draw_quad & other) const {
+			if (textureId.idx == other.textureId.idx) 
+				return !compareColoursEq(colour, other.colour);
+			return true;
+			}
+		};
+		
+	struct untextured_draw_quad {
+		uint8_t colour[4];
+		bgfxsfh::rect drawRect;
+		
+		inline void setColour(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
+			colour[0] = r;
+			colour[1] = g;
+			colour[2] = b;
+			colour[3] = a;
+			}
+		
+		inline bool operator < (const untextured_draw_quad & other) const {
+			return compareColoursLt(colour, other.colour);
+			}
+			
+		inline bool stateChange (const untextured_draw_quad & other) const {
+			return !compareColoursEq(colour, other.colour);
+			}
+		};
+	
 	struct Vec4 {
 		float v[4];
 		inline Vec4(){}
@@ -173,15 +236,21 @@ public:
 		return uvi;
 		}
 		
-	static void pushTexturedQuad(const rect & r, const rect & r2, bool dontFlipY = false) { pushTexturedQuad(r.x, r.y, r.w, r.h, r2.x, r2.y, r2.w, r2.h, dontFlipY); }
+	static void pushTexturedQuad(const rect & r, const rect & r2, bool dontFlipY = false) { pushTexturedQuads(&r, &r2, NULL, 1, dontFlipY); }
 	
 	static void pushTexturedQuadWScissor(const rect & r, const rect & r2, const rect & scissor, bool dontFlipY = false) { 
-		rect rIntersect = bgfxsfh::scissorIntersect(r, scissor);
-		rect uvi = bgfxsfh::scissorIntersectTexCoord(r, r2, rIntersect, dontFlipY);
-		pushTexturedQuad(rIntersect, uvi, dontFlipY);
+		rect rIntersect, uvi;
+		getTexturedQuadWScissor(r, r2, rIntersect, uvi, scissor, dontFlipY);
+		pushTexturedQuads(&rIntersect, &uvi, NULL, 1, dontFlipY);
 		}
 		
-	static void pushTexturedQuad(const float xOffset, const float yOffset, const float xSize, const float ySize, const float texU, const float texV, const float uWidth, const float vHeight, const bool dontFilpY, const float _framebufferWidth = 0.f, const float _framebufferHeight = 0.f) {
+	static void getTexturedQuadWScissor(const rect & r, const rect & r2, rect& rOut, rect& r2Out, const rect & scissor, bool dontFlipY = false) {
+		rOut  = bgfxsfh::scissorIntersect(r, scissor);
+		r2Out = bgfxsfh::scissorIntersectTexCoord(r, r2, rOut, dontFlipY);
+		}
+		
+	static void pushTexturedQuads(const rect* pos, const rect* uv, const draw_quad* drawQuads, const int numQuads, const bool dontFilpY, const float _framebufferWidth = 0.f, const float _framebufferHeight = 0.f) {
+		// Pass drawQuads=NULL to use pos and uv arrays and vice versa
 		/*
 		* From the BGFX Examples, the following license applies to only this function:
 		* Copyright 2011-2018 Branimir Karadzic. All rights reserved.
@@ -192,86 +261,97 @@ public:
 		bool _originBottomLeft = false; 
 		if (!dontFilpY)
 			_originBottomLeft = bgfx::getCaps()->originBottomLeft; // Prevent double flipping
-		
-		if (6 == bgfx::getAvailTransientVertexBuffer(6, bgfxsfh::PosTexCoord0Vertex::ms_decl) ) {
+			
+		if (uint32_t(6*numQuads) == bgfx::getAvailTransientVertexBuffer(6*numQuads, bgfxsfh::PosTexCoord0Vertex::ms_decl) ) {
 			bgfx::TransientVertexBuffer vb;
-			bgfx::allocTransientVertexBuffer(&vb, 6, bgfxsfh::PosTexCoord0Vertex::ms_decl);
+			bgfx::allocTransientVertexBuffer(&vb, 6*numQuads, bgfxsfh::PosTexCoord0Vertex::ms_decl);
 			bgfxsfh::PosTexCoord0Vertex* vertex = (bgfxsfh::PosTexCoord0Vertex*)vb.data;
 
-			const float minx = xOffset;
-			const float maxx = (xOffset + xSize);
-			const float miny = yOffset;
-			const float maxy = (yOffset + ySize);
+			for (int i = 0; i < numQuads; ++i) {
+				const rect& r = drawQuads ? drawQuads[i].drawRect : pos[i];
+				const rect& r2 = drawQuads ? drawQuads[i].texRect : uv[i];
+				
+				const float minx = r.x;
+				const float maxx = (r.x + r.w);
+				const float miny = r.y;
+				const float maxy = (r.y + r.h);
 
-			float texelHalfW = 0.f;
-			float texelHalfH = 0.f;
-			if (_framebufferWidth > 0.0f && _framebufferHeight > 0.0f) {
-				texelHalfW = _texelHalf/_framebufferWidth;
-				texelHalfH = _texelHalf/_framebufferHeight;
+				float texelHalfW = 0.f;
+				float texelHalfH = 0.f;
+				if (_framebufferWidth > 0.0f && _framebufferHeight > 0.0f) {
+					texelHalfW = _texelHalf/_framebufferWidth;
+					texelHalfH = _texelHalf/_framebufferHeight;
+					}
+				const float minu = r2.x + texelHalfW;
+				const float maxu = r2.x+r2.w + texelHalfH;
+
+				const float zz = 0.0f;
+
+				float minv = r2.y + texelHalfH;
+				float maxv = r2.y+r2.h + texelHalfH;
+
+				if (_originBottomLeft) {
+					float temp = minv;
+					minv = maxv;
+					maxv = temp;
+					}
+
+				int j = i*6;
+				vertex[j+0].m_x = minx;
+				vertex[j+0].m_y = miny;
+				vertex[j+0].m_z = zz;
+				vertex[j+0].m_u = minu;
+				vertex[j+0].m_v = minv;
+
+				vertex[j+1].m_x = maxx;
+				vertex[j+1].m_y = miny;
+				vertex[j+1].m_z = zz;
+				vertex[j+1].m_u = maxu;
+				vertex[j+1].m_v = minv;
+
+				vertex[j+2].m_x = maxx;
+				vertex[j+2].m_y = maxy;
+				vertex[j+2].m_z = zz;
+				vertex[j+2].m_u = maxu;
+				vertex[j+2].m_v = maxv;
+				
+				vertex[j+3].m_x = minx;
+				vertex[j+3].m_y = miny;
+				vertex[j+3].m_z = zz;
+				vertex[j+3].m_u = minu;
+				vertex[j+3].m_v = minv;
+
+				vertex[j+4].m_x = maxx;
+				vertex[j+4].m_y = maxy;
+				vertex[j+4].m_z = zz;
+				vertex[j+4].m_u = maxu;
+				vertex[j+4].m_v = maxv;
+				
+				vertex[j+5].m_x = minx;
+				vertex[j+5].m_y = maxy;
+				vertex[j+5].m_z = zz;
+				vertex[j+5].m_u = minu;
+				vertex[j+5].m_v = maxv;
 				}
-			const float minu = texU + texelHalfW;
-			const float maxu = texU+uWidth + texelHalfH;
-
-			const float zz = 0.0f;
-
-			float minv = texV + texelHalfH;
-			float maxv = texV+vHeight + texelHalfH;
-
-			if (_originBottomLeft) {
-				float temp = minv;
-				minv = maxv;
-				maxv = temp;
-				}
-
-			vertex[0].m_x = minx;
-			vertex[0].m_y = miny;
-			vertex[0].m_z = zz;
-			vertex[0].m_u = minu;
-			vertex[0].m_v = minv;
-
-			vertex[1].m_x = maxx;
-			vertex[1].m_y = miny;
-			vertex[1].m_z = zz;
-			vertex[1].m_u = maxu;
-			vertex[1].m_v = minv;
-
-			vertex[2].m_x = maxx;
-			vertex[2].m_y = maxy;
-			vertex[2].m_z = zz;
-			vertex[2].m_u = maxu;
-			vertex[2].m_v = maxv;
-			
-			vertex[3].m_x = minx;
-			vertex[3].m_y = miny;
-			vertex[3].m_z = zz;
-			vertex[3].m_u = minu;
-			vertex[3].m_v = minv;
-
-			vertex[4].m_x = maxx;
-			vertex[4].m_y = maxy;
-			vertex[4].m_z = zz;
-			vertex[4].m_u = maxu;
-			vertex[4].m_v = maxv;
-			
-			vertex[5].m_x = minx;
-			vertex[5].m_y = maxy;
-			vertex[5].m_z = zz;
-			vertex[5].m_u = minu;
-			vertex[5].m_v = maxv;
 
 
 			bgfx::setVertexBuffer(0, &vb);
 			}
 		}
 	
-	static void pushUntexturedQuad(const rect & r) { pushUntexturedQuad(r.x, r.y, r.w, r.h); }
+	static void pushUntexturedQuad(const rect & r) { pushUntexturedQuads(&r, NULL, 1); }
 	
 	static void pushUntexturedQuadWScissor(const rect & r, const rect & scissor) {
-		rect rIntersect = scissorIntersect(r, scissor);
-		pushUntexturedQuad(rIntersect.x, rIntersect.y, rIntersect.w, rIntersect.h);
+		rect rIntersect;
+		getUntexturedQuadsWScissor(r, rIntersect, scissor);
+		pushUntexturedQuads(&r, NULL, 1);
 		}
 		
-	static void pushUntexturedQuad(const float xOffset, const float yOffset, const float xSize, const float ySize, const float _framebufferWidth = 0.f, const float _framebufferHeight = 0.f) {
+	static void getUntexturedQuadsWScissor(const rect & r, rect& rOut, const rect & scissor, bool dontFlipY = false) {
+		rOut  = bgfxsfh::scissorIntersect(r, scissor);
+		}
+		
+	static void pushUntexturedQuads(const rect* pos, const untextured_draw_quad* drawQuads, const int numQuads, const float _framebufferWidth = 0.f, const float _framebufferHeight = 0.f) {
 		/*
 		* From the BGFX Examples, the following license applies to only this function:
 		* Copyright 2011-2018 Branimir Karadzic. All rights reserved.
@@ -281,61 +361,67 @@ public:
 		const float _texelHalf = bgfx::RendererType::Direct3D9 == renderer ? 0.5f : 0.0f;
 		const bool _originBottomLeft = bgfx::getCaps()->originBottomLeft;
 		
-		if (6 == bgfx::getAvailTransientVertexBuffer(6, bgfxsfh::PosVertex::ms_decl) ) {
+		if (uint32_t(6*numQuads) == bgfx::getAvailTransientVertexBuffer(6*numQuads, bgfxsfh::PosVertex::ms_decl) ) {
 			bgfx::TransientVertexBuffer vb;
-			bgfx::allocTransientVertexBuffer(&vb, 6, bgfxsfh::PosVertex::ms_decl);
-			bgfxsfh::PosVertex* vertex = (bgfxsfh::PosVertex*)vb.data;
-
-			const float minx = xOffset;
-			const float maxx = (xOffset + xSize);
-			const float miny = yOffset;
-			const float maxy = (yOffset + ySize);
-
-			float texelHalfW = 0.f;
-			float texelHalfH = 0.f;
-			if (_framebufferWidth > 0.0f && _framebufferHeight > 0.0f) {
-				texelHalfW = _texelHalf/_framebufferWidth;
-				texelHalfH = _texelHalf/_framebufferHeight;
-				}
-			const float minu = 0.0f + texelHalfW;
-			const float maxu = 1.0f + texelHalfH;
-
-			const float zz = 0.0f;
-
-			float minv = texelHalfH;
-			float maxv = 1.0f + texelHalfH;
-
-			if (_originBottomLeft) {
-				float temp = minv;
-				minv = maxv;
-				maxv = temp;
-				}
-
-			vertex[0].m_x = minx;
-			vertex[0].m_y = miny;
-			vertex[0].m_z = zz;
-
-			vertex[1].m_x = maxx;
-			vertex[1].m_y = miny;
-			vertex[1].m_z = zz;
-
-			vertex[2].m_x = maxx;
-			vertex[2].m_y = maxy;
-			vertex[2].m_z = zz;
+			bgfx::allocTransientVertexBuffer(&vb, 6*numQuads, bgfxsfh::PosVertex::ms_decl);
 			
-			vertex[3].m_x = minx;
-			vertex[3].m_y = miny;
-			vertex[3].m_z = zz;
+			for (int i = 0; i < numQuads; ++i) {
+				bgfxsfh::PosVertex* vertex = (bgfxsfh::PosVertex*)vb.data;
 
-			vertex[4].m_x = maxx;
-			vertex[4].m_y = maxy;
-			vertex[4].m_z = zz;
-			
-			vertex[5].m_x = minx;
-			vertex[5].m_y = maxy;
-			vertex[5].m_z = zz;
+				const rect& r = drawQuads ? drawQuads[i].drawRect : pos[i];
+					
+				const float minx = r.x;
+				const float maxx = (r.x + r.w);
+				const float miny = r.y;
+				const float maxy = (r.y + r.h);
 
 
+				float texelHalfW = 0.f;
+				float texelHalfH = 0.f;
+				if (_framebufferWidth > 0.0f && _framebufferHeight > 0.0f) {
+					texelHalfW = _texelHalf/_framebufferWidth;
+					texelHalfH = _texelHalf/_framebufferHeight;
+					}
+				const float minu = 0.0f + texelHalfW;
+				const float maxu = 1.0f + texelHalfH;
+
+				const float zz = 0.0f;
+
+				float minv = texelHalfH;
+				float maxv = 1.0f + texelHalfH;
+
+				if (_originBottomLeft) {
+					float temp = minv;
+					minv = maxv;
+					maxv = temp;
+					}
+
+				int j = i*6;
+				vertex[j+0].m_x = minx;
+				vertex[j+0].m_y = miny;
+				vertex[j+0].m_z = zz;
+
+				vertex[j+1].m_x = maxx;
+				vertex[j+1].m_y = miny;
+				vertex[j+1].m_z = zz;
+
+				vertex[j+2].m_x = maxx;
+				vertex[j+2].m_y = maxy;
+				vertex[j+2].m_z = zz;
+				
+				vertex[j+3].m_x = minx;
+				vertex[j+3].m_y = miny;
+				vertex[j+3].m_z = zz;
+
+				vertex[j+4].m_x = maxx;
+				vertex[j+4].m_y = maxy;
+				vertex[j+4].m_z = zz;
+				
+				vertex[j+5].m_x = minx;
+				vertex[j+5].m_y = maxy;
+				vertex[j+5].m_z = zz;
+
+				}
 			bgfx::setVertexBuffer(0, &vb);
 			}
 		}
@@ -528,16 +614,19 @@ public:
 	SSF_VECTOR<bgfx_stb_glyph_atlas> mAtlases;
 	bgfxsfh::rect scissor; // Set to (0, 0, 0, 0) to disable
 	bgfxsfh::cpuBuffer* renderTarget;
+			
+	SSF_MAP<uint64_t, bgfx_stb_glyph> mGlyphs;
+	SSF_VECTOR<bgfxsfh::draw_quad> drawBuffer;
+	SSF_VECTOR<bgfxsfh::untextured_draw_quad> untexturedDrawBuffer;
+	bool bufferDraws;	// If true draw commands will be batched into the buffer vectors above and exectured as groups
 	
-	bgfx_stb_font_cache () : sttfont_font_cache(), mViewId(0), mAtlasSize(1024), renderTarget(NULL) {
+	bgfx_stb_font_cache () : sttfont_font_cache(), mViewId(0), mAtlasSize(1024), renderTarget(NULL), bufferDraws(false) {
 		resetScissor();
 		}
 	~bgfx_stb_font_cache () {
 		clearGlyphs();
 		bgfxsfh::deinitialise();
 		}
-			
-	SSF_MAP<uint64_t, bgfx_stb_glyph> mGlyphs;
 	
 	void setScissor(const float x, const float y, const float w, const float h) {
 		scissor.x = x;
@@ -785,6 +874,86 @@ public:
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
+		
+	void onStartDrawing() {
+		if (renderTarget) return;
+		bufferDraws = false;
+		}
+	void onCompletedDrawing() {
+		if (renderTarget) return;
+		if (!bufferDraws) return;
+		bufferDraws = false;
+		
+		// Submit batched draw commands
+		if (drawBuffer.size()) {
+			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
+			// most strings use the same texture & format so we won't sort for now
+			//std::sort(drawBuffer.begin(), drawBuffer.end()); 
+			uint32_t drawLast = 0;
+			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
+				if (drawBuffer[i].stateChange(drawBuffer[i-1])) { // state change
+					bgfxsfh::draw_quad & d = drawBuffer[drawLast];
+					bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
+					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
+					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+					
+					bgfxsfh::pushTexturedQuads(NULL, NULL, &drawBuffer[drawLast], i-drawLast, true); 
+					
+					bgfx::setState(bgfxsfh::RENDER_STATE);
+					bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+					
+					drawLast = i;
+					}
+				}
+			if (drawBuffer.size() - drawLast) {
+				//drawLast = 0;
+				uint32_t i = drawBuffer.size();
+				bgfxsfh::draw_quad & d = drawBuffer[drawLast];
+				bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
+				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
+				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+				
+				bgfxsfh::pushTexturedQuads(NULL, NULL, &drawBuffer[drawLast], i-drawLast, true); 
+				
+				bgfx::setState(bgfxsfh::RENDER_STATE);
+				bgfx::submit(mViewId, bgfxsfh::texturedProgram);
+				}
+			drawBuffer.clear();
+			}
+		
+		if (untexturedDrawBuffer.size()) {
+			//std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end());
+			uint32_t drawLast = 0;
+			for (uint32_t i = 1; i < untexturedDrawBuffer.size(); ++i) {
+				if (untexturedDrawBuffer[i].stateChange(untexturedDrawBuffer[i-1])) { // state change
+					bgfxsfh::untextured_draw_quad & d = untexturedDrawBuffer[drawLast];
+					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
+					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+					
+					bgfxsfh::pushUntexturedQuads(NULL, &untexturedDrawBuffer[drawLast], i-drawLast); 
+					
+					bgfx::setState(bgfxsfh::RENDER_STATE);
+					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+					
+					drawLast = i;
+					}
+				}
+			if (untexturedDrawBuffer.size() - drawLast) {
+				//drawLast = 0;
+				uint32_t i = untexturedDrawBuffer.size();
+				bgfxsfh::untextured_draw_quad & d = untexturedDrawBuffer[drawLast];
+				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
+				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+				
+				bgfxsfh::pushUntexturedQuads(NULL, &untexturedDrawBuffer[drawLast], i-drawLast); 
+				
+				bgfx::setState(bgfxsfh::RENDER_STATE);
+				bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
+				}
+			
+			untexturedDrawBuffer.clear();
+			}
+		}
 	
 	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
@@ -816,44 +985,33 @@ public:
 		if (st) {//bgfx::isValid(G->mAtlasTexture)) {
 			if (format) {
 				int charAdv = kerningAdv + G->xOffset;
-				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
-				#if 0
-				uint8_t cr,cg,cb,ca;
-				
-				if (false) { //isColoured || formatCode) { 
-					// Remove bleeding pixels
-					// not needed with the bgfx frontend
-					bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, 0).v);
-					bgfxsfh::rect r2;
-					r2.x = r.x; r2.y = r.y;
-					r2.w = r.w; r2.h = r.h;
-					if (r2.x < overdraw) {
-						int dx = overdraw - r2.x;
-						r2.x += dx;
-						r2.w -= dx;
-						}
-					overdraw = r.x + r.w;
-					
-					if (useScissor)
-						bgfxsfh::pushUntexturedQuadWScissor(r2, scissor); //TODO: prevent overlapping!
-					else
-						bgfxsfh::pushUntexturedQuad(r2); //TODO: prevent overlapping!
-					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
-					}
-				#endif
+				//bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
 				
 				// Draw the glypth
 				if (!renderTarget) {
-					bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
-					bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
-					
-					if (useScissor)
-						bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
-					else
-						bgfxsfh::pushTexturedQuad(r, rt, true);
-					bgfx::setState(RSTATE);
-					bgfx::submit(_viewId, bgfxsfh::texturedProgram);
+					if (bgfx::isValid(G->mAtlasTexture)) {
+						if (bufferDraws) {
+							bgfxsfh::draw_quad dc;
+							dc.setColour(format->r, format->g, format->b, format->a);
+							dc.textureId = G->mAtlasTexture;
+							dc.drawRect = r;
+							dc.texRect = rt;
+							if (useScissor)
+								bgfxsfh::getTexturedQuadWScissor(r, rt, dc.drawRect, dc.texRect, scissor, true);
+							drawBuffer.push_back(dc);
+							}
+						else {
+							bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
+							bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
+							
+							if (useScissor)
+								bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
+							else
+								bgfxsfh::pushTexturedQuad(r, rt, true);
+							bgfx::setState(RSTATE);
+							bgfx::submit(_viewId, bgfxsfh::texturedProgram);
+							}
+						}
 					}
 				else {
 					renderTarget->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, format->r, format->g, format->b, format->a);
@@ -865,12 +1023,22 @@ public:
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
 					if (!renderTarget) {
-						if (useScissor)
-							bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
-						else
-							bgfxsfh::pushUntexturedQuad(r2);
-						bgfx::setState(bgfxsfh::RENDER_STATE);
-						bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+						if (bufferDraws) {
+							bgfxsfh::untextured_draw_quad dc;
+							dc.setColour(format->r, format->g, format->b, format->a);
+							dc.drawRect = r2;
+							if (useScissor)
+								bgfxsfh::getUntexturedQuadsWScissor(r2, dc.drawRect, scissor, true);
+							untexturedDrawBuffer.push_back(dc);
+							}
+						else {
+							if (useScissor)
+								bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
+							else
+								bgfxsfh::pushUntexturedQuad(r2);
+							bgfx::setState(bgfxsfh::RENDER_STATE);
+							bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+							}
 						}
 					else {
 						renderTarget->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
@@ -882,12 +1050,22 @@ public:
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
 					if (!renderTarget) {
-						if (useScissor)
-							bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
-						else
-							bgfxsfh::pushUntexturedQuad(r2);
-						bgfx::setState(bgfxsfh::RENDER_STATE);
-						bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+						if (bufferDraws) {
+							bgfxsfh::untextured_draw_quad dc;
+							dc.setColour(format->r, format->g, format->b, format->a);
+							dc.drawRect = r2;
+							if (useScissor)
+								bgfxsfh::getUntexturedQuadsWScissor(r2, dc.drawRect, scissor, true);
+							untexturedDrawBuffer.push_back(dc);
+							}
+						else {
+							if (useScissor)
+								bgfxsfh::pushUntexturedQuadWScissor(r2, scissor);
+							else
+								bgfxsfh::pushUntexturedQuad(r2);
+							bgfx::setState(bgfxsfh::RENDER_STATE);
+							bgfx::submit(_viewId, bgfxsfh::untexturedProgram);
+							}
 						}
 					else {
 						renderTarget->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
@@ -896,18 +1074,32 @@ public:
 				}
 			else {
 				if (!renderTarget) {
-					bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
-					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
-					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
-					
 					overdraw = SSF_INT_MIN;
-					if (useScissor)
-						bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
-					else
-						bgfxsfh::pushTexturedQuad(r, rt, true);
-					bgfx::setState(RSTATE);
-					bgfx::submit(_viewId, bgfxsfh::texturedProgram);
-					//std::cout << "submitting! " << char(codepoint) << std::endl;
+					
+					if (bufferDraws) {
+						bgfxsfh::draw_quad dc;
+						dc.setColour(255,255,255,255);
+						dc.textureId = G->mAtlasTexture;
+						dc.drawRect = r;
+						dc.texRect = rt;
+						if (useScissor)
+							bgfxsfh::getTexturedQuadWScissor(dc.drawRect, dc.texRect, dc.drawRect, dc.texRect, scissor, true);
+						drawBuffer.push_back(dc);
+						std::cout << "submitting 1! " << char(codepoint) << std::endl;
+						}
+					else {
+						bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
+						bgfxsfh::Vec4 temp = bgfxsfh::toVec4(255,255,255,255);
+						bgfx::setUniform(bgfxsfh::u_colour, temp.v);
+						
+						if (useScissor)
+							bgfxsfh::pushTexturedQuadWScissor(r, rt, scissor, true);
+						else
+							bgfxsfh::pushTexturedQuad(r, rt, true);
+						bgfx::setState(RSTATE);
+						bgfx::submit(_viewId, bgfxsfh::texturedProgram);
+						//std::cout << "submitting! " << char(codepoint) << std::endl;
+						}
 					}
 				else {
 					renderTarget->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, 255, 255, 255, 255);

@@ -316,7 +316,10 @@ public:
   int getNumberOfRows (sttfont_formatted_text const & str);
   int getTextHeight (SSF_STRING const & str);
   int getTextHeight (sttfont_formatted_text const & str);
+  virtual void onStartDrawing ();
+  virtual void onCompletedDrawing ();
   int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
+  int processString_worker (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset);
   int processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
@@ -1408,8 +1411,19 @@ int sttfont_font_cache::getTextHeight (sttfont_formatted_text const & str)
                                                                {
 		return scale*rowSize*getNumberOfRows(str);
 		}
+void sttfont_font_cache::onStartDrawing ()
+                                      {}
+void sttfont_font_cache::onCompletedDrawing ()
+                                          {}
 int sttfont_font_cache::processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
                                                                                                                                                                                                                                                                                                                                                                                                                      {
+		onStartDrawing();
+		int r = processString_worker(x, y, c, maxLen, format, isDrawing, widthOut, heightOut, maxWidth, mHint, threshX, threshY, caretPosition, initialXOffset);
+		onCompletedDrawing();
+		return r;
+		}
+int sttfont_font_cache::processString_worker (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
+                                                                                                                                                                                                                                                                                                                                                                       {
 		// Scan through function and extract the glyphs
 		// returns the x position at the end
 		uint32_t seek = 0;
@@ -1508,6 +1522,8 @@ int sttfont_font_cache::processString (int const x, int const y, char const * c,
 		}
 int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxHeight, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
                                                                                                                                                                                                                                                                                                                                                                       {
+		onStartDrawing();
+		
 		int xOffset = initialXOffset;
 		int yOffset = 0;
 		
@@ -1541,7 +1557,8 @@ int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, i
 					mHint->workingY = 0;
 					}
 				}
-			xOffset = processString(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, maxHeight, mHint, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
+				
+			xOffset = processString_worker(x,y + yOffset, ssfti.text.data(), ssfti.text.size(), &ssfti.format, isDrawingWorking, &widthWorking, &heightWorking, maxHeight, mHint, threshX, threshY, caretPosition ? &carretPosition2 : NULL, xOffset); // color!!!
 			
 			if (caretPosition) {
 				if (carretPosition2 >= 0)
@@ -1559,7 +1576,10 @@ int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, i
 			if (ssfti.callback)
 				ssfti.callback->callbackOnDraw(text, i, x, y, xOffsetBefore, xOffset, widthWorking, heightWorking);
 			}
-		return xOffset + x;
+		
+		int ret = xOffset + x; 
+		onCompletedDrawing();
+		return ret;
 		}
 int sttfont_font_cache::getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint)
                                                                                                                              {
