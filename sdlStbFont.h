@@ -143,6 +143,14 @@ struct sttfont_formatted_text_item
   virtual void * sttr_getClassSig () const;
   virtual char const * const sttr_getClassName () const;
 };
+struct sttfont_formatted_uipair
+{
+  unsigned int a;
+  unsigned int b;
+  static void sttr_register ();
+  virtual void * sttr_getClassSig () const;
+  virtual char const * const sttr_getClassName () const;
+};
 struct sttfont_formatted_text
 {
   SSF_VECTOR <sttfont_formatted_text_item> mItems;
@@ -180,6 +188,7 @@ struct sttfont_formatted_text
   bool isEmpty () const;
   SSF_STRING getString () const;
   SSF_STRING getStringTruncated (unsigned int const maxLen) const;
+  void append_lua (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text const & obj);
   void append (sttfont_formatted_text_MS obj);
   void clear ();
@@ -189,16 +198,23 @@ protected:
   void consolidateSegments_worker ();
 public:
   bool back (unsigned int const num);
+  sttfont_formatted_uipair getIndexAt_lua (unsigned int const position, sttfont_lookupHint * mHint) const;
   void getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_lookupHint * mHint = NULL) const;
+  sttfont_formatted_uipair utf8_charsizeAt_lua (unsigned int const position, sttfont_lookupHint * mHint);
   void utf8_charsizeAt (unsigned int const position, unsigned int & posOut, unsigned int & sizeOut, sttfont_lookupHint * mHint = NULL);
   void insert (unsigned int const position, SSF_STRING const & str, sttfont_lookupHint * mHint = NULL);
   void insert (unsigned int const position, SSF_STRING_MS str, sttfont_lookupHint * mHint = NULL);
+  void insert_lua (unsigned int const position, sttfont_formatted_text const & str, sttfont_lookupHint * mHint);
   void insert (unsigned int const position, sttfont_formatted_text const & str, sttfont_lookupHint * mHint = NULL);
   void insert (unsigned int const position, sttfont_formatted_text_MS str, sttfont_lookupHint * mHint = NULL);
+  void remove_lua (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint);
   void remove (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL);
   SSF_STRING substr (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL) const;
+  SSF_STRING substr_lua (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint) const;
   sttfont_formatted_text extract (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint = NULL) const;
+  sttfont_formatted_text extract_lua (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint) const;
   void tokenise (SSF_VECTOR <sttfont_formatted_text> & arrOut, uint32_t const delimiter, bool const checkQuoteMarks = true, uint32_t const escapeChar = '\\', bool const includeDelimiterInToken = false) const;
+  void tokenise_lua (SSF_VECTOR <sttfont_formatted_text> * arrOut, uint32_t const delimiter, bool const checkQuoteMarks, uint32_t const escapeChar, bool const includeDelimiterInToken) const;
 };
 struct sttfont_uint32_t_range
 {
@@ -344,6 +360,22 @@ LZZ_INLINE bool sttfont_format::operator == (sttfont_format const & other) const
                                                                      { // use default operator
 		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
 		}
+LZZ_INLINE void sttfont_formatted_text::append (sttfont_formatted_text const & obj)
+                                                               { return append_lua(obj); }
+LZZ_INLINE void sttfont_formatted_text::insert (unsigned int const position, sttfont_formatted_text const & str, sttfont_lookupHint * mHint)
+                                                                                                                               { insert_lua(position, str, mHint); }
+LZZ_INLINE void sttfont_formatted_text::remove (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint)
+                                                                                                                   { remove(position, num, mHint); }
+LZZ_INLINE SSF_STRING sttfont_formatted_text::substr_lua (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint) const
+                                                                                                                            {
+		return substr(position, num, mHint);
+		}
+LZZ_INLINE sttfont_formatted_text sttfont_formatted_text::extract_lua (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint) const
+                                                                                                                                         { return extract(position, num, mHint); }
+LZZ_INLINE void sttfont_formatted_text::tokenise_lua (SSF_VECTOR <sttfont_formatted_text> * arrOut, uint32_t const delimiter, bool const checkQuoteMarks, uint32_t const escapeChar, bool const includeDelimiterInToken) const
+                                                                                                                                                                                                         {
+		return tokenise(*arrOut, delimiter, checkQuoteMarks, escapeChar, includeDelimiterInToken);
+		}
 #undef LZZ_INLINE
 #endif
 
@@ -480,6 +512,20 @@ void * sttfont_formatted_text_item::sttr_getClassSig () const
         { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text_item > ( ) ; }
 char const * const sttfont_formatted_text_item::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_formatted_text_item > ( ) ; }
+void sttfont_formatted_uipair::sttr_register ()
+                                    {
+		#ifdef STTR_ENABLED
+		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
+		R.beginClass<sttfont_formatted_uipair>("sttfont_formatted_uipair")
+			.STTR_REGF(sttfont_formatted_uipair,a,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_uipair,b,STTR_JSON_ENABLED)
+		.endClass();
+		#endif
+		}
+void * sttfont_formatted_uipair::sttr_getClassSig () const
+        { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text_item > ( ) ; }
+char const * const sttfont_formatted_uipair::sttr_getClassName () const
+        { return sttr :: getTypeName < sttfont_formatted_text_item > ( ) ; }
 sttfont_formatted_text::sttfont_formatted_text ()
                                 {}
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text const & obj)
@@ -541,6 +587,24 @@ void sttfont_formatted_text::sttr_register ()
 		R.beginClass<sttfont_formatted_text>("sttfont_formatted_text")
 			.STTR_REGF(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
 			.STTR_REGF(sttfont_formatted_text,activeFormat,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_text,copy,0)
+			.STTR_REGF(sttfont_formatted_text,size,0)
+			.STTR_REGF(sttfont_formatted_text,length,0)
+			.STTR_REGF(sttfont_formatted_text,isEmpty,0)
+			.STTR_REGF(sttfont_formatted_text,getString,0)
+			.STTR_REGF(sttfont_formatted_text,getStringTruncated,0)
+			.STTR_REGF(sttfont_formatted_text,append_lua,0)
+			.STTR_REGF(sttfont_formatted_text,clear,0)
+			.STTR_REGF(sttfont_formatted_text,setColour,0)
+			.STTR_REGF(sttfont_formatted_text,consolidateSegments,0)
+			.STTR_REGF(sttfont_formatted_text,back,0)
+			.STTR_REGF(sttfont_formatted_text,getIndexAt_lua,0)
+			.STTR_REGF(sttfont_formatted_text,utf8_charsizeAt_lua,0)
+			.STTR_REGF(sttfont_formatted_text,insert_lua,0)
+			.STTR_REGF(sttfont_formatted_text,remove_lua,0)
+			.STTR_REGF(sttfont_formatted_text,substr_lua,0)
+			.STTR_REGF(sttfont_formatted_text,extract_lua,0)
+			.STTR_REGF(sttfont_formatted_text,tokenise_lua,0)
 		.endClass();
 		#endif
 		}
@@ -605,8 +669,8 @@ SSF_STRING sttfont_formatted_text::getStringTruncated (unsigned int const maxLen
 			}
 		return r;
 		}
-void sttfont_formatted_text::append (sttfont_formatted_text const & obj)
-                                                        {
+void sttfont_formatted_text::append_lua (sttfont_formatted_text const & obj)
+                                                            {
 		if (obj.mItems.size() == 1 && mItems.size()) {
 			if (mItems[mItems.size()-1].format == obj.mItems[0].format) {
 				mItems[mItems.size()-1].text += obj.mItems[0].text;
@@ -696,10 +760,17 @@ bool sttfont_formatted_text::back (unsigned int const num)
 			}
 		return false;
 		}
+sttfont_formatted_uipair sttfont_formatted_text::getIndexAt_lua (unsigned int const position, sttfont_lookupHint * mHint) const
+                                                                                                               {
+		sttfont_formatted_uipair r;
+		getIndexAt(position, r.a, r.b, mHint);
+		return r;
+		}
 void sttfont_formatted_text::getIndexAt (unsigned int const position, unsigned int & indexOut, unsigned int & localPosOut, sttfont_lookupHint * mHint) const
                                                                                                                                                  {
 		/// Returns the segment index and position within the segment of a character position
 		/// A hint can be used to prevent itterating over the whole thing
+		/// Hint is updated if mHint->writeOut is true
 		indexOut = -1;
 		localPosOut = -1;
 		
@@ -734,9 +805,15 @@ void sttfont_formatted_text::getIndexAt (unsigned int const position, unsigned i
 			workingLen += mItems[i].text.size();
 			}
 		}
+sttfont_formatted_uipair sttfont_formatted_text::utf8_charsizeAt_lua (unsigned int const position, sttfont_lookupHint * mHint)
+                                                                                                              {
+		sttfont_formatted_uipair r;
+		utf8_charsizeAt(position, r.a, r.b, mHint);
+		return r;
+		}
 void sttfont_formatted_text::utf8_charsizeAt (unsigned int const position, unsigned int & posOut, unsigned int & sizeOut, sttfont_lookupHint * mHint)
                                                                                                                                             {
-		/// At @position, what is the caracter size? Returns this in @sizeOut
+		/// At @position, what is the character size? Returns this in @sizeOut
 		/// If this is in the middle of a character, return the position of the start of the character in @posOut
 		posOut = position;
 		sizeOut = 0;
@@ -780,8 +857,8 @@ void sttfont_formatted_text::insert (unsigned int const position, SSF_STRING_MS 
 		if (index >= mItems.size()) { *this << std::move(str); return; } // not found, append to end
 		mItems[index].text.insert(offset, std::move(str));
 		}
-void sttfont_formatted_text::insert (unsigned int const position, sttfont_formatted_text const & str, sttfont_lookupHint * mHint)
-                                                                                                                        {
+void sttfont_formatted_text::insert_lua (unsigned int const position, sttfont_formatted_text const & str, sttfont_lookupHint * mHint)
+                                                                                                                     {
 		/// Inserts @str at character position @pos. Copying formatted text version
 		if (str.mItems.size() == 0) return;
 		unsigned int index, offset;
@@ -828,8 +905,8 @@ void sttfont_formatted_text::insert (unsigned int const position, sttfont_format
 		if (after.text.length())
 			mItems.insert(mItems.begin()+index+1+strSz, std::move(after));
 		}
-void sttfont_formatted_text::remove (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint)
-                                                                                                            {
+void sttfont_formatted_text::remove_lua (unsigned int const position, unsigned int const num, sttfont_lookupHint * mHint)
+                                                                                                         {
 		/// Removes @num characters after position num
 		/// Note that if you're using hints that they might be invalid after removing text
 		unsigned int index, offset;

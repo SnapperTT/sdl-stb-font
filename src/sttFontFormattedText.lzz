@@ -136,14 +136,14 @@ struct sttfont_formatted_text_item {
 	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text_item)
 	};
 
-struct sttfont_formatted_ipair {
-	int a,b;
+struct sttfont_formatted_uipair {
+	unsigned int a,b;
 	static void sttr_register() {
 		#ifdef STTR_ENABLED
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
-		R.beginClass<sttfont_formatted_ipair>("sttfont_formatted_ipair")
-			.STTR_REGF(sttfont_formatted_ipair,a,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_formatted_ipair,b,STTR_JSON_ENABLED)
+		R.beginClass<sttfont_formatted_uipair>("sttfont_formatted_uipair")
+			.STTR_REGF(sttfont_formatted_uipair,a,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_uipair,b,STTR_JSON_ENABLED)
 		.endClass();
 		#endif
 		}
@@ -371,8 +371,8 @@ public:
 		}
 		
 		
-	sttfont_formatted_ipair getIndexAt_lua(const unsigned int position, sttfont_lookupHint * mHint) const {
-		sttfont_formatted_ipair r;
+	sttfont_formatted_uipair getIndexAt_lua(const unsigned int position, sttfont_lookupHint * mHint) const {
+		sttfont_formatted_uipair r;
 		getIndexAt(position, r.a, r.b, mHint);
 		return r;
 		}
@@ -416,8 +416,8 @@ public:
 			}
 		}
 		
-	sttfont_formatted_ipair utf8_charsizeAt_lua(const unsigned int position, sttfont_lookupHint * mHint) const {
-		sttfont_formatted_ipair r;
+	sttfont_formatted_uipair utf8_charsizeAt_lua(const unsigned int position, sttfont_lookupHint * mHint) {
+		sttfont_formatted_uipair r;
 		utf8_charsizeAt(position, r.a, r.b, mHint);
 		return r;
 		}
