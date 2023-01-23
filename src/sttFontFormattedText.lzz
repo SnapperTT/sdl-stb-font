@@ -191,6 +191,8 @@ struct sttfont_formatted_text {
 
 	static void sttr_register() {
 		#ifdef STTR_ENABLED
+		#define STTR_REGF_ALIAS(C,X,A,F) regField<C,decltype(&C::X),F>(&C::X,#A).setUserFlags(F)
+		
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
 		R.beginClass<sttfont_formatted_text>("sttfont_formatted_text")
 			.STTR_REGF(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
@@ -201,19 +203,20 @@ struct sttfont_formatted_text {
 			.STTR_REGF(sttfont_formatted_text,isEmpty,0)
 			.STTR_REGF(sttfont_formatted_text,getString,0)
 			.STTR_REGF(sttfont_formatted_text,getStringTruncated,0)
-			.STTR_REGF(sttfont_formatted_text,append_lua,0)
+			.STTR_REGF(sttfont_formatted_text,append_luasafe,0)
 			.STTR_REGF(sttfont_formatted_text,clear,0)
 			.STTR_REGF(sttfont_formatted_text,setColour,0)
 			.STTR_REGF(sttfont_formatted_text,consolidateSegments,0)
 			.STTR_REGF(sttfont_formatted_text,back,0)
-			.STTR_REGF(sttfont_formatted_text,getIndexAt_lua,0)
-			.STTR_REGF(sttfont_formatted_text,utf8_charsizeAt_lua,0)
-			.STTR_REGF(sttfont_formatted_text,insert_lua,0)
-			.STTR_REGF(sttfont_formatted_text,remove_lua,0)
-			.STTR_REGF(sttfont_formatted_text,substr_lua,0)
-			.STTR_REGF(sttfont_formatted_text,extract_lua,0)
-			.STTR_REGF(sttfont_formatted_text,tokenise_lua,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,getIndexAt_luasafe,getIndexAt,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,utf8_charsizeAt_luasafe,utf8_charsizeAt,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,insert_luasafe,insert,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,remove_luasafe,remove,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,substr_luasafe,substr,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,extract_luasafe,extract,0)
+			.STTR_REGF_ALIAS(sttfont_formatted_text,tokenise_luasafe,tokenise,0)
 		.endClass();
+		#undef STTR_REGF_ALIAS
 		#endif
 		}
 	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text)
@@ -274,7 +277,7 @@ struct sttfont_formatted_text {
 		return r;
 		}
 		
-	void append_lua(const sttfont_formatted_text & obj) {
+	void append_luasafe(const sttfont_formatted_text & obj) {
 		if (obj.mItems.size() == 1 && mItems.size()) {
 			if (mItems[mItems.size()-1].format == obj.mItems[0].format) {
 				mItems[mItems.size()-1].text += obj.mItems[0].text;
@@ -285,7 +288,7 @@ struct sttfont_formatted_text {
 		activeFormat = obj.activeFormat;
 		}
 		
-	inline void append(const sttfont_formatted_text & obj) { return append_lua(obj); }
+	inline void append(const sttfont_formatted_text & obj) { return append_luasafe(obj); }
 	
 	void append(sttfont_formatted_text_MS obj) {
 		if (obj.mItems.size() == 1 && mItems.size()) {
@@ -371,7 +374,7 @@ public:
 		}
 		
 		
-	sttfont_formatted_uipair getIndexAt_lua(const unsigned int position, sttfont_lookupHint * mHint) const {
+	sttfont_formatted_uipair getIndexAt_luasafe(const unsigned int position, sttfont_lookupHint * mHint) const {
 		sttfont_formatted_uipair r;
 		getIndexAt(position, r.a, r.b, mHint);
 		return r;
@@ -416,7 +419,7 @@ public:
 			}
 		}
 		
-	sttfont_formatted_uipair utf8_charsizeAt_lua(const unsigned int position, sttfont_lookupHint * mHint) {
+	sttfont_formatted_uipair utf8_charsizeAt_luasafe(const unsigned int position, sttfont_lookupHint * mHint) {
 		sttfont_formatted_uipair r;
 		utf8_charsizeAt(position, r.a, r.b, mHint);
 		return r;
@@ -468,7 +471,7 @@ public:
 		mItems[index].text.insert(offset, std::move(str));
 		}
 		
-	void insert_lua(const unsigned int position, const sttfont_formatted_text & str, sttfont_lookupHint * mHint) {
+	void insert_luasafe(const unsigned int position, const sttfont_formatted_text & str, sttfont_lookupHint * mHint) {
 		/// Inserts @str at character position @pos. Copying formatted text version
 		if (str.mItems.size() == 0) return;
 		unsigned int index, offset;
@@ -491,7 +494,7 @@ public:
 		if (after.text.length())
 			mItems.insert(mItems.begin()+index+1+strSz, std::move(after));
 		}
-	inline void insert(const unsigned int position, const sttfont_formatted_text & str, sttfont_lookupHint * mHint = NULL) { insert_lua(position, str, mHint); }
+	inline void insert(const unsigned int position, const sttfont_formatted_text & str, sttfont_lookupHint * mHint = NULL) { insert_luasafe(position, str, mHint); }
 		
 	void insert(const unsigned int position, sttfont_formatted_text_MS str, sttfont_lookupHint * mHint = NULL) {
 		/// Inserts @str at character position @pos. Moving version
@@ -518,7 +521,7 @@ public:
 		}
 		
 
-	void remove_lua(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint) {
+	void remove_luasafe(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint) {
 		/// Removes @num characters after position num
 		/// Note that if you're using hints that they might be invalid after removing text
 		unsigned int index, offset;
@@ -544,7 +547,7 @@ public:
 			
 		}
 		
-	inline void remove(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint = NULL) { remove(position, num, mHint); }
+	inline void remove(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint = NULL) { remove_luasafe(position, num, mHint); }
 	
 	SSF_STRING substr(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint = NULL) const {
 		/// Reads @num characters after @position. If num goes past the end of a string
@@ -568,7 +571,7 @@ public:
 			}
 		return r;
 		}
-	inline SSF_STRING substr_lua(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint) const {
+	inline SSF_STRING substr_luasafe(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint) const {
 		return substr(position, num, mHint);
 		}
 		
@@ -607,7 +610,7 @@ public:
 			}
 		return r;
 		}
-	inline sttfont_formatted_text extract_lua(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint) const { return extract(position, num, mHint); }
+	inline sttfont_formatted_text extract_luasafe(const unsigned int position, const unsigned int num, sttfont_lookupHint * mHint) const { return extract(position, num, mHint); }
 		
 	void tokenise (SSF_VECTOR<sttfont_formatted_text> & arrOut, const uint32_t delimiter, const bool checkQuoteMarks = true, const uint32_t escapeChar = '\\', const bool includeDelimiterInToken = false) const {
 		/// Breaks this into an array of sttfont_formatted_text objects
@@ -690,7 +693,7 @@ public:
 		arrOut.push_back(std::move(d));
 		}
 			
-	inline void tokenise_lua (SSF_VECTOR<sttfont_formatted_text>* arrOut, const uint32_t delimiter, const bool checkQuoteMarks, const uint32_t escapeChar, const bool includeDelimiterInToken) const {
+	inline void tokenise_luasafe (SSF_VECTOR<sttfont_formatted_text>* arrOut, const uint32_t delimiter, const bool checkQuoteMarks, const uint32_t escapeChar, const bool includeDelimiterInToken) const {
 		return tokenise(*arrOut, delimiter, checkQuoteMarks, escapeChar, includeDelimiterInToken);
 		}
 	};
