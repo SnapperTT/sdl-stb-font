@@ -55,6 +55,16 @@ namespace sttr {
 #endif
 
 
+#ifndef SSF_UINTQUAD
+struct sttfont_uintQuad {
+	uint32_t first, second, third, fourth;
+	
+	inline sttfont_uintQuad() : first(0), second(0), third(0), fourth(0) {}
+	inline sttfont_uintQuad(uint32_t a, uint32_t b = 0, uint32_t c = 0, uint32_t d = 0) : first(a), second(b), third(c), fourth(d) {}
+	};
+#define SSF_UINTQUAD sttfont_uintQuad
+#endif
+
 #include <cstdint>
 
 // move semantics - makes lzz happy
@@ -328,10 +338,13 @@ public:
   int getTextSize (int & w, int & h, char const * c, uint32_t const maxLen = -1, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
   int getTextSize (int & w, int & h, SSF_STRING const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
   int getTextSize (int & w, int & h, sttfont_formatted_text const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
+  int countNewlines (SSF_STRING const & str);
   int getNumberOfRows (SSF_STRING const & str);
   int getNumberOfRows (sttfont_formatted_text const & str);
   int getTextHeight (SSF_STRING const & str);
   int getTextHeight (sttfont_formatted_text const & str);
+  int getTextWidth (SSF_STRING const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
+  int getTextWidth (sttfont_formatted_text const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
   virtual void onStartDrawing ();
   virtual void onCompletedDrawing ();
   int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
@@ -346,6 +359,8 @@ public:
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
+  void breakString (sttfont_formatted_text const & stringIn, SSF_VECTOR <sttfont_formatted_text> & arrOut, int const xs, bool const tokeniseNewLines = true, SSF_VECTOR <SSF_UINTQUAD> * breakPoints = NULL);
+  void breakString (SSF_STRING const & stringIn, SSF_VECTOR <SSF_STRING> & arrOut, int const xs, bool const tokeniseNewLines = true, SSF_VECTOR <SSF_UINTQUAD> * breakPoints = NULL);
 };
 LZZ_INLINE sttfont_format::sttfont_format ()
   : r (255), g (255), b (255), a (255), format (0), flags (0), padding (0)
@@ -1467,19 +1482,29 @@ int sttfont_font_cache::getTextSize (int & w, int & h, sttfont_formatted_text co
                                                                                                                                                      {
 		return processFormatted(str, 0, 0, false, &w, &h, maxWidth, mHint);
 		}
+int sttfont_font_cache::countNewlines (SSF_STRING const & str)
+                                                  {
+		int n = 0;
+		
+		uint32_t seek = 0;
+		const uint32_t len = str.length();
+		while (seek < len) {
+			const uint32_t seekBefore = seek;
+			uint32_t uChar = sttfont_font_cache::utf8_read(&str[seek], seek, len);
+			if (uChar == uint32_t('\n')) n++;
+			}
+		return n;
+		}
 int sttfont_font_cache::getNumberOfRows (SSF_STRING const & str)
                                                      {
-		int n = 1;
-		for (const char c : str)
-			if (c == '\n') n++;
+		int n = 1 + countNewlines(str);
 		return n;
 		}
 int sttfont_font_cache::getNumberOfRows (sttfont_formatted_text const & str)
                                                                  {
 		int n = 1;
 		for (const sttfont_formatted_text_item & item : str.mItems) {
-			for (const char c : item.text)
-				if (c == '\n') n++;
+			n += countNewlines(item.text);
 			}
 		return n;
 		}
@@ -1490,6 +1515,18 @@ int sttfont_font_cache::getTextHeight (SSF_STRING const & str)
 int sttfont_font_cache::getTextHeight (sttfont_formatted_text const & str)
                                                                {
 		return scale*rowSize*getNumberOfRows(str);
+		}
+int sttfont_font_cache::getTextWidth (SSF_STRING const & str, sttfont_lookupHint * mHint, int const * const maxWidth)
+                                                                                                                       {
+		int w,h;
+		getTextSize(w, h, str, mHint, maxWidth);
+		return w;
+		}
+int sttfont_font_cache::getTextWidth (sttfont_formatted_text const & str, sttfont_lookupHint * mHint, int const * const maxWidth)
+                                                                                                                                   {
+		int w,h;
+		getTextSize(w, h, str, mHint, maxWidth);
+		return w;
 		}
 void sttfont_font_cache::onStartDrawing ()
                                       {}
@@ -1733,6 +1770,200 @@ void sttfont_font_cache::renderTextToObject (sttfont_prerendered_text * textOut,
                                                                                                                  {
 		// Make your own implmentation for your own frontend here
 		//textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, SSF_VECTOR <sttfont_formatted_text> & arrOut, int const xs, bool const tokeniseNewLines, SSF_VECTOR <SSF_UINTQUAD> * breakPoints)
+                                                                                                   {
+		// Note: This some of the ugliest code I have ever written. Look upon it and weap
+		if (tokeniseNewLines) {
+			SSF_VECTOR<sttfont_formatted_text> tokenised;
+			stringIn.tokenise(tokenised, '\n', false, 0);
+			
+			for (sttfont_formatted_text & sft : tokenised) {
+				breakString(sft, arrOut, xs, false, breakPoints);
+				}
+			return;
+			}
+		
+		//std::cout << "Breaking: " << stringIn.getString() << ", xs: " << xs << std::endl;
+		
+		// Trivial cases
+		if (getTextWidth(stringIn) < xs) {
+			if (breakPoints) breakPoints->push_back(SSF_UINTQUAD(arrOut.size(), 0, stringIn.size()));
+			arrOut.push_back(std::move(stringIn.copy()));
+			return;
+			}
+			
+		SSF_VECTOR<sttfont_formatted_text> tokenised;
+		stringIn.tokenise(tokenised, ' ', false, 0, true);
+		
+		
+		size_t lastInsert = 0;
+		uint32_t workingLen = 0;	// Working length in pixels
+		uint32_t iWorkingLen = 0;	// Working length in bytes
+		uint32_t iWorkingLenLastBreak = 0;	// The length at the last break. Effectivley the start point of a split
+		uint32_t spaceLen = 0;
+		
+		spaceLen = getTextWidth(sttfont_formatted_text(" "));
+		
+		#if 0
+			{
+			std::cout << "String [" << stringIn.getString() << "], Tokens: (" << tokenised.size() << ") ";
+			for (size_t ti = 0; ti < tokenised.size(); ++ti) {
+				if (ti) std::cout <<", ";
+				std::cout << "[" << tokenised[ti].getString() << "]";
+				}
+			std::cout << std::endl;
+			}
+		#endif
+		
+		int maxLenLookup = xs + spaceLen; // If a string is longer than this, stop calcualting its length (early out)
+		
+		for (size_t ti = 0; ti < tokenised.size(); ++ti) {
+			bool breakLongWord = false;
+			int tokLen = 0;
+			//uint64_t TSTART = 0;
+			//topOfLoop:
+			//TSTART = SDL_GetPerformanceCounter();
+			const sttfont_formatted_text & thisTokenS = tokenised[ti];
+			
+			tokLen = getTextWidth(thisTokenS, NULL, &maxLenLookup);
+			
+			// Check last character is space. If it is, ignore the length of it
+			if (thisTokenS.mItems.size()) {
+				const SSF_STRING & str = thisTokenS.mItems[thisTokenS.mItems.size()-1].text;
+				if (str.size()) {
+					if (str[str.size()-1] == ' ')
+						tokLen -= spaceLen;
+					}
+				}
+			
+			if (tokLen > xs) {
+				// Break this token
+				uint32_t subWorkingLen = 0;
+				sttfont_lookupHint mHint;
+					mHint.writeOut = true;
+				sttfont_lookupHint mHint2;
+					mHint.writeOut = true;
+					
+				sttfont_formatted_text subToken;
+				int tokLen2Last = 0;
+					
+				for (size_t si = 0; si < thisTokenS.mItems.size(); ++si) {
+					const SSF_STRING & s = thisTokenS.mItems[si].text;
+					const uint32_t len = s.length();
+					
+					uint32_t seek = 0;
+					uint32_t seekBefore = 0;
+					
+					while (seek < len) {
+						seekBefore = seek;
+						sttfont_font_cache::utf8_read(&s[seek], seek, len); // Look ahead and discard value
+					
+						sttfont_formatted_text subToken2 =  thisTokenS.extract(seekBefore+subWorkingLen, seek-seekBefore, &mHint2);
+						subToken.append(std::move(subToken2));
+						
+						int tokLen2 = getTextWidth(subToken, &mHint);
+						
+						if (tokLen2 > xs) {
+							//split!
+							uint32_t splitPos = subWorkingLen + seekBefore;
+							if (splitPos == 0) splitPos = 1;
+							if (splitPos < len) {
+								sttfont_formatted_text before = thisTokenS.extract(0, splitPos);
+								sttfont_formatted_text after  = thisTokenS.extract(splitPos, -1);
+								//std::cout << "here!!! ["<< thisTokenS.getString() <<"] (" << splitPos << "/" << thisTokenS.size() << ") before: [" << before.getString() << "], after: [" << before.getString() << "]" << std::endl;
+
+								tokenised.insert(tokenised.begin() + ti + 1, std::move(after));
+								tokenised[ti].swap(before);
+								
+								
+								//std::cout << "here!!! [" << tokenised[ti].getString() << std::endl;
+				//uint64_t TSPLIT = SDL_GetPerformanceCounter();
+				//const double deltaTime = (double)((TSPLIT - TSTART)*1000 / (double)SDL_GetPerformanceFrequency() );
+				//std::cout  << std::endl << "TokLen: [" << tokenised[ti].size() << "/" << tokenised[ti+1].size() << "],  Split time: " << deltaTime <<"ms" << " before: [" << tokenised[ti].getStringTruncated(64) << "] after: [" << tokenised[ti+1].getStringTruncated(64) << "] "<< std::endl << std::endl;
+								//ti--;
+								}
+							
+							tokLen = tokLen2Last;
+							breakLongWord = true;
+							goto breaken;
+							}
+						tokLen2Last = tokLen2;
+						}
+					subWorkingLen += len;
+					}
+				}
+				
+			// I told you this is ugly code. Look, it even has a Goto!
+			breaken:
+			
+			//				std::cout << "breaken: [" << tokenised[ti].getString() << "] " << ti << "/" << tokenised.size() << " " << (workingLen + tokLen) << "/" << xs << std::endl;
+			
+			/////////////////////////////////////////////////////////////////////
+			// Token for 
+			const sttfont_formatted_text & thisToken = tokenised[ti];
+			
+			bool isOverLength = (workingLen + tokLen > xs);
+			bool isLastPiece = (ti == tokenised.size()-1);
+			
+				
+			if (isOverLength || isLastPiece || breakLongWord) {
+				sttfont_formatted_text working;
+				//bool first = true;
+				unsigned int tokStride = 0;
+				size_t limit = ti;
+				if (!isOverLength)
+					limit = ti+1;
+					
+				bool isLastPiece2 = (limit == tokenised.size());
+				for (size_t tj = lastInsert; tj < limit; ++tj) {
+					//std::cout << "tok: [" << tokenised[tj].getString() << "] " << (tj+1 < limit ) << " " << tokStride << std::endl;
+					working.append(std::move(tokenised[tj]));
+					}
+				const bool trailingSpace = (!isLastPiece2) && (!breakLongWord);
+				//if (trailingSpace)
+				//	working << " ";
+					
+				working.consolidateSegments();
+				
+				if (breakPoints) {
+					//if (isLastPiece)
+					//tokStride = 0;
+					iWorkingLen = working.size();
+					
+					//std::cout << "Insert B " << tokLen << "/" << Vgui_ContextI::aContext->getTextWidth(working) << "/" << xs << "\t[" << working.getString() << "], this piece: " << thisToken.getString() << ", arrSize: " << arrOut.size() << ", workingLen: " << iWorkingLen  << " workingLenLastBreak : " << iWorkingLenLastBreak << ", tokStride: " << tokStride << ", breakLongWord: " << breakLongWord << " isLastPiece2: " << isLastPiece2 << " trailingSpace: " << (trailingSpace) << std::endl << std::endl;
+					
+					breakPoints->push_back(SSF_UINTQUAD(arrOut.size(), iWorkingLenLastBreak, iWorkingLen, tokStride));
+					iWorkingLenLastBreak += iWorkingLen + tokStride;
+					}
+				arrOut.push_back(std::move(working));
+				
+				lastInsert = limit;
+				if (isOverLength)
+					ti--;
+					
+				workingLen = 0;
+				//iWorkingLen = 0;
+				}
+			else {
+				workingLen += tokLen + spaceLen;
+				}
+			
+			//exit(1);
+			}
+		}
+void sttfont_font_cache::breakString (SSF_STRING const & stringIn, SSF_VECTOR <SSF_STRING> & arrOut, int const xs, bool const tokeniseNewLines, SSF_VECTOR <SSF_UINTQUAD> * breakPoints)
+                                                                                                   {
+		sttfont_formatted_text sft;
+		sft << stringIn;
+		
+		SSF_VECTOR<sttfont_formatted_text> arrTemp;
+		breakString(sft, arrTemp, xs, tokeniseNewLines, breakPoints);
+		arrOut.resize(arrTemp.size());
+		for (uint32_t i = 0; i < arrTemp.size(); ++i) {
+			if (arrTemp[i].isEmpty()) continue;
+			arrOut[i].swap(arrTemp[i].mItems[0].text);
+			}
 		}
 #undef LZZ_INLINE
 #endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_sttFont

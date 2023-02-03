@@ -51,6 +51,7 @@ How Do I?
 * [Get Font Metrics](#get-font-metrics)
 * [Use Fallback Fonts (For Multilinugal Support)](#use-fallback-fonts-for-multilinugal-support)
 * [Get the Size of Text](#get-the-size-of-text)
+* [Fit Text To A Width](#fit-text-to-a-width)
 * [Manage Memory](#manage-memory)
 * [Caching Results in a Texture](#caching-results-in-a-texture)
 * [Print in Colours Other Than White](#print-in-colours-other-than-white)
@@ -171,13 +172,19 @@ Note that all fonts have to be loaded before any drawing functions are called. I
 ## Get the Size of Text
 ```c++
 int w, h;
-fc.getTextSize(w, h, "Text");
+fc.getTextSize(w, h, "Text"); // Get width and height at same time
 
+// Also
 h = fc.getTextHeight("Text"); // Faster, if only height is needed
-int nRows = fc.getTextRows("Text \n More text"); // Returns the number of rows of text - here it's 2
+w = fc.getTextWidth("Text"); // Internally just a wrapper for getTextSize
+int nRows = fc.getTextRows("Text \n More text"); // UTF8 safe, returns the number of rows of text - here it's 2
+int numNewlines = fc.getNumNewLines
 ```
 
 Tip: `drawText()` returns the x coordinate of the end of a drawn string or formatted text object.
+
+## Fit Text To A Width
+For line wrapping use the `fc.breakString(stringIn, arrayOut, width)` function. This converts a string or a formatted text object into a vector of strings or formatted text objects each of which is less than width. This will try to break on newlines and whitespace first then it'll split words if the are longer than the specified width. This is utf8 safe.
 
 ## Manage Memory
 
