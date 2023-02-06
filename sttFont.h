@@ -54,16 +54,12 @@ namespace sttr {
 	#define SSF_DEL_ARR(X) delete[] X
 #endif
 
-
-#ifndef SSF_UINTQUAD
 struct sttfont_uintQuad {
 	uint32_t first, second, third, fourth;
 	
 	inline sttfont_uintQuad() : first(0), second(0), third(0), fourth(0) {}
 	inline sttfont_uintQuad(uint32_t a, uint32_t b = 0, uint32_t c = 0, uint32_t d = 0) : first(a), second(b), third(c), fourth(d) {}
 	};
-#define SSF_UINTQUAD sttfont_uintQuad
-#endif
 
 #include <cstdint>
 
@@ -359,8 +355,8 @@ public:
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
-  void breakString (sttfont_formatted_text const & stringIn, SSF_VECTOR <sttfont_formatted_text> & arrOut, int const xs, bool const tokeniseNewLines = true, SSF_VECTOR <SSF_UINTQUAD> * breakPoints = NULL);
-  void breakString (SSF_STRING const & stringIn, SSF_VECTOR <SSF_STRING> & arrOut, int const xs, bool const tokeniseNewLines = true, SSF_VECTOR <SSF_UINTQUAD> * breakPoints = NULL);
+  void breakString (sttfont_formatted_text const & stringIn, SSF_VECTOR <sttfont_formatted_text> & arrOut, int const xs, bool const tokeniseNewLines = true, SSF_VECTOR <sttfont_uintQuad> * breakPoints = NULL);
+  void breakString (SSF_STRING const & stringIn, SSF_VECTOR <SSF_STRING> & arrOut, int const xs, bool const tokeniseNewLines = true, SSF_VECTOR <sttfont_uintQuad> * breakPoints = NULL);
 };
 LZZ_INLINE sttfont_format::sttfont_format ()
   : r (255), g (255), b (255), a (255), format (0), flags (0), padding (0)
@@ -1771,8 +1767,8 @@ void sttfont_font_cache::renderTextToObject (sttfont_prerendered_text * textOut,
 		// Make your own implmentation for your own frontend here
 		//textOut->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
-void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, SSF_VECTOR <sttfont_formatted_text> & arrOut, int const xs, bool const tokeniseNewLines, SSF_VECTOR <SSF_UINTQUAD> * breakPoints)
-                                                                                                   {
+void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, SSF_VECTOR <sttfont_formatted_text> & arrOut, int const xs, bool const tokeniseNewLines, SSF_VECTOR <sttfont_uintQuad> * breakPoints)
+                                                                                                       {
 		// Note: This some of the ugliest code I have ever written. Look upon it and weap
 		if (tokeniseNewLines) {
 			SSF_VECTOR<sttfont_formatted_text> tokenised;
@@ -1788,7 +1784,7 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 		
 		// Trivial cases
 		if (getTextWidth(stringIn) < xs) {
-			if (breakPoints) breakPoints->push_back(SSF_UINTQUAD(arrOut.size(), 0, stringIn.size()));
+			if (breakPoints) breakPoints->push_back(sttfont_uintQuad(arrOut.size(), 0, stringIn.size()));
 			arrOut.push_back(std::move(stringIn.copy()));
 			return;
 			}
@@ -1933,7 +1929,7 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 					
 					//std::cout << "Insert B " << tokLen << "/" << Vgui_ContextI::aContext->getTextWidth(working) << "/" << xs << "\t[" << working.getString() << "], this piece: " << thisToken.getString() << ", arrSize: " << arrOut.size() << ", workingLen: " << iWorkingLen  << " workingLenLastBreak : " << iWorkingLenLastBreak << ", tokStride: " << tokStride << ", breakLongWord: " << breakLongWord << " isLastPiece2: " << isLastPiece2 << " trailingSpace: " << (trailingSpace) << std::endl << std::endl;
 					
-					breakPoints->push_back(SSF_UINTQUAD(arrOut.size(), iWorkingLenLastBreak, iWorkingLen, tokStride));
+					breakPoints->push_back(sttfont_uintQuad(arrOut.size(), iWorkingLenLastBreak, iWorkingLen, tokStride));
 					iWorkingLenLastBreak += iWorkingLen + tokStride;
 					}
 				arrOut.push_back(std::move(working));
@@ -1952,8 +1948,8 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 			//exit(1);
 			}
 		}
-void sttfont_font_cache::breakString (SSF_STRING const & stringIn, SSF_VECTOR <SSF_STRING> & arrOut, int const xs, bool const tokeniseNewLines, SSF_VECTOR <SSF_UINTQUAD> * breakPoints)
-                                                                                                   {
+void sttfont_font_cache::breakString (SSF_STRING const & stringIn, SSF_VECTOR <SSF_STRING> & arrOut, int const xs, bool const tokeniseNewLines, SSF_VECTOR <sttfont_uintQuad> * breakPoints)
+                                                                                                       {
 		sttfont_formatted_text sft;
 		sft << stringIn;
 		
