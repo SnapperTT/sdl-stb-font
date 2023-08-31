@@ -162,7 +162,7 @@ public:
 			mPcCache.submitToConsumer();
 			mCommandBuffer.submitToConsumer();
 			
-			SDL_Delay(20);
+			//SDL_Delay(20);
 			submissionCounter++;
 			}
 		std::cout << "Producer thread exited" << std::endl;

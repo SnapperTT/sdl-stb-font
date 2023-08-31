@@ -2,6 +2,9 @@
 // SdlStbFont bgfxFrontend
 // By Liam Twigger - 2021
 // Public Domain
+//
+// Note that this also depends on stb_rect_pack.h
+//
 #include "bgfxh_embedded_shader.h"
 
 //#define BGFXSFH_IS_VALID(X) std::cout << "is valid " << #X << ": " << bgfx::isValid(X) << std::endl 
