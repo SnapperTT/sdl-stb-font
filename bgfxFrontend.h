@@ -1227,13 +1227,18 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		// 2. Have an atlas-page system for prerenders. The object created will have to keep track of bits of the atlas being used and clear pages not used anymore
 		// 3. Accumulate view slots + call frame() automatically when some limit is reached. Have some kind of dispatchRenderToTexture() to call frame() and reset the view counter when done
 		// 4. Reusue the damn framebuffer. Only regenerate it if we need a bigger one on at least one axis
-		
-		
 		bgfxsfh::cpuBuffer buff;
 		buff.w = width;
 		buff.h = height;
 		buff.sz = buff.w*buff.h*4;
-		uint8_t chr[buff.sz];
+		
+		#ifdef _MSC_VER
+			sttfont_tmpArr<uint8_t, 4096> tmpArr(buff.sz);
+			uint8_t* chr = tmpArr.arr;
+		#else
+			uint8_t chr[buff.sz];
+		#endif
+		
 		buff.buff = &chr[0];
 		buff.clearBuff();
 		buff.flipY = bgfx::getCaps()->originBottomLeft;
@@ -1253,6 +1258,7 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		
 		if (widthOut)  *widthOut = width;
 		if (heightOut) *heightOut = height;
+		
 		return RT;
 		}
 bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture (SSF_STRING const & str, int * widthOut, int * heightOut)

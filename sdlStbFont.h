@@ -61,6 +61,26 @@ struct sttfont_uintQuad {
 	inline sttfont_uintQuad(uint32_t a, uint32_t b = 0, uint32_t c = 0, uint32_t d = 0) : first(a), second(b), third(c), fourth(d) {}
 	};
 
+// workaround for temp arrays not being a thing on msvc
+// used for stack allocated temporary arrays in function or block scope
+template <typename T, int S>
+struct sttfont_tmpArr {
+	T stackBuff[S];
+	T* heapBuff;
+	T* arr;
+	
+	inline void reserve(const uint64_t sz) {
+		if (heapBuff) abort();
+		if (sz > S) {
+			heapBuff = SSF_NEW_ARR(T, sz);
+			arr = heapBuff;
+			}
+		}
+	inline sttfont_tmpArr() : heapBuff(NULL), arr(&stackBuff[0]) {}
+	inline sttfont_tmpArr(const uint64_t sz) : heapBuff(NULL), arr(&stackBuff[0]) { reserve(sz); }
+	inline ~sttfont_tmpArr() { if (heapBuff) SSF_DEL_ARR(heapBuff); }
+	};
+
 #include <cstdint>
 
 // move semantics - makes lzz happy
