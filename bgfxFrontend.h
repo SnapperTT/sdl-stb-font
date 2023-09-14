@@ -540,8 +540,8 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 					texelHalfW = _texelHalf/_framebufferWidth;
 					texelHalfH = _texelHalf/_framebufferHeight;
 					}
-				const float minu = 0.0f + texelHalfW;
-				const float maxu = 1.0f + texelHalfH;
+				//const float minu = 0.0f + texelHalfW;
+				//const float maxu = 1.0f + texelHalfH;
 
 				const float zz = 0.0f;
 

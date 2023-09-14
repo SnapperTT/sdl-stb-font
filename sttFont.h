@@ -1505,7 +1505,6 @@ int sttfont_font_cache::countNewlines (SSF_STRING const & str)
 		uint32_t seek = 0;
 		const uint32_t len = str.length();
 		while (seek < len) {
-			const uint32_t seekBefore = seek;
 			uint32_t uChar = sttfont_font_cache::utf8_read(&str[seek], seek, len);
 			if (uChar == uint32_t('\n')) n++;
 			}
@@ -1917,9 +1916,9 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 			
 			/////////////////////////////////////////////////////////////////////
 			// Token for 
-			const sttfont_formatted_text & thisToken = tokenised[ti];
+			//const sttfont_formatted_text & thisToken = tokenised[ti];
 			
-			bool isOverLength = (workingLen + tokLen > xs);
+			bool isOverLength = (workingLen + tokLen > unsigned(xs));
 			bool isLastPiece = (ti == tokenised.size()-1);
 			
 				
@@ -1936,7 +1935,7 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 					//std::cout << "tok: [" << tokenised[tj].getString() << "] " << (tj+1 < limit ) << " " << tokStride << std::endl;
 					working.append(std::move(tokenised[tj]));
 					}
-				const bool trailingSpace = (!isLastPiece2) && (!breakLongWord);
+				//const bool trailingSpace = (!isLastPiece2) && (!breakLongWord);
 				//if (trailingSpace)
 				//	working << " ";
 					
