@@ -531,11 +531,14 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 				const float maxx = (r.x + r.w);
 				const float miny = r.y;
 				const float maxy = (r.y + r.h);
-				
-				//const float minu = 0.0f + texelHalfW;
-				//const float maxu = 1.0f + texelHalfH;
 
 				const float zz = 0.0f;
+
+				if (_originBottomLeft) {
+					float temp = minv;
+					minv = maxv;
+					maxv = temp;
+					}
 
 				int j = i*6;
 				vertex[j+0].m_x = minx;
