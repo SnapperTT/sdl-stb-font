@@ -516,7 +516,6 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 		* License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
 		*/
 		const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
-		const float _texelHalf = bgfx::RendererType::Direct3D9 == renderer ? 0.5f : 0.0f;
 		const bool _originBottomLeft = bgfx::getCaps()->originBottomLeft;
 		
 		if (uint32_t(6*numQuads) == bgfx::getAvailTransientVertexBuffer(6*numQuads, bgfxsfh::PosVertex::ms_decl) ) {
@@ -532,27 +531,11 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 				const float maxx = (r.x + r.w);
 				const float miny = r.y;
 				const float maxy = (r.y + r.h);
-
-
-				float texelHalfW = 0.f;
-				float texelHalfH = 0.f;
-				if (_framebufferWidth > 0.0f && _framebufferHeight > 0.0f) {
-					texelHalfW = _texelHalf/_framebufferWidth;
-					texelHalfH = _texelHalf/_framebufferHeight;
-					}
+				
 				//const float minu = 0.0f + texelHalfW;
 				//const float maxu = 1.0f + texelHalfH;
 
 				const float zz = 0.0f;
-
-				float minv = texelHalfH;
-				float maxv = 1.0f + texelHalfH;
-
-				if (_originBottomLeft) {
-					float temp = minv;
-					minv = maxv;
-					maxv = temp;
-					}
 
 				int j = i*6;
 				vertex[j+0].m_x = minx;
