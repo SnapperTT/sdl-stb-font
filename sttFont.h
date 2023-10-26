@@ -1930,7 +1930,7 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 				if (!isOverLength)
 					limit = ti+1;
 					
-				bool isLastPiece2 = (limit == tokenised.size());
+				//bool isLastPiece2 = (limit == tokenised.size());
 				for (size_t tj = lastInsert; tj < limit; ++tj) {
 					//std::cout << "tok: [" << tokenised[tj].getString() << "] " << (tj+1 < limit ) << " " << tokStride << std::endl;
 					working.append(std::move(tokenised[tj]));
