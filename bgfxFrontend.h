@@ -515,9 +515,6 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 		* Copyright 2011-2018 Branimir Karadzic. All rights reserved.
 		* License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
 		*/
-		const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
-		const bool _originBottomLeft = bgfx::getCaps()->originBottomLeft;
-		
 		if (uint32_t(6*numQuads) == bgfx::getAvailTransientVertexBuffer(6*numQuads, bgfxsfh::PosVertex::ms_decl) ) {
 			bgfx::TransientVertexBuffer vb;
 			bgfx::allocTransientVertexBuffer(&vb, 6*numQuads, bgfxsfh::PosVertex::ms_decl);
@@ -533,12 +530,6 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 				const float maxy = (r.y + r.h);
 
 				const float zz = 0.0f;
-
-				if (_originBottomLeft) {
-					float temp = minv;
-					minv = maxv;
-					maxv = temp;
-					}
 
 				int j = i*6;
 				vertex[j+0].m_x = minx;

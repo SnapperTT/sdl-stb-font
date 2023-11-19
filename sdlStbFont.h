@@ -676,7 +676,7 @@ bool sttfont_formatted_text::isEmpty () const
 		//if (mItems.size() == 1) return !mItems[0].text.size();
 		for (sttfont_formatted_text_item item : mItems)
 			if (item.text.size()) return false;
-		return false;
+		return true; // none of the elements have text
 		}
 SSF_STRING sttfont_formatted_text::getString () const
                                      {

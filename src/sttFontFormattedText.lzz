@@ -148,7 +148,7 @@ struct sttfont_formatted_uipair {
 		#endif
 		}
 	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text_item)
-	}
+	};
 
 struct sttfont_formatted_text {
 	SSF_VECTOR<sttfont_formatted_text_item> mItems;
@@ -249,7 +249,7 @@ struct sttfont_formatted_text {
 		//if (mItems.size() == 1) return !mItems[0].text.size();
 		for (sttfont_formatted_text_item item : mItems)
 			if (item.text.size()) return false;
-		return false;
+		return true; // none of the elements have text
 		}
 		
 	SSF_STRING getString() const {
