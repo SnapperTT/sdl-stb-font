@@ -68,6 +68,36 @@ struct sttfont_format {
 	static const sttfont_format cyan	= sttfont_format(FORMAT_NONE,  0,255,255,255);
 	static const sttfont_format grey	= sttfont_format(FORMAT_NONE,128,128,128,255);
 	
+	static const sttfont_format light_red 		= sttfont_format(FORMAT_NONE,255,  128,  128,255);
+	static const sttfont_format light_green		= sttfont_format(FORMAT_NONE,  128,255,  128,255);
+	static const sttfont_format light_blue 		= sttfont_format(FORMAT_NONE,  128,  128,255,255);
+	static const sttfont_format light_yellow	= sttfont_format(FORMAT_NONE,255,255,  128,255);
+	static const sttfont_format light_black 	= sttfont_format(FORMAT_NONE,  128,  128,  128,255);
+	static const sttfont_format light_white		= sttfont_format(FORMAT_NONE,255,255,255,255);
+	static const sttfont_format light_magenta	= sttfont_format(FORMAT_NONE,255,  128,255,255);
+	static const sttfont_format light_cyan		= sttfont_format(FORMAT_NONE,  128,255,255,255);
+	static const sttfont_format light_grey		= sttfont_format(FORMAT_NONE,192,192,192,255);
+	
+	static const sttfont_format dark_red 		= sttfont_format(FORMAT_NONE,128,  0,  0,255);
+	static const sttfont_format dark_green		= sttfont_format(FORMAT_NONE,  0,128,  0,255);
+	static const sttfont_format dark_blue 		= sttfont_format(FORMAT_NONE,  0,  0,128,255);
+	static const sttfont_format dark_yellow		= sttfont_format(FORMAT_NONE,128,128,  0,255);
+	static const sttfont_format dark_black 		= sttfont_format(FORMAT_NONE,  0,  0,  0,255);
+	static const sttfont_format dark_white		= sttfont_format(FORMAT_NONE,128,128,128,255);
+	static const sttfont_format dark_magenta	= sttfont_format(FORMAT_NONE,128,  0,128,255);
+	static const sttfont_format dark_cyan		= sttfont_format(FORMAT_NONE,  0,128,128,255);
+	static const sttfont_format dark_grey		= sttfont_format(FORMAT_NONE,64,64,64,255);
+	
+	const static int COLOUR_MODE_NORMAL = 0;
+	const static int COLOUR_MODE_DARKEN = 1;
+	const static int COLOUR_MODE_LIGHTEN = 2;
+	
+	static const sttfont_format& selectColour(const int colourMode, const sttfont_format& colourIf0, const sttfont_format& colourIf1, const sttfont_format& colourIf2) {
+		if (colourMode == 1) return colourIf1;
+		if (colourMode == 2) return colourIf2;
+		return colourIf0;
+		}
+	
 	static const sttfont_format_reset reset;
 	
 	void swap(sttfont_format & other) {
@@ -106,6 +136,31 @@ struct sttfont_format {
 			.STTR_REG(sttfont_format,magenta)
 			.STTR_REG(sttfont_format,cyan)
 			.STTR_REG(sttfont_format,grey)
+			
+			.STTR_REG(sttfont_format,light_red)
+			.STTR_REG(sttfont_format,light_green)
+			.STTR_REG(sttfont_format,light_blue)
+			.STTR_REG(sttfont_format,light_yellow)
+			.STTR_REG(sttfont_format,light_black)
+			.STTR_REG(sttfont_format,light_white)
+			.STTR_REG(sttfont_format,light_magenta)
+			.STTR_REG(sttfont_format,light_cyan)
+			.STTR_REG(sttfont_format,light_grey)
+			
+			.STTR_REG(sttfont_format,dark_red)
+			.STTR_REG(sttfont_format,dark_green)
+			.STTR_REG(sttfont_format,dark_blue)
+			.STTR_REG(sttfont_format,dark_yellow)
+			.STTR_REG(sttfont_format,dark_black)
+			.STTR_REG(sttfont_format,dark_white)
+			.STTR_REG(sttfont_format,dark_magenta)
+			.STTR_REG(sttfont_format,dark_cyan)
+			.STTR_REG(sttfont_format,dark_grey)
+			
+			.STTR_REG(sttfont_format,COLOUR_MODE_NORMAL)
+			.STTR_REG(sttfont_format,COLOUR_MODE_DARKEN)
+			.STTR_REG(sttfont_format,COLOUR_MODE_LIGHTEN)
+			.STTR_REG(sttfont_format,selectColour)
 			
 			.STTR_REG(sttfont_format,reset)
 		.endClass();

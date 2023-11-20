@@ -26,8 +26,9 @@ struct pcfc_prerendered_text : public sttfont_prerendered_text {
 		}
 	
 	void freeTexture() {
-		if (owner)
+		if (owner && handle)
 			owner->destroyPrerender(handle);
+		handle = 0; // we no longer own the texture 
 		}
 	}
 

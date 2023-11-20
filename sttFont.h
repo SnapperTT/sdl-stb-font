@@ -150,6 +150,28 @@ struct sttfont_format
   static sttfont_format const magenta;
   static sttfont_format const cyan;
   static sttfont_format const grey;
+  static sttfont_format const light_red;
+  static sttfont_format const light_green;
+  static sttfont_format const light_blue;
+  static sttfont_format const light_yellow;
+  static sttfont_format const light_black;
+  static sttfont_format const light_white;
+  static sttfont_format const light_magenta;
+  static sttfont_format const light_cyan;
+  static sttfont_format const light_grey;
+  static sttfont_format const dark_red;
+  static sttfont_format const dark_green;
+  static sttfont_format const dark_blue;
+  static sttfont_format const dark_yellow;
+  static sttfont_format const dark_black;
+  static sttfont_format const dark_white;
+  static sttfont_format const dark_magenta;
+  static sttfont_format const dark_cyan;
+  static sttfont_format const dark_grey;
+  static int const COLOUR_MODE_NORMAL = 0;
+  static int const COLOUR_MODE_DARKEN = 1;
+  static int const COLOUR_MODE_LIGHTEN = 2;
+  static sttfont_format const & selectColour (int const colourMode, sttfont_format const & colourIf0, sttfont_format const & colourIf1, sttfont_format const & colourIf2);
   static sttfont_format_reset const reset;
   void swap (sttfont_format & other);
   static void sttr_register ();
@@ -310,6 +332,7 @@ public:
   float strikethroughPosition;
   int faceSize;
   int tabWidthInSpaces;
+  void * userData;
   sttfont_font_cache ();
   virtual ~ sttfont_font_cache ();
   void setFaceSize (int const _faceSize);
@@ -471,6 +494,33 @@ sttfont_format const sttfont_format::white = sttfont_format(FORMAT_NONE,255,255,
 sttfont_format const sttfont_format::magenta = sttfont_format(FORMAT_NONE,255,  0,255,255);
 sttfont_format const sttfont_format::cyan = sttfont_format(FORMAT_NONE,  0,255,255,255);
 sttfont_format const sttfont_format::grey = sttfont_format(FORMAT_NONE,128,128,128,255);
+sttfont_format const sttfont_format::light_red = sttfont_format(FORMAT_NONE,255,  128,  128,255);
+sttfont_format const sttfont_format::light_green = sttfont_format(FORMAT_NONE,  128,255,  128,255);
+sttfont_format const sttfont_format::light_blue = sttfont_format(FORMAT_NONE,  128,  128,255,255);
+sttfont_format const sttfont_format::light_yellow = sttfont_format(FORMAT_NONE,255,255,  128,255);
+sttfont_format const sttfont_format::light_black = sttfont_format(FORMAT_NONE,  128,  128,  128,255);
+sttfont_format const sttfont_format::light_white = sttfont_format(FORMAT_NONE,255,255,255,255);
+sttfont_format const sttfont_format::light_magenta = sttfont_format(FORMAT_NONE,255,  128,255,255);
+sttfont_format const sttfont_format::light_cyan = sttfont_format(FORMAT_NONE,  128,255,255,255);
+sttfont_format const sttfont_format::light_grey = sttfont_format(FORMAT_NONE,192,192,192,255);
+sttfont_format const sttfont_format::dark_red = sttfont_format(FORMAT_NONE,128,  0,  0,255);
+sttfont_format const sttfont_format::dark_green = sttfont_format(FORMAT_NONE,  0,128,  0,255);
+sttfont_format const sttfont_format::dark_blue = sttfont_format(FORMAT_NONE,  0,  0,128,255);
+sttfont_format const sttfont_format::dark_yellow = sttfont_format(FORMAT_NONE,128,128,  0,255);
+sttfont_format const sttfont_format::dark_black = sttfont_format(FORMAT_NONE,  0,  0,  0,255);
+sttfont_format const sttfont_format::dark_white = sttfont_format(FORMAT_NONE,128,128,128,255);
+sttfont_format const sttfont_format::dark_magenta = sttfont_format(FORMAT_NONE,128,  0,128,255);
+sttfont_format const sttfont_format::dark_cyan = sttfont_format(FORMAT_NONE,  0,128,128,255);
+sttfont_format const sttfont_format::dark_grey = sttfont_format(FORMAT_NONE,64,64,64,255);
+int const sttfont_format::COLOUR_MODE_NORMAL;
+int const sttfont_format::COLOUR_MODE_DARKEN;
+int const sttfont_format::COLOUR_MODE_LIGHTEN;
+sttfont_format const & sttfont_format::selectColour (int const colourMode, sttfont_format const & colourIf0, sttfont_format const & colourIf1, sttfont_format const & colourIf2)
+                                                                                                                                                                           {
+		if (colourMode == 1) return colourIf1;
+		if (colourMode == 2) return colourIf2;
+		return colourIf0;
+		}
 sttfont_format_reset const sttfont_format::reset;
 void sttfont_format::swap (sttfont_format & other)
                                           {
@@ -509,6 +559,31 @@ void sttfont_format::sttr_register ()
 			.STTR_REG(sttfont_format,magenta)
 			.STTR_REG(sttfont_format,cyan)
 			.STTR_REG(sttfont_format,grey)
+			
+			.STTR_REG(sttfont_format,light_red)
+			.STTR_REG(sttfont_format,light_green)
+			.STTR_REG(sttfont_format,light_blue)
+			.STTR_REG(sttfont_format,light_yellow)
+			.STTR_REG(sttfont_format,light_black)
+			.STTR_REG(sttfont_format,light_white)
+			.STTR_REG(sttfont_format,light_magenta)
+			.STTR_REG(sttfont_format,light_cyan)
+			.STTR_REG(sttfont_format,light_grey)
+			
+			.STTR_REG(sttfont_format,dark_red)
+			.STTR_REG(sttfont_format,dark_green)
+			.STTR_REG(sttfont_format,dark_blue)
+			.STTR_REG(sttfont_format,dark_yellow)
+			.STTR_REG(sttfont_format,dark_black)
+			.STTR_REG(sttfont_format,dark_white)
+			.STTR_REG(sttfont_format,dark_magenta)
+			.STTR_REG(sttfont_format,dark_cyan)
+			.STTR_REG(sttfont_format,dark_grey)
+			
+			.STTR_REG(sttfont_format,COLOUR_MODE_NORMAL)
+			.STTR_REG(sttfont_format,COLOUR_MODE_DARKEN)
+			.STTR_REG(sttfont_format,COLOUR_MODE_LIGHTEN)
+			.STTR_REG(sttfont_format,selectColour)
 			
 			.STTR_REG(sttfont_format,reset)
 		.endClass();
@@ -1235,8 +1310,8 @@ void sttfont_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 			}
 		}
 sttfont_font_cache::sttfont_font_cache ()
-  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8)
-                                                  {}
+  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL)
+                                                                  {}
 sttfont_font_cache::~ sttfont_font_cache ()
                                        {}
 void sttfont_font_cache::setFaceSize (int const _faceSize)

@@ -151,8 +151,9 @@ void pcfc_prerendered_text::initToZero ()
 		}
 void pcfc_prerendered_text::freeTexture ()
                            {
-		if (owner)
+		if (owner && handle)
 			owner->destroyPrerender(handle);
+		handle = 0; // we no longer own the texture 
 		}
 producer_consumer_font_cache::pcfc_consumer_prerendered_text::pcfc_consumer_prerendered_text ()
                                                  {}

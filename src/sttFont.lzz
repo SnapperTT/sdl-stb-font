@@ -291,11 +291,11 @@ public:
 	// Must be set before loadFont() is called. Cannot be changed after
 	int faceSize;			// Default is 20. All the parameters are calcualted based on this
 	int tabWidthInSpaces;	// Default is 8, set this before loadFont(). Max 128. Sets tabWidth when font is loaded
-	
+	void* userData;			// Pointer for whatever purpose you see fit
 	
 	sttfont_font_cache () : ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), tabWidth(1), scale(1.f),
 		underlineThickness(1.0), strikethroughThickness(1.0), underlinePosition(0.0), strikethroughPosition(0.0),
-		faceSize(20), tabWidthInSpaces(8) {}
+		faceSize(20), tabWidthInSpaces(8), userData(NULL) {}
 	virtual ~sttfont_font_cache () {}
 	
 		
