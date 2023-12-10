@@ -950,7 +950,7 @@ sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const ta
 void bgfx_stb_font_cache::onStartDrawing ()
                               {
 		if (renderTarget) return;
-		bufferDraws = false;
+		bufferDraws = true;
 		}
 void bgfx_stb_font_cache::onCompletedDrawing ()
                                   {

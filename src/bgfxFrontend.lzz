@@ -857,7 +857,7 @@ public:
 		
 	void onStartDrawing() {
 		if (renderTarget) return;
-		bufferDraws = false;
+		bufferDraws = true;
 		}
 	void onCompletedDrawing() {
 		if (renderTarget) return;
