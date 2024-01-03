@@ -7,7 +7,7 @@
 #ifndef BGFXH_EMBEDDED_SHADER
 
 #include <bgfx/embedded_shader.h>
-#define BGFXH_EMBEDDED_SHADER_DX9BC BGFX_EMBEDDED_SHADER_DX9BC
+//#define BGFXH_EMBEDDED_SHADER_DX9BC BGFX_EMBEDDED_SHADER_DX9BC
 #define BGFXH_EMBEDDED_SHADER_DXBC BGFX_EMBEDDED_SHADER_DXBC
 #define BGFXH_EMBEDDED_SHADER_PSSL BGFX_EMBEDDED_SHADER_PSSL
 #define BGFXH_EMBEDDED_SHADER_GLSL BGFX_EMBEDDED_SHADER_GLSL
@@ -16,7 +16,7 @@
 #define BGFXH_EMBEDDED_SHADER_SPIRV BGFX_EMBEDDED_SHADER_SPIRV
 #define BGFXH_EMBEDDED_SHADER_METAL BGFX_EMBEDDED_SHADER_METAL
 
-#if BGFX_PLATFORM_SUPPORTS_DX9BC
+#if 0 //BGFX_PLATFORM_SUPPORTS_DX9BC
 #	undef  BGFXH_EMBEDDED_SHADER_DX9BC
 #	define BGFXH_EMBEDDED_SHADER_DX9BC(_renderer, _name) 		{ _renderer, BX_CONCATENATE(_name, _dx9 ), BX_CONCATENATE(_name, _dx9_size) },
 #endif // BGFX_PLATFORM_SUPPORTS_DX9BC
@@ -55,7 +55,7 @@
 #	define BGFXH_EMBEDDED_SHADER_METAL(_renderer, _name) 		{ _renderer, BX_CONCATENATE(_name, _metal), BX_CONCATENATE(_name, _metal_size) },
 #endif // BGFX_PLATFORM_SUPPORTS_METAL
 
-#define BGFXH_EMBEDDED_SHADER(_name)                                                               			{                                                                                      				#_name,                                                                            				{                                                                                  					BGFXH_EMBEDDED_SHADER_DX9BC(bgfx::RendererType::Direct3D9,  _name)             					BGFXH_EMBEDDED_SHADER_DXBC (bgfx::RendererType::Direct3D11, _name)             					BGFXH_EMBEDDED_SHADER_DXBC (bgfx::RendererType::Direct3D12, _name)             					BGFXH_EMBEDDED_SHADER_PSSL (bgfx::RendererType::Gnm,        _name)             					BGFXH_EMBEDDED_SHADER_METAL(bgfx::RendererType::Metal,      _name)             					BGFXH_EMBEDDED_SHADER_NVN  (bgfx::RendererType::Nvn,        _name)             					BGFXH_EMBEDDED_SHADER_ESSL (bgfx::RendererType::OpenGLES,   _name)             					BGFXH_EMBEDDED_SHADER_GLSL (bgfx::RendererType::OpenGL,     _name)             					BGFXH_EMBEDDED_SHADER_SPIRV(bgfx::RendererType::Vulkan,     _name)             					{ bgfx::RendererType::Noop,  (const uint8_t*)"VSH\x5\x0\x0\x0\x0\x0\x0", 10 }, 					{ bgfx::RendererType::Count, NULL, 0 }                                         				}                                                                                  			}
+#define BGFXH_EMBEDDED_SHADER(_name)                                                               			{                                                                                      				#_name,                                                                            				{                                                                                  					BGFXH_EMBEDDED_SHADER_DXBC (bgfx::RendererType::Direct3D11, _name)             					BGFXH_EMBEDDED_SHADER_DXBC (bgfx::RendererType::Direct3D12, _name)             					BGFXH_EMBEDDED_SHADER_PSSL (bgfx::RendererType::Gnm,        _name)             					BGFXH_EMBEDDED_SHADER_METAL(bgfx::RendererType::Metal,      _name)             					BGFXH_EMBEDDED_SHADER_NVN  (bgfx::RendererType::Nvn,        _name)             					BGFXH_EMBEDDED_SHADER_ESSL (bgfx::RendererType::OpenGLES,   _name)             					BGFXH_EMBEDDED_SHADER_GLSL (bgfx::RendererType::OpenGL,     _name)             					BGFXH_EMBEDDED_SHADER_SPIRV(bgfx::RendererType::Vulkan,     _name)             					{ bgfx::RendererType::Noop,  (const uint8_t*)"VSH\x5\x0\x0\x0\x0\x0\x0", 10 }, 					{ bgfx::RendererType::Count, NULL, 0 }                                         				}                                                                                  			}
 
 #endif //#ifndef BGFXH_EMBEDDED_SHADER
 #define LZZ_INLINE inline
