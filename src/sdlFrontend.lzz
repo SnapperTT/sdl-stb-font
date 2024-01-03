@@ -10,7 +10,9 @@ struct SDL_Surface;
 #end
 
 #src
-#include <SDL2/SDL.h>
+#ifndef SDL_STB_FONT_SDL_INCLUDED
+	#include <SDL2/SDL.h>
+#endif
 #end
 
 /// Prerended cached text

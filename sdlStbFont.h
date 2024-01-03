@@ -2122,7 +2122,9 @@ public:
 // sdlFrontend.cpp
 //
 
-#include <SDL2/SDL.h>
+#ifndef SDL_STB_FONT_SDL_INCLUDED
+	#include <SDL2/SDL.h>
+#endif
 #define LZZ_INLINE inline
 sdl_stb_prerendered_text::sdl_stb_prerendered_text ()
   : sttfont_prerendered_text (), mSdlTexture (NULL), mRenderer (NULL)
