@@ -166,7 +166,7 @@ struct sttfont_format {
 		.endClass();
 		#endif
 		}
-	STTFONT_STTR_CLASS_SIG(sttfont_format)
+	STTFONT_STTR_CLASS_SIG_NON_POLY(sttfont_format)
 	
 	};
 	
@@ -188,7 +188,7 @@ struct sttfont_formatted_text_item {
 		.endClass();
 		#endif
 		}
-	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text_item)
+	STTFONT_STTR_CLASS_SIG_NON_POLY(sttfont_formatted_text_item)
 	};
 
 struct sttfont_formatted_uipair {
@@ -202,7 +202,7 @@ struct sttfont_formatted_uipair {
 		.endClass();
 		#endif
 		}
-	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text_item)
+	STTFONT_STTR_CLASS_SIG_NON_POLY(sttfont_formatted_text_item)
 	};
 
 struct sttfont_formatted_text {
@@ -274,7 +274,7 @@ struct sttfont_formatted_text {
 		#undef STTR_REGF_ALIAS
 		#endif
 		}
-	STTFONT_STTR_CLASS_SIG(sttfont_formatted_text)
+	STTFONT_STTR_CLASS_SIG_NON_POLY(sttfont_formatted_text)
 	
 	sttfont_formatted_text copy() const {
 		// Explicit copy - named function

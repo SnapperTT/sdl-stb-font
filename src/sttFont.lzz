@@ -1,7 +1,11 @@
 // control-f -> "// Make your own implmentation for your own frontend here" for notes w.r.t making your own rendering frontend
-#define STTFONT_STTR_CLASS_SIG(X)																\
+#define STTFONT_STTR_CLASS_SIG(X)															\
 	virtual void * sttr_getClassSig() const { return (void*) sttr::getTypeSignature<X>(); } \
 	virtual const char * const sttr_getClassName() const { return sttr::getTypeName<X>(); }
+	
+#define STTFONT_STTR_CLASS_SIG_NON_POLY(X)													\
+	void * sttr_getClassSig() const { return (void*) sttr::getTypeSignature<X>(); } \
+	const char * const sttr_getClassName() const { return sttr::getTypeName<X>(); }
 
 
 #hdr

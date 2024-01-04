@@ -175,8 +175,8 @@ struct sttfont_format
   static sttfont_format_reset const reset;
   void swap (sttfont_format & other);
   static void sttr_register ();
-  virtual void * sttr_getClassSig () const;
-  virtual char const * const sttr_getClassName () const;
+  void * sttr_getClassSig () const;
+  char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_text_item
 {
@@ -188,16 +188,16 @@ struct sttfont_formatted_text_item
   sttfont_formatted_text_item (SSF_STRING_MS _text, sttfont_format const & _format);
   sttfont_formatted_text_item & setCallback (sttfont_format_callback * _cb);
   static void sttr_register ();
-  virtual void * sttr_getClassSig () const;
-  virtual char const * const sttr_getClassName () const;
+  void * sttr_getClassSig () const;
+  char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_uipair
 {
   unsigned int a;
   unsigned int b;
   static void sttr_register ();
-  virtual void * sttr_getClassSig () const;
-  virtual char const * const sttr_getClassName () const;
+  void * sttr_getClassSig () const;
+  char const * const sttr_getClassName () const;
 };
 struct sttfont_formatted_text
 {
@@ -227,8 +227,8 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator << (sttfont_formatted_text_item_MS obj);
   sttfont_formatted_text & appendCBuff (char const * text, uint32_t const maxLen);
   static void sttr_register ();
-  virtual void * sttr_getClassSig () const;
-  virtual char const * const sttr_getClassName () const;
+  void * sttr_getClassSig () const;
+  char const * const sttr_getClassName () const;
   sttfont_formatted_text copy () const;
   void swap (sttfont_formatted_text & other);
   size_t size () const;
