@@ -1879,7 +1879,7 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 		// Trivial cases
 		if (getTextWidth(stringIn) < xs) {
 			if (breakPoints) breakPoints->push_back(sttfont_uintQuad(arrOut.size(), 0, stringIn.size()));
-			arrOut.push_back(std::move(stringIn.copy()));
+			arrOut.push_back(stringIn.copy());
 			return;
 			}
 			
