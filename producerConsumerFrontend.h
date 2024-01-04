@@ -12,7 +12,7 @@
 #endif
 
 typedef uint32_t pcfc_handle;
-struct producer_consumer_font_cache;
+class producer_consumer_font_cache;
 
 #ifdef SSF_CONCURRENT_QUEUE
 	#define SSF_STATE_TRANSFER SSF_CONCURRENT_QUEUE<state_t*>
