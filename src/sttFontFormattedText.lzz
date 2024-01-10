@@ -28,19 +28,33 @@ struct sttfont_format {
 	static const uint8_t FORMAT_STRIKETHROUGH = 1 << 3;
 	static const uint8_t FORMAT_RENDER_EVEN_IF_CALLBACK_EXISTS = 1 << 7;
 	
-	static const uint8_t FORMAT_FLAGS_COLOUR_SET 	   = 1 << 0;
+	static const uint8_t FORMAT_FLAGS_COLOUR_SET 	   = 1 << 0;	// Colour has been manually set and can therefore be overridden by sttfont_formatted_text::overrideColour
 	
 	inline sttfont_format() : r(255), g(255), b(255), a(255), format(0), flags(0), padding(0) {}
 	inline sttfont_format(const uint8_t _format)
 					: r(255), g(255), b(255), a(255), format(_format), flags(0), padding(0) {}
 	inline sttfont_format(const uint8_t _format, const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255)
 					: r(_r), g(_g), b(_b), a(_a), format(_format), flags(FORMAT_FLAGS_COLOUR_SET), padding(0) {}
-					
+	
+	inline sttfont_format clone() const { sttfont_format r; r = *this; return r; }
+	
 	inline bool operator == (const sttfont_format & other) const { // use default operator
 		return (r == other.r) && (g == other.g) && (b == other.b) && (a == other.a) && (format == other.format) && (flags == other.flags);
 		}
 	
+	inline void setBold(const bool on) { if (on) format |= FORMAT_BOLD; else format &= ~FORMAT_BOLD; }
+	inline void setItalic(const bool on) { if (on) format |= FORMAT_ITALIC; else format &= ~FORMAT_ITALIC; }
+	inline void setUnderline(const bool on) { if (on) format |= FORMAT_UNDERLINE; else format &= ~FORMAT_UNDERLINE; }
+	inline void setStrikethrough(const bool on) { if (on) format |= FORMAT_STRIKETHROUGH; else format &= ~FORMAT_STRIKETHROUGH; }
+	inline bool isBold() const { return format & FORMAT_BOLD; }
+	inline bool isItaic() const { return format & FORMAT_ITALIC; }
+	inline bool isUnderline() const { return format & FORMAT_UNDERLINE; }
+	inline bool isStrikethrough() const { return format & FORMAT_STRIKETHROUGH; }
+	inline bool hasFormats() const { return format; }
+	void resetColour() { r = 255, b = 255, g = 255, a = 255; flags &= ~FORMAT_FLAGS_COLOUR_SET; }
+	
 	void combine(const sttfont_format & other) {
+		// merges flags and blends colours multiplicatively
 		format |= other.format;
 		flags |= other.flags;
 		r = 255*((r/255.0)*(other.r/255.0));
@@ -48,11 +62,25 @@ struct sttfont_format {
 		b = 255*((b/255.0)*(other.b/255.0));
 		a = 255*((a/255.0)*(other.a/255.0));
 		}
-	
-	// Constants and "constants"
+		
+	void combineWithColour(const sttfont_format & other) {
+		// merges formats and overrides colour
+		format |= other.format;
+		flags |= other.flags;
+		r = other.r;
+		g = other.g;
+		b = other.b;
+		a = other.a;
+		}
+		
 	static sttfont_format color (const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { sttfont_format ret(FORMAT_NONE,_r,_g,_b,_a); ret.flags |= FORMAT_FLAGS_COLOUR_SET; return ret; }
 	static sttfont_format colour(const uint8_t _r, const uint8_t _g, const uint8_t _b, const uint8_t _a = 255) { sttfont_format ret(FORMAT_NONE,_r,_g,_b,_a); ret.flags |= FORMAT_FLAGS_COLOUR_SET; return ret; }
 	
+	static sttfont_format color_luasafe (const uint8_t _r, const uint8_t _g, const uint8_t _b) { return color(_r,_g,_b,255); }
+	static sttfont_format colour_luasafe(const uint8_t _r, const uint8_t _g, const uint8_t _b) { return colour(_r,_g,_b,255); }
+	
+	
+	// Constants and "constants"
 	static const sttfont_format bold = sttfont_format(FORMAT_BOLD);
 	static const sttfont_format italic = sttfont_format(FORMAT_ITALIC);
 	static const sttfont_format underline = sttfont_format(FORMAT_UNDERLINE);
@@ -106,8 +134,60 @@ struct sttfont_format {
 		other = tmp;
 		}
 		
+	SSF_STRING getTtyFormatCodeBegin() const {
+		if (!(hasFormats() || r != 255 || g != 255 || b != 255))
+			return "";
+		SSF_STRING rs = "\033[";
+		ttyFmtWorker(rs);
+		return rs + "m";
+		}
+		
+	SSF_STRING getTtyFormatCodeEnd() const {
+		if (!(hasFormats() || r != 255 || g != 255 || b != 255))
+			return "";
+		return "\033[0m";
+		}
+		
+	void ttyFmtWorker(SSF_STRING & rs) const {
+		bool first = false;
+		if (r != 255 || g != 255 || b != 255) {
+			if (first) rs += ";";
+			char arr[64];
+			snprintf(arr, 63, "38;2;%i;%i;%i", r, g, b);
+			rs += arr;
+			first = true;
+			}
+		if (isBold()) {
+			if (first) rs += ";";
+			rs += "1";
+			first = true;
+			}
+		if (isItaic()) {
+			if (first) rs += ";";
+			rs += "3";
+			first = true;
+			}
+		if (isUnderline()) {
+			if (first) rs += ";";
+			rs += "4";
+			first = true;
+			}
+		if (isStrikethrough()) {
+			if (first) rs += ";";
+			rs += "9";
+			first = true;
+			}
+		}
+		
+	SSF_STRING debugDump() const {
+		SSF_STRING rs;
+		ttyFmtWorker(rs);
+		return "[fmt:" + rs + "]";
+		}
+		
 	static void sttr_register() {
 		#ifdef STTR_ENABLED
+		#define STTR_REGF_ALIAS(C,X,A,F) regField<C,decltype(&C::X),F>(&C::X,#A).setUserFlags(F)
 		// Reflection stuff - see snappertt/sttr on github for more info. You don't need STTR to use this library
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
 		R.beginClass<sttfont_format>("sttfont_format")
@@ -118,10 +198,23 @@ struct sttfont_format {
 			.STTR_REGF(sttfont_format,format,STTR_JSON_ENABLED)
 			.STTR_REGF(sttfont_format,flags,STTR_JSON_ENABLED)
 			
+			.STTR_REG(sttfont_format,clone)
 			.STTR_REG(sttfont_format,combine)
+			.STTR_REG(sttfont_format,combineWithColour)
 			
-			.STTR_REG(sttfont_format,color)
-			.STTR_REG(sttfont_format,colour)
+			.STTR_REG(sttfont_format,setBold)
+			.STTR_REG(sttfont_format,setItalic)
+			.STTR_REG(sttfont_format,setUnderline)
+			.STTR_REG(sttfont_format,setStrikethrough)
+			.STTR_REG(sttfont_format,isBold)
+			.STTR_REG(sttfont_format,isItaic)
+			.STTR_REG(sttfont_format,isUnderline)
+			.STTR_REG(sttfont_format,isStrikethrough)
+			.STTR_REG(sttfont_format,hasFormats)
+			.STTR_REG(sttfont_format,resetColour)
+			
+			.STTR_REGF_ALIAS(sttfont_format,colour_luasafe,colour,0)
+			.STTR_REGF_ALIAS(sttfont_format,color_luasafe,color,0)
 			.STTR_REG(sttfont_format,bold)
 			.STTR_REG(sttfont_format,italic)
 			.STTR_REG(sttfont_format,underline)
@@ -163,7 +256,12 @@ struct sttfont_format {
 			.STTR_REG(sttfont_format,selectColour)
 			
 			.STTR_REG(sttfont_format,reset)
+			
+			.STTR_REG(sttfont_format,getTtyFormatCodeBegin)
+			.STTR_REG(sttfont_format,getTtyFormatCodeEnd)
+			.STTR_REG(sttfont_format,debugDump)
 		.endClass();
+		#undef STTR_REGF_ALIAS
 		#endif
 		}
 	STTFONT_STTR_CLASS_SIG_NON_POLY(sttfont_format)
@@ -224,12 +322,12 @@ struct sttfont_formatted_text {
 	sttfont_formatted_text& operator = (sttfont_formatted_text_MS obj){ mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); return *this; }
 	sttfont_formatted_text& operator = (const sttfont_formatted_text & obj){ mItems = obj.mItems; activeFormat = obj.activeFormat; return *this; }
 	void resetFormat() { activeFormat = sttfont_format(); }
-	sttfont_formatted_text& operator << (const SSF_STRING & text) 	{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this; }
-	sttfont_formatted_text& operator << (SSF_STRING_MS text) 		{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator << (const char * text) 		{ mItems.push_back(sttfont_formatted_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator += (const SSF_STRING & text) 	{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this; }
-	sttfont_formatted_text& operator += (SSF_STRING_MS text) 		{ mItems.push_back(sttfont_formatted_text_item(text, activeFormat)); resetFormat(); return *this;  }
-	sttfont_formatted_text& operator += (const char * text) 			{ mItems.push_back(sttfont_formatted_text_item(SSF_STRING(text), activeFormat)); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator << (const SSF_STRING & text) 	{ append_plaintext_str(text, &activeFormat); resetFormat(); return *this; }
+	sttfont_formatted_text& operator << (SSF_STRING_MS text) 		{ append_plaintext_MS(std::move(text), &activeFormat); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator << (const char * text) 		{ append_plaintext_MS(SSF_STRING(text), &activeFormat); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator += (const SSF_STRING & text) 	{ append_plaintext_str(text, &activeFormat); resetFormat(); return *this; }
+	sttfont_formatted_text& operator += (SSF_STRING_MS text) 		{ append_plaintext_MS(std::move(text), &activeFormat); resetFormat(); return *this;  }
+	sttfont_formatted_text& operator += (const char * text) 			{ append_plaintext_str(SSF_STRING(text), &activeFormat); resetFormat(); return *this;  }
 	sttfont_formatted_text& operator << (const sttfont_format & format) 		{ activeFormat.combine(format); return *this; }
 	sttfont_formatted_text& operator << (const sttfont_format_reset & reset) 	{ resetFormat(); return *this; }
 	sttfont_formatted_text& operator << (const sttfont_formatted_text_item & obj) { mItems.push_back(obj); return *this; }
@@ -252,15 +350,18 @@ struct sttfont_formatted_text {
 		R.beginClass<sttfont_formatted_text>("sttfont_formatted_text")
 			.STTR_REGF(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
 			.STTR_REGF(sttfont_formatted_text,activeFormat,STTR_JSON_ENABLED)
+			.STTR_REGF(sttfont_formatted_text,swap,0)
 			.STTR_REGF(sttfont_formatted_text,copy,0)
 			.STTR_REGF(sttfont_formatted_text,size,0)
 			.STTR_REGF(sttfont_formatted_text,length,0)
 			.STTR_REGF(sttfont_formatted_text,isEmpty,0)
 			.STTR_REGF(sttfont_formatted_text,getString,0)
+			.STTR_REGF(sttfont_formatted_text,getTtyString,0)
 			.STTR_REGF(sttfont_formatted_text,getStringTruncated,0)
 			.STTR_REGF(sttfont_formatted_text,append_luasafe,0)
+			.STTR_REGF(sttfont_formatted_text,append_plaintext_str,0)
 			.STTR_REGF(sttfont_formatted_text,clear,0)
-			.STTR_REGF(sttfont_formatted_text,setColour,0)
+			.STTR_REGF(sttfont_formatted_text,overrideColour,0)
 			.STTR_REGF(sttfont_formatted_text,consolidateSegments,0)
 			.STTR_REGF(sttfont_formatted_text,back,0)
 			.STTR_REGF_ALIAS(sttfont_formatted_text,getIndexAt_luasafe,getIndexAt,0)
@@ -270,6 +371,8 @@ struct sttfont_formatted_text {
 			.STTR_REGF_ALIAS(sttfont_formatted_text,substr_luasafe,substr,0)
 			.STTR_REGF_ALIAS(sttfont_formatted_text,extract_luasafe,extract,0)
 			.STTR_REGF_ALIAS(sttfont_formatted_text,tokenise_luasafe,tokenise,0)
+			
+			
 		.endClass();
 		#undef STTR_REGF_ALIAS
 		#endif
@@ -317,6 +420,18 @@ struct sttfont_formatted_text {
 		return r;
 		}
 		
+	SSF_STRING getTtyString() const {
+		/// Returns a string of all the segments linked together with Tty format codes applied
+		SSF_STRING r;
+		r.reserve(size() + mItems.size()*32);
+		for (unsigned int  i = 0; i < mItems.size(); ++i ) {
+			r += mItems[i].format.getTtyFormatCodeBegin();
+			r += mItems[i].text;
+			r += mItems[i].format.getTtyFormatCodeEnd();
+			}
+		return r;
+		}
+		
 	SSF_STRING getStringTruncated(const unsigned int maxLen) const {
 		/// Returns a plain unformatted string of all the segments stitched together, cut to max len
 		SSF_STRING r;
@@ -333,6 +448,7 @@ struct sttfont_formatted_text {
 		}
 		
 	void append_luasafe(const sttfont_formatted_text & obj) {
+		/// Appends a sttfont_formatted_text to this
 		if (obj.mItems.size() == 1 && mItems.size()) {
 			if (mItems[mItems.size()-1].format == obj.mItems[0].format) {
 				mItems[mItems.size()-1].text += obj.mItems[0].text;
@@ -342,7 +458,39 @@ struct sttfont_formatted_text {
 		mItems.insert(mItems.end(), obj.mItems.begin(), obj.mItems.end());
 		activeFormat = obj.activeFormat;
 		}
+	
+	
+	void append_plaintext_MS (SSF_STRING_MS str, const sttfont_format* fmt) {
+		/// Appends a plaintext string with optional formatting
+		/// if fmt is NULL then use activeFormat
+		/// if fmt matches the format of the last segment then append to the last segment
+		/// if not create a new segment with the specified text and format
+		if (!fmt) {
+			append_plaintext_MS(std::move(str), &activeFormat);
+			return;
+			}
+		const uint32_t sz = mItems.size();
+		if (sz) {
+			if (mItems[sz-1].format == *fmt) {
+				mItems[sz-1].text.append(str);
+				return;
+				}
+			}
+		sttfont_formatted_text_item ti;
+		ti.text = std::move(str);
+		ti.format = *fmt;
+		mItems.push_back(ti);
+		}
 		
+	inline void append_plaintext (const char * str, const uint32_t len, const sttfont_format* fmt) {
+		SSF_STRING hstr(str, len);
+		append_plaintext_MS(std::move(hstr), fmt);
+		}
+	
+	inline void append_plaintext_str(const SSF_STRING & str, const sttfont_format* fmt) {
+		append_plaintext(str.data(), str.size(), fmt);
+		}
+	
 	inline void append(const sttfont_formatted_text & obj) { return append_luasafe(obj); }
 	
 	void append(sttfont_formatted_text_MS obj) {
@@ -360,10 +508,9 @@ struct sttfont_formatted_text {
 		*this = sttfont_formatted_text();
 		}
 
-	void setColour(const sttfont_format & fmt) {
-		/// If any pieces do not have their colour set, set the colour to fmt's colour
+	void overrideColour_worker(const sttfont_format & fmt, const bool force) {
 		for (sttfont_formatted_text_item & sfti : mItems) {
-			if (!(sfti.format.flags & sttfont_format::FORMAT_FLAGS_COLOUR_SET)) {
+			if (force || !(sfti.format.flags & sttfont_format::FORMAT_FLAGS_COLOUR_SET)) {
 				uint8_t nfmt  = fmt.format | sfti.format.format;
 				uint8_t nflg  = fmt.flags;
 				sfti.format = fmt;
@@ -371,6 +518,16 @@ struct sttfont_formatted_text {
 				sfti.format.flags  = nflg;
 				}
 			}
+		}
+		
+	void overrideColour(const sttfont_format & fmt) {
+		/// If any pieces do not have their colour set, then override the default colour to @fmt's colour
+		overrideColour_worker(fmt, false);
+		}
+		
+	void forceOverrideColour(const sttfont_format & fmt) {
+		/// Force override colour in all segments
+		overrideColour_worker(fmt, true);
 		}
 		
 	void consolidateSegments() {
