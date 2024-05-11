@@ -11,6 +11,40 @@
 	#include <mutex>
 #endif
 
+// SSF_PCFC_TEMPORARY_ALLOCATOR
+// Purpose: allows data to be stored in a temporary container (such as a bump allocator)
+// that is disposed of after consuming. Object level scope
+// Must implement stt::allocatorI from github/SnapperTT/stt-stl
+
+#ifndef SSF_PCFC_TEMPORARY_ALLOCATOR
+	#define SSF_PCFC_TEMPORARY_ALLOCATOR int
+	#define SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED 0
+#else
+	#ifndef SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+		#define SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED 1
+	#endif
+#endif
+
+// SSF_STACK_TEMPORATY_ALLOCATOR
+// Purpose: for an explictly temporary allocator that has function level scope
+// Must implement stt::allocatorI from github/SnapperTT/stt-stl
+
+#ifndef SSF_STACK_TEMPORATY_ALLOCATOR
+	#define SSF_STACK_TEMPORATY_ALLOCATOR int
+	#define SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED 0
+#else
+	#ifndef SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+		#define SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED 1
+	#endif
+#endif
+
+#if (SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED) && (!SSF_STT_STL_ALLOCATOR_ENABLED)
+	#error Stack temporary allocator is enabled buy stt-stl allocators are not (define SSF_STT_STL_ALLOCATOR_ENABLED 1 and include stt-stl/pages)
+#endif
+#if (SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED) && (!SSF_STT_STL_ALLOCATOR_ENABLED)
+	#error Object temporary allocator is enabled buy stt-stl allocators are not (define SSF_STT_STL_ALLOCATOR_ENABLED 1 and include stt-stl/pages)
+#endif
+
 typedef uint32_t pcfc_handle;
 class producer_consumer_font_cache;
 
@@ -19,6 +53,8 @@ class producer_consumer_font_cache;
 #else
 	#define SSF_STATE_TRANSFER SSF_MUTEX mMutex; state_t
 #endif
+
+#define SSF_PCFC_PFCF_FORMATTED_TEXT_MS producer_consumer_font_cache::pcfc_formatted_text&&
 #define LZZ_INLINE inline
 struct pcfc_prerendered_text : public sttfont_prerendered_text
 {
@@ -53,8 +89,19 @@ protected:
     SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerender;
     SSF_VECTOR <pcfc_handle> destroyPrerender;
     SSF_VECTOR <producer_consumer_font_cache::pcfc_formatted_text> text;
+    SSF_PCFC_TEMPORARY_ALLOCATOR temporaryAllocator;
     void * userdata;
+  private:
+    state_t (state_t const & other);
+    state_t & operator = (state_t const & other);
+  public:
     state_t ();
+    ~ state_t ();
+    void push_back_prerender (producer_consumer_font_cache::pcfc_consumer_prerendered_text const & prt);
+    void push_back_destroyPrerender (pcfc_handle const prt);
+    void push_back_text_cr (producer_consumer_font_cache::pcfc_formatted_text const & prt);
+    void push_back_text (producer_consumer_font_cache::pcfc_formatted_text const & prt);
+    void push_back_text (SSF_PCFC_PFCF_FORMATTED_TEXT_MS prt);
     void swap (state_t & s);
     void clear (bool const checkForJobs = true);
   };
@@ -98,6 +145,18 @@ public:
   bool dispatchSingleText (pcfc_handle const texId);
   void * getUserdata ();
 };
+LZZ_INLINE void producer_consumer_font_cache::state_t::push_back_text (producer_consumer_font_cache::pcfc_formatted_text const & prt)
+                                                                                                         {
+			push_back_text_cr(prt);
+			}
+LZZ_INLINE void producer_consumer_font_cache::state_t::push_back_text (SSF_PCFC_PFCF_FORMATTED_TEXT_MS prt)
+                                                                                {
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				push_back_text_cr(prt);
+			#else
+				text.push_back(std::move(prt));
+			#endif
+			}
 template <typename T>
 int producer_consumer_font_cache::dispatchPrerenderJobs ()
                                     {
@@ -159,12 +218,86 @@ producer_consumer_font_cache::pcfc_consumer_prerendered_text::pcfc_consumer_prer
                                                  {}
 producer_consumer_font_cache::state_t::state_t ()
   : userdata (NULL)
-                                           {}
+                                           {
+			// binds a custom allocator to the vectors (see github/SnapperTT/stt-stl)
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				prerender.setAllocator(&temporaryAllocator);
+				destroyPrerender.setAllocator(&temporaryAllocator);
+				text.setAllocator(&temporaryAllocator);
+			#endif
+			}
+producer_consumer_font_cache::state_t::~ state_t ()
+                           {
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				// no not deallocate or call destructors for the vectors
+				// just let ~temporaryAllocator() release the underlying arenas
+				prerender.markInterned();
+				destroyPrerender.markInterned();
+				text.markInterned();
+			#endif
+			}
+void producer_consumer_font_cache::state_t::push_back_prerender (producer_consumer_font_cache::pcfc_consumer_prerendered_text const & prt)
+                                                                                                                  {
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				// copy into temporaryAllocator and push_back
+				prerender.push_back(producer_consumer_font_cache::pcfc_consumer_prerendered_text());
+				producer_consumer_font_cache::pcfc_consumer_prerendered_text& p = prerender.back();
+				
+				p.width = prt.width;
+				p.height = prt.height;
+				p.handle = prt.handle;
+				sttfont_formatted_text::copyInterned(&temporaryAllocator, p.text, prt.text, true);
+				p.text.markInterned();
+				
+				//stt::stt_dbg_log("push back PCRT %i (w: %i, h: %i, [%s])", p.text.size(), p.width, p.height, p.text.getString().c_str());
+				//stt::stt_dbg_log("resLen: %i, %i", prerender.back().text.size(), prerender.back().text.mItems.size());
+			#else
+				prerender.push_back(prt);
+			#endif
+			}
+void producer_consumer_font_cache::state_t::push_back_destroyPrerender (pcfc_handle const prt)
+                                                                       {
+			destroyPrerender.push_back(prt);
+			}
+void producer_consumer_font_cache::state_t::push_back_text_cr (producer_consumer_font_cache::pcfc_formatted_text const & prt)
+                                                                                                     {
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				// create a copy of prt using temporaryAllocator, then "intern" it
+				// markInterned() makes containers not deallocate through destructor
+				// instead the allocator itself must be discarded to deallocate
+				
+				text.push_back(producer_consumer_font_cache::pcfc_formatted_text());
+				producer_consumer_font_cache::pcfc_formatted_text& tmp = text.back();
+				// pushing_back seems to invoke sttfont_formatted_text::copy/move which causes allocator information to be lost
+				// i'm not sure why that happens but text.resize -> realloc doesn't cause this to happen
+				
+				
+				sttfont_formatted_text::copyInterned(&temporaryAllocator, tmp.text, prt.text, true);
+				tmp.text.mItems.markInterned();
+				tmp.x = prt.x;
+				tmp.y = prt.y;
+				
+				//stt::stt_dbg_log("push back TEXT %i (x: %i, y: %i, [%s])", tmp.text.size(), tmp.x, tmp.y, tmp.text.getString().c_str());
+				//stt::stt_dbg_log("resLen: %i, %i", text.back().text.size(), text.back().text.mItems.size());
+			#else
+				text.push_back(prt);
+			#endif
+			}
 void producer_consumer_font_cache::state_t::swap (state_t & s)
                                        {
 			prerender.swap(s.prerender);
 			destroyPrerender.swap(s.destroyPrerender);
 			text.swap(s.text);
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				temporaryAllocator.swap(s.temporaryAllocator);
+				// all data with store.mAllocatorI = &temporaryAllocator must
+				// have their allocator pointers swapped too 
+				prerender.swap_allocator_pointers(s.prerender);
+				destroyPrerender.swap_allocator_pointers(s.destroyPrerender);
+				text.swap_allocator_pointers(s.text);
+				// we don't need to swap the allocator pointers of
+				// text->mItems as they are interned on push_back
+			#endif
 			void * tmp = s.userdata;
 			s.userdata = userdata;
 			userdata = tmp;
@@ -181,6 +314,9 @@ void producer_consumer_font_cache::state_t::clear (bool const checkForJobs)
 			destroyPrerender.clear();
 			text.clear();
 			userdata = NULL;
+			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
+				temporaryAllocator.clear();
+			#endif
 			}
 pcfc_handle producer_consumer_font_cache::getNextPrerenderToken ()
                                             {
@@ -247,24 +383,63 @@ void producer_consumer_font_cache::addFormatFontManagedBoth (uint8_t formatMask,
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                  {
-		sttfont_formatted_text tmp(c, maxLen);
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
+		tmp.appendCBuff(c, maxLen);
+		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			assert(tmp.mItems.getCustomAllocator() == &alloc);
+		#endif
 		return pushText(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                               {
-		sttfont_formatted_text tmp(str);
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
+		tmp += str;
+		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			assert(tmp.mItems.getCustomAllocator() == &alloc);
+		#endif
 		return pushText(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                                               {
-		sttfont_formatted_text tmp;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
 		tmp << format; tmp.appendCBuff(c, maxLen);
+		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			assert(tmp.mItems.getCustomAllocator() == &alloc);
+		#endif
 		return pushText(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                            {
-		sttfont_formatted_text tmp;
-		tmp << format << str;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
+		tmp << format << str; // HERE ARE THE ALLOCS
+		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			assert(tmp.mItems.getCustomAllocator() == &alloc);
+		#endif
+		
 		return pushText(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, sttfont_formatted_text const & str, int * xOut, int * widthOut, int * heightOut)
@@ -273,11 +448,22 @@ pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, st
 			int xx = processFormatted(str, x, y, false, widthOut, heightOut);
 			if (xOut) *xOut = xx;
 			}
-		pcfc_formatted_text p;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			pcfc_formatted_text p;
+			p.text.setAllocator(&alloc);
+		#else
+			pcfc_formatted_text p;
+		#endif
 		p.text = str;
+		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			assert(p.text.mItems.getCustomAllocator() == &alloc);
+		#endif
+		
 		p.x = x;
 		p.y = y;
-		producerState.text.push_back(std::move(p));
+		producerState.push_back_text(std::move(p));
 		return producerState.text.size() - 1; 
 		}
 void producer_consumer_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
@@ -302,17 +488,28 @@ void producer_consumer_font_cache::renderTextToObject (sttfont_prerendered_text 
 		p->handle = getNextPrerenderToken();
 		p->owner = this;
 		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+		#endif
 		pcfc_consumer_prerendered_text p2;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			p2.text.setAllocator(&alloc);
+		#endif
 		p2.width = p->width;
 		p2.height = p->height;
 		p2.handle = p->handle;
 		p2.text = str;
 		
-		producerState.prerender.push_back(p2);
+		
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+		assert(p2.text.mItems.getCustomAllocator() == &alloc);
+		#endif
+		
+		producerState.push_back_prerender(p2);
 		}
 void producer_consumer_font_cache::destroyPrerender (pcfc_handle const handle)
                                                         {
-		producerState.destroyPrerender.push_back(handle);
+		producerState.push_back_destroyPrerender(handle);
 		}
 void producer_consumer_font_cache::pushUserdata (void * data)
                                       {
@@ -333,23 +530,45 @@ void producer_consumer_font_cache::submitToConsumer ()
 		}
 pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                              {
-		sttfont_formatted_text tmp(c, maxLen);
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
+		tmp.appendCBuff(c, maxLen);
 		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                           {
-		sttfont_formatted_text tmp(str);
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
+		tmp += str;
 		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                                                           {
-		sttfont_formatted_text tmp;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
 		tmp << format; tmp.appendCBuff(c, maxLen);
 		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
 		}
 pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, sttfont_format const format, SSF_STRING const & str, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                                        {
-		sttfont_formatted_text tmp;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			sttfont_formatted_text tmp(&alloc);
+		#else
+			sttfont_formatted_text tmp;
+		#endif
 		tmp << format << str;
 		return pushTextConsumerSide(x, y, tmp, xOut, widthOut, heightOut);
 		}
@@ -359,11 +578,17 @@ pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int
 			int xx = processFormatted(str, x, y, false, widthOut, heightOut);
 			if (xOut) *xOut = xx;
 			}
-		pcfc_formatted_text p;
+		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
+			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
+			pcfc_formatted_text p;
+			p.text.setAllocator(&alloc);
+		#else
+			pcfc_formatted_text p;
+		#endif
 		p.text = str;
 		p.x = x;
 		p.y = y;
-		consumerState.text.push_back(std::move(p));
+		consumerState.push_back_text(std::move(p));
 		return consumerState.text.size() - 1; 
 		}
 bool producer_consumer_font_cache::receiveFromProducer ()

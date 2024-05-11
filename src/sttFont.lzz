@@ -41,7 +41,10 @@ namespace sttr {
 	#include <string>
 	#define SSF_STRING std::string
 #endif
-
+#ifndef SSF_STRING_VIEW
+	#include <string_view>
+	#define SSF_STRING_VIEW std::string_view
+#endif
 
 // new and delete macros
 // all calls in this library are done with "foo * f = SSF_NEW(f)"

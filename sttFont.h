@@ -36,7 +36,10 @@ namespace sttr {
 	#include <string>
 	#define SSF_STRING std::string
 #endif
-
+#ifndef SSF_STRING_VIEW
+	#include <string_view>
+	#define SSF_STRING_VIEW std::string_view
+#endif
 
 // new and delete macros
 // all calls in this library are done with "foo * f = SSF_NEW(f)"
@@ -96,6 +99,14 @@ struct sttfont_tmpArr {
 #endif
 struct sttfont_formatted_text;
 class sttfont_font_cache;
+namespace stt {
+	struct allocatorI;
+	}
+// purpose: an allocator that puts string objects onto a stack memory buffer
+// when the buffer falls out of scope then the buffer is released
+#ifndef SSF_STT_STL_ALLOCATOR_ENABLED
+	#define SSF_STT_STL_ALLOCATOR_ENABLED 0
+#endif
 #define LZZ_INLINE inline
 struct sttfont_lookupHint
 {
@@ -205,6 +216,7 @@ struct sttfont_formatted_text_item
   sttfont_formatted_text_item (SSF_STRING const & _text, sttfont_format const & _format);
   sttfont_formatted_text_item (SSF_STRING_MS _text, sttfont_format const & _format);
   sttfont_formatted_text_item & setCallback (sttfont_format_callback * _cb);
+  void setAllocator (stt::allocatorI * alloc);
   static void sttr_register ();
   void * sttr_getClassSig () const;
   char const * const sttr_getClassName () const;
@@ -222,6 +234,7 @@ struct sttfont_formatted_text
   SSF_VECTOR <sttfont_formatted_text_item> mItems;
   sttfont_format activeFormat;
   sttfont_formatted_text ();
+  sttfont_formatted_text (stt::allocatorI * alloc);
   sttfont_formatted_text (sttfont_formatted_text const & obj);
   sttfont_formatted_text (SSF_STRING const & text);
   sttfont_formatted_text (SSF_STRING_MS text);
@@ -233,9 +246,11 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator = (sttfont_formatted_text_MS obj);
   sttfont_formatted_text & operator = (sttfont_formatted_text const & obj);
   void resetFormat ();
+  sttfont_formatted_text & operator << (SSF_STRING_VIEW const & text);
   sttfont_formatted_text & operator << (SSF_STRING const & text);
   sttfont_formatted_text & operator << (SSF_STRING_MS text);
   sttfont_formatted_text & operator << (char const * text);
+  sttfont_formatted_text & operator += (SSF_STRING_VIEW const & text);
   sttfont_formatted_text & operator += (SSF_STRING const & text);
   sttfont_formatted_text & operator += (SSF_STRING_MS text);
   sttfont_formatted_text & operator += (char const * text);
@@ -244,9 +259,17 @@ struct sttfont_formatted_text
   sttfont_formatted_text & operator << (sttfont_formatted_text_item const & obj);
   sttfont_formatted_text & operator << (sttfont_formatted_text_item_MS obj);
   sttfont_formatted_text & appendCBuff (char const * text, uint32_t const maxLen);
+  void allocatorAwareAppend (sttfont_formatted_text_item const & obj);
+  void allocatorAwareAppendMv (sttfont_formatted_text_item_MS obj);
+  void allocatorAwareAssign (sttfont_formatted_text const & other);
+  void allocatorAwareAssignMv (sttfont_formatted_text_MS other);
   static void sttr_register ();
   void * sttr_getClassSig () const;
   char const * const sttr_getClassName () const;
+  void setAllocator (stt::allocatorI * alloc);
+  void setCustomAllocatorForTextItem (sttfont_formatted_text_item & ti);
+  static void copyInterned (stt::allocatorI * alloc, sttfont_formatted_text & dst, sttfont_formatted_text const & src, bool const internStrings);
+  void markInterned ();
   sttfont_formatted_text copy () const;
   void swap (sttfont_formatted_text & other);
   size_t size () const;
@@ -257,6 +280,7 @@ struct sttfont_formatted_text
   SSF_STRING getStringTruncated (unsigned int const maxLen) const;
   void append_luasafe (sttfont_formatted_text const & obj);
   void append_plaintext_MS (SSF_STRING_MS str, sttfont_format const * fmt);
+  void append_plaintext_BUF (char const * str, uint32_t const len, sttfont_format const * fmt);
   void append_plaintext (char const * str, uint32_t const len, sttfont_format const * fmt);
   void append_plaintext_str (SSF_STRING const & str, sttfont_format const * fmt);
   void append (sttfont_formatted_text const & obj);
@@ -460,12 +484,11 @@ LZZ_INLINE bool sttfont_format::hasFormats () const
                                        { return format; }
 LZZ_INLINE void sttfont_formatted_text::append_plaintext (char const * str, uint32_t const len, sttfont_format const * fmt)
                                                                                                        {
-		SSF_STRING hstr(str, len);
-		append_plaintext_MS(std::move(hstr), fmt);
+		append_plaintext_BUF(str,len, fmt);
 		}
 LZZ_INLINE void sttfont_formatted_text::append_plaintext_str (SSF_STRING const & str, sttfont_format const * fmt)
                                                                                             {
-		append_plaintext(str.data(), str.size(), fmt);
+		append_plaintext_BUF(str.data(), str.size(), fmt);
 		}
 LZZ_INLINE void sttfont_formatted_text::append (sttfont_formatted_text const & obj)
                                                                { return append_luasafe(obj); }
@@ -740,10 +763,16 @@ sttfont_formatted_text_item::sttfont_formatted_text_item (SSF_STRING const & _te
   : text (_text), format (_format), callback (0)
                                                                                                                                             {}
 sttfont_formatted_text_item::sttfont_formatted_text_item (SSF_STRING_MS _text, sttfont_format const & _format)
-  : text (_text), format (_format), callback (0)
-                                                                                                                                                    {}
+  : text (std::move(_text)), format (_format), callback (0)
+                                                                                                                                                               {}
 sttfont_formatted_text_item & sttfont_formatted_text_item::setCallback (sttfont_format_callback * _cb)
                                                                                { callback = _cb; return *this; }
+void sttfont_formatted_text_item::setAllocator (stt::allocatorI * alloc)
+                                                  {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			text.setAllocator(alloc);
+		#endif
+		}
 void sttfont_formatted_text_item::sttr_register ()
                                     {
 		#ifdef STTR_ENABLED
@@ -774,8 +803,15 @@ char const * const sttfont_formatted_uipair::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_formatted_text_item > ( ) ; }
 sttfont_formatted_text::sttfont_formatted_text ()
                                 {}
+sttfont_formatted_text::sttfont_formatted_text (stt::allocatorI * alloc)
+                                                        {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+		if (alloc)
+			mItems.setAllocator(alloc);
+		#endif
+		}
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text const & obj)
-                                                                   { mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); }
+                                                                   { allocatorAwareAssign(obj); }
 sttfont_formatted_text::sttfont_formatted_text (SSF_STRING const & text)
                                                         { *this << text; }
 sttfont_formatted_text::sttfont_formatted_text (SSF_STRING_MS text)
@@ -785,46 +821,93 @@ sttfont_formatted_text::sttfont_formatted_text (char const * text)
 sttfont_formatted_text::sttfont_formatted_text (char const * text, uint32_t const maxLen)
                                                                          { appendCBuff(text, maxLen); }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item_MS text)
-                                                                                        { *this << text; }
+                                                                                        { allocatorAwareAppendMv(std::move(text)); }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_item const & text)
-                                                                                { *this << text; }
+                                                                                { allocatorAwareAppend(text); }
 sttfont_formatted_text::sttfont_formatted_text (sttfont_formatted_text_MS obj)
-                                                             { mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); }
+                                                             { allocatorAwareAssignMv(std::move(obj)); }
 sttfont_formatted_text & sttfont_formatted_text::operator = (sttfont_formatted_text_MS obj)
-                                                                          { mItems = std::move(obj.mItems); activeFormat = std::move(obj.activeFormat); return *this; }
+                                                                          { allocatorAwareAssignMv(std::move(obj)); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator = (sttfont_formatted_text const & obj)
-                                                                               { mItems = obj.mItems; activeFormat = obj.activeFormat; return *this; }
+                                                                               { allocatorAwareAssign(obj); return *this; }
 void sttfont_formatted_text::resetFormat ()
                            { activeFormat = sttfont_format(); }
+sttfont_formatted_text & sttfont_formatted_text::operator << (SSF_STRING_VIEW const & text)
+                                                                                        { append_plaintext_BUF(text.data(), text.length(), &activeFormat); resetFormat(); return *this;  }
 sttfont_formatted_text & sttfont_formatted_text::operator << (SSF_STRING const & text)
                                                                         { append_plaintext_str(text, &activeFormat); resetFormat(); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (SSF_STRING_MS text)
                                                                                 { append_plaintext_MS(std::move(text), &activeFormat); resetFormat(); return *this;  }
 sttfont_formatted_text & sttfont_formatted_text::operator << (char const * text)
-                                                                                { append_plaintext_MS(SSF_STRING(text), &activeFormat); resetFormat(); return *this;  }
+                                                                                { appendCBuff(text, -1); resetFormat(); return *this;  }
+sttfont_formatted_text & sttfont_formatted_text::operator += (SSF_STRING_VIEW const & text)
+                                                                                        { append_plaintext_BUF(text.data(), text.length(),  &activeFormat); resetFormat(); return *this;  }
 sttfont_formatted_text & sttfont_formatted_text::operator += (SSF_STRING const & text)
                                                                         { append_plaintext_str(text, &activeFormat); resetFormat(); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator += (SSF_STRING_MS text)
                                                                                 { append_plaintext_MS(std::move(text), &activeFormat); resetFormat(); return *this;  }
 sttfont_formatted_text & sttfont_formatted_text::operator += (char const * text)
-                                                                                        { append_plaintext_str(SSF_STRING(text), &activeFormat); resetFormat(); return *this;  }
+                                                                                        { appendCBuff(text, -1); resetFormat(); return *this;  }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_format const & format)
                                                                                         { activeFormat.combine(format); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_format_reset const & reset)
                                                                                         { resetFormat(); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_text_item const & obj)
-                                                                                      { mItems.push_back(obj); return *this; }
+                                                                                      { allocatorAwareAppend(obj); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::operator << (sttfont_formatted_text_item_MS obj)
-                                                                                        { mItems.push_back(obj); return *this; }
+                                                                                        { allocatorAwareAppendMv(std::move(obj)); return *this; }
 sttfont_formatted_text & sttfont_formatted_text::appendCBuff (char const * text, uint32_t const maxLen)
                                                                                       {
-		if (maxLen == uint32_t(-1)) { *this << text; return *this; }
 		const char* p = text;
 		while (*p) p++;
 		uint32_t len = (p - text);
 		if (len > maxLen) len = maxLen;
-		*this << SSF_STRING(text, len);
+		append_plaintext_BUF(text, len, NULL);
 		return *this;
+		}
+void sttfont_formatted_text::allocatorAwareAppend (sttfont_formatted_text_item const & obj)
+                                                                           {
+		// appends into this using this' allocator
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			sttfont_formatted_text_item tmp;
+				setCustomAllocatorForTextItem(tmp);
+			tmp = obj; // copy into custom allocated memory
+			mItems.push_back(std::move(tmp));
+		#else
+			mItems.push_back(obj);
+		#endif
+		}
+void sttfont_formatted_text::allocatorAwareAppendMv (sttfont_formatted_text_item_MS obj)
+                                                                        {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			if (mItems.getCustomAllocator())
+				return allocatorAwareAppend(obj);
+		#else
+			mItems.push_back(std::move(obj));
+		#endif
+		}
+void sttfont_formatted_text::allocatorAwareAssign (sttfont_formatted_text const & other)
+                                                                       {
+		// copies other's data -> this, keeping this' allocator
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			stt::allocatorI * a = mItems.getCustomAllocator();
+			if (a)
+				return copyInterned(a, *this, other, false);
+		#endif
+		mItems = other.mItems;
+		activeFormat = other.activeFormat;
+		}
+void sttfont_formatted_text::allocatorAwareAssignMv (sttfont_formatted_text_MS other)
+                                                                     {
+		// moving other -> this, keeping this' allocator
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			if (mItems.getCustomAllocator())
+				return allocatorAwareAssign(other);
+			//if (other.mItems.getCustomAllocator())
+			//	mItems = std::move(other.items); // stt::vector(stt::vector&&) will auto-move allocator
+		#endif
+		mItems = std::move(other.mItems);
+		activeFormat = other.activeFormat;
 		}
 void sttfont_formatted_text::sttr_register ()
                                     {
@@ -866,6 +949,56 @@ void * sttfont_formatted_text::sttr_getClassSig () const
         { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text > ( ) ; }
 char const * const sttfont_formatted_text::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_formatted_text > ( ) ; }
+void sttfont_formatted_text::setAllocator (stt::allocatorI * alloc)
+                                                   {
+		// For use with stt-stl
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			mItems.setAllocator(alloc);
+		#endif
+		}
+void sttfont_formatted_text::setCustomAllocatorForTextItem (sttfont_formatted_text_item & ti)
+                                                                             {
+		// Internal function that propgoates mItem.sso.d.store.mAllocator to any text its
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			stt::allocatorI* alloc = mItems.getCustomAllocator();
+			if (alloc)
+				ti.setAllocator(alloc);
+		#endif
+		}
+void sttfont_formatted_text::copyInterned (stt::allocatorI * alloc, sttfont_formatted_text & dst, sttfont_formatted_text const & src, bool const internStrings)
+                                                                                                                                                      {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			// copies to an empty container which will use allocator alloc
+			// strings within this item can be optionally marked as interned
+			assert(dst.isEmpty());
+			assert(alloc);
+			
+			dst.mItems.setAllocator(alloc);
+			uint32_t nItems = src.mItems.size();
+			dst.mItems.resize(nItems);
+			for (uint32_t i = 0; i < nItems; ++i) {
+				dst.mItems[i].text.setAllocator(alloc);
+				dst.mItems[i].text = src.mItems[i].text;
+				if (internStrings)
+					dst.mItems[i].text.markInterned(); // do not deallocate through destructor
+				dst.mItems[i].format = src.mItems[i].format;
+				}
+			dst.activeFormat = src.activeFormat;
+		#else
+			// copy
+			dst = src;
+		#endif
+		}
+void sttfont_formatted_text::markInterned ()
+                            {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+		// marks all elements as interned
+			uint32_t nItems = mItems.size();
+			for (uint32_t i = 0; i < nItems; ++i)
+				mItems[i].text.markInterned();
+			mItems.markInterned();
+		#endif
+		}
 sttfont_formatted_text sttfont_formatted_text::copy () const
                                             {
 		// Explicit copy - named function
@@ -944,8 +1077,23 @@ void sttfont_formatted_text::append_luasafe (sttfont_formatted_text const & obj)
 				return;
 				}
 			}
-		mItems.insert(mItems.end(), obj.mItems.begin(), obj.mItems.end());
 		activeFormat = obj.activeFormat;
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+		stt::allocatorI* a = mItems.getCustomAllocator();
+		if (a) {
+			uint32_t szInit = mItems.size();
+			uint32_t otherSz = obj.mItems.size();
+			if (!otherSz) return;
+			mItems.resize(szInit + otherSz);
+			for (uint32_t i = 0; i < otherSz; ++i) {
+				mItems[szInit+i].text.setAllocator(a);
+				mItems[szInit+i].text = obj.mItems[i].text;
+				mItems[szInit+i].format = obj.mItems[i].format;
+				}
+			return;
+			}
+		#endif
+		mItems.insert(mItems.end(), obj.mItems.begin(), obj.mItems.end());
 		}
 void sttfont_formatted_text::append_plaintext_MS (SSF_STRING_MS str, sttfont_format const * fmt)
                                                                                 {
@@ -953,10 +1101,8 @@ void sttfont_formatted_text::append_plaintext_MS (SSF_STRING_MS str, sttfont_for
 		/// if fmt is NULL then use activeFormat
 		/// if fmt matches the format of the last segment then append to the last segment
 		/// if not create a new segment with the specified text and format
-		if (!fmt) {
-			append_plaintext_MS(std::move(str), &activeFormat);
-			return;
-			}
+		if (!fmt)
+			return append_plaintext_MS(std::move(str), &activeFormat);
 		const uint32_t sz = mItems.size();
 		if (sz) {
 			if (mItems[sz-1].format == *fmt) {
@@ -965,12 +1111,41 @@ void sttfont_formatted_text::append_plaintext_MS (SSF_STRING_MS str, sttfont_for
 				}
 			}
 		sttfont_formatted_text_item ti;
+			setCustomAllocatorForTextItem(ti);
 		ti.text = std::move(str);
 		ti.format = *fmt;
-		mItems.push_back(ti);
+		mItems.push_back(std::move(ti));
+		}
+void sttfont_formatted_text::append_plaintext_BUF (char const * str, uint32_t const len, sttfont_format const * fmt)
+                                                                                                   {
+		if (!fmt)
+			return append_plaintext_BUF(str, len, &activeFormat);
+		const uint32_t sz = mItems.size();
+		if (sz) {
+			if (mItems[sz-1].format == *fmt) {
+				mItems[sz-1].text.append(str, len);
+				return;
+				}
+			}
+		sttfont_formatted_text_item ti;
+			setCustomAllocatorForTextItem(ti);
+		ti.text.append(str, len);
+		ti.format = *fmt;
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+		// for debugging spurrious copies
+		//	stt::stt_dbg_log("append_plaintext_BUF, allocators: %p %p, [%s]", mItems.getCustomAllocator(), ti.text.getCustomAllocator(), str);
+		//	if (strcmp("Render Thread", str) == 0 && !mItems.getCustomAllocator())
+		//		abort();
+		#endif
+		mItems.push_back(std::move(ti));
 		}
 void sttfont_formatted_text::append (sttfont_formatted_text_MS obj)
                                                    {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			if (mItems.getCustomAllocator()) {
+				return append_luasafe(obj); //copy into allocator
+				}
+		#endif
 		if (obj.mItems.size() == 1 && mItems.size()) {
 			if (mItems[mItems.size()-1].format == obj.mItems[0].format) {
 				mItems[mItems.size()-1].text += std::move(obj.mItems[0].text);
@@ -1169,7 +1344,9 @@ void sttfont_formatted_text::insert_luasafe (unsigned int const position, sttfon
 				}
 			}
 			
-		sttfont_formatted_text_item after = mItems[index];	
+		sttfont_formatted_text_item after;	
+			setCustomAllocatorForTextItem(after);
+			after = mItems[index];
 		mItems[index].text.erase(offset);
 		after.text.erase(0, offset);	
 		
@@ -1193,7 +1370,9 @@ void sttfont_formatted_text::insert (unsigned int const position, sttfont_format
 				}
 			}
 			
-		sttfont_formatted_text_item after = mItems[index];	
+		sttfont_formatted_text_item after;	
+			setCustomAllocatorForTextItem(after);
+			after = mItems[index];
 		mItems[index].text.erase(offset);
 		after.text.erase(0, offset);	
 		
