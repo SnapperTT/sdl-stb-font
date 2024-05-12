@@ -108,9 +108,11 @@ protected:
   state_t producerState;
   SSF_STATE_TRANSFER txQueue;
   state_t consumerState;
+  SSF_ATOMIC_INT numInQueue;
   pcfc_handle getNextPrerenderToken ();
 public:
   producer_consumer_font_cache ();
+  int getNumInQueue ();
   void freeStoredPrerenderedText (bool const freeTextures);
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
@@ -324,7 +326,9 @@ pcfc_handle producer_consumer_font_cache::getNextPrerenderToken ()
 		}
 producer_consumer_font_cache::producer_consumer_font_cache ()
   : consumer_font_cache (NULL), nextPrerenderTokenId (1)
-                                                                                            {}
+                                                                                            { numInQueue = 0; }
+int producer_consumer_font_cache::getNumInQueue ()
+                             { return numInQueue; }
 void producer_consumer_font_cache::freeStoredPrerenderedText (bool const freeTextures)
                                                                 {
 		for (auto ppair : prerenderMap) {
@@ -527,6 +531,7 @@ void producer_consumer_font_cache::submitToConsumer ()
 			txQueue.swap(producerState);
 			mMutex.unlock();
 		#endif
+		numInQueue++;
 		}
 pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                              {
@@ -608,6 +613,7 @@ bool producer_consumer_font_cache::receiveFromProducer ()
 			mMutex.unlock();
 			return true;
 		#endif
+		numInQueue--;
 		}
 bool producer_consumer_font_cache::hasPrerenderOrDestroyJobs () const
                                                {

@@ -220,13 +220,16 @@ protected:
 	state_t producerState;
 	SSF_STATE_TRANSFER txQueue;
 	state_t consumerState;
+	SSF_ATOMIC_INT numInQueue;
 	
 	pcfc_handle getNextPrerenderToken() {
 		return nextPrerenderTokenId++;
 		}
 		
 public:
-	producer_consumer_font_cache() : consumer_font_cache(NULL), nextPrerenderTokenId(1) {}
+	producer_consumer_font_cache() : consumer_font_cache(NULL), nextPrerenderTokenId(1) { numInQueue = 0; }
+	
+	int getNumInQueue () { return numInQueue; }
 	
 	void freeStoredPrerenderedText(const bool freeTextures) {
 		for (auto ppair : prerenderMap) {
@@ -440,6 +443,7 @@ public:
 			txQueue.swap(producerState);
 			mMutex.unlock();
 		#endif
+		numInQueue++;
 		}
 		
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -525,6 +529,7 @@ public:
 			mMutex.unlock();
 			return true;
 		#endif
+		numInQueue--;
 		}
 	
 	template <typename T>

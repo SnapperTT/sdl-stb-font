@@ -40,6 +40,10 @@ namespace sttr {
 	#include <string_view>
 	#define SSF_STRING_VIEW std::string_view
 #endif
+#ifndef SSF_ATOMIC_INT
+	#include <atomic>
+	#define SSF_ATOMIC_INT std::atomic<int>
+#endif
 
 // new and delete macros
 // all calls in this library are done with "foo * f = SSF_NEW(f)"
