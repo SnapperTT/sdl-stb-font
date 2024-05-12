@@ -146,6 +146,7 @@ public:
   bool dispatchSinglePrerenderedWColorMod (pcfc_handle const prtId, int x, int y, int const r, int const g, int const b, int const a) const;
   bool dispatchSingleText (pcfc_handle const texId);
   void * getUserdata ();
+  void * consumeUserdata ();
 };
 LZZ_INLINE void producer_consumer_font_cache::state_t::push_back_text (producer_consumer_font_cache::pcfc_formatted_text const & prt)
                                                                                                          {
@@ -653,6 +654,12 @@ bool producer_consumer_font_cache::dispatchSingleText (pcfc_handle const texId)
 void * producer_consumer_font_cache::getUserdata ()
                             {
 		return consumerState.userdata;
+		}
+void * producer_consumer_font_cache::consumeUserdata ()
+                                {
+		void* r = consumerState.userdata;
+		if (r) consumerState.userdata = NULL;
+		return r;
 		}
 #undef LZZ_INLINE
 #endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_producerConsumerFrontend
