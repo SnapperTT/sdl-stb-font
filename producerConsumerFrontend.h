@@ -86,10 +86,10 @@ protected:
   SSF_MAP <uint64_t, sttfont_glyph> mGlyphs;
   struct state_t
   {
+    SSF_PCFC_TEMPORARY_ALLOCATOR temporaryAllocator;
     SSF_VECTOR <producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerender;
     SSF_VECTOR <pcfc_handle> destroyPrerender;
     SSF_VECTOR <producer_consumer_font_cache::pcfc_formatted_text> text;
-    SSF_PCFC_TEMPORARY_ALLOCATOR temporaryAllocator;
     void * userdata;
   private:
     state_t (state_t const & other);
@@ -604,6 +604,7 @@ bool producer_consumer_font_cache::receiveFromProducer ()
 			if (txQueue.try_dequeue(s)) {
 				s->swap(consumerState);
 				SSF_DEL(s);
+				numInQueue--;
 				return true;
 				}
 			return false;
@@ -612,9 +613,9 @@ bool producer_consumer_font_cache::receiveFromProducer ()
 			mMutex.lock();
 			consumerState.swap(txQueue);
 			mMutex.unlock();
+			numInQueue--;
 			return true;
 		#endif
-		numInQueue--;
 		}
 bool producer_consumer_font_cache::hasPrerenderOrDestroyJobs () const
                                                {
