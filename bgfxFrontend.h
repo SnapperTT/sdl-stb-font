@@ -1159,7 +1159,7 @@ void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int con
 						if (useScissor)
 							bgfxsfh::getTexturedQuadWScissor(dc.drawRect, dc.texRect, dc.drawRect, dc.texRect, scissor, true);
 						drawBuffer.push_back(dc);
-						std::cout << "submitting 1! " << char(codepoint) << std::endl;
+						//std::cout << "submitting 1! " << char(codepoint) << std::endl;
 						}
 					else {
 						bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
