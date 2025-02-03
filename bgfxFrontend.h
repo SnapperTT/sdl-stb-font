@@ -16,6 +16,13 @@
 #define BGFXSFH_IS_VALID(X) BX_NOOP(X)
 
 #define SSF_UINT32_ALIASING uint32_t __attribute((__may_alias__))
+
+#ifndef SSF_SORT_BGFX_DRAW_CALLS_GLYPHS
+	#define SSF_SORT_BGFX_DRAW_CALLS_GLYPHS 1
+#endif
+#ifndef SSF_SORT_BGFX_DRAW_CALLS_SHAPES
+	#define SSF_SORT_BGFX_DRAW_CALLS_SHAPES 1
+#endif
 #define LZZ_INLINE inline
 struct bgfxsfh
 {
@@ -962,7 +969,9 @@ void bgfx_stb_font_cache::onCompletedDrawing ()
 		if (drawBuffer.size()) {
 			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
 			// most strings use the same texture & format so we won't sort for now
-			//std::sort(drawBuffer.begin(), drawBuffer.end()); 
+			#if SSF_SORT_BGFX_DRAW_CALLS_GLYPHS
+				std::sort(drawBuffer.begin(), drawBuffer.end()); 
+			#endif
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
 				if (drawBuffer[i].stateChange(drawBuffer[i-1])) { // state change
@@ -996,7 +1005,9 @@ void bgfx_stb_font_cache::onCompletedDrawing ()
 			}
 		
 		if (untexturedDrawBuffer.size()) {
-			//std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end());
+			#if SSF_SORT_BGFX_DRAW_CALLS_SHAPES
+				std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end());
+			#endif
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < untexturedDrawBuffer.size(); ++i) {
 				if (untexturedDrawBuffer[i].stateChange(untexturedDrawBuffer[i-1])) { // state change
