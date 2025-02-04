@@ -12,18 +12,17 @@
 --			-p	- ammends a path to the input file - use this if invoking this script from some weird directory
 --			-D VALUE - #defines VALUE in the shaders that are being compiled. Can use -D VAL1 -D VAL2 etc.. for multiple defines
 --		The following are used to override defaults defined in this file
---			-C_DO (ON/OFF) - compile c header shaders?
---			-DX9_DO (ON/OFF) - compile DX9 shaders?
---			-DX11_DO (ON/OFF) - compile DX11/DX12 shaders?
---			-NACL_DO (ON/OFF) - compile NACL shaders?
---			-ANDROID_DO (ON/OFF) - compile ANDRIOD shaders?
---			-GLSL_DO (ON/OFF) - compile GLSL shaders?
---			-METAL_DO (ON/OFF) - compile METAL shaders?
---			-ORBIS_DO (ON/OFF) - compile ORBIS shaders?
---			-SPRIV_DO (ON/OFF) - compile SPRIV shaders?
+--			-C_DO - compile c header shaders?
+--			-DX9_DO - compile DX9 shaders? (NOTE: 2025 - DX9 shader compile has been disabled as it has been removed from bgfx)
+--			-DX11_DO - compile DX11/DX12 shaders?
+--			-NACL_DO - compile NACL shaders?
+--			-ANDROID_DO - compile ANDRIOD shaders?
+--			-GLSL_DO - compile GLSL shaders?
+--			-METAL_DO - compile METAL shaders?
+--			-ORBIS_DO - compile ORBIS shaders?
+--			-SPRIV_DO - compile SPRIV shaders?
 -- 
-
-
+-- Here be dragons, I have no idea what I was thinking while writing this
 
 INPUT_FILE = false;
 OUTPUT_FILE = false;
@@ -169,8 +168,8 @@ DX9_FS_FLAGS="--platform windows -p ps_4_0 -O 3"
 DX9_SHADER_PATH="dx9"
 DX9_DO = true;
 
-DX11_VS_FLAGS="--platform windows -p vs_4_0 -O 3"
-DX11_FS_FLAGS="--platform windows -p ps_4_0 -O 3"
+DX11_VS_FLAGS="--platform windows -p vs_5_0 -O 3"
+DX11_FS_FLAGS="--platform windows -p ps_5_0 -O 3"
 DX11_CS_FLAGS="--platform windows -p cs_5_0 -O 1"
 DX11_SHADER_PATH="dx11"
 DX11_DO = true;
@@ -213,6 +212,26 @@ SPRIV_DO = true;
 C_SHADER_PATH="c"
 C_DO = true;
 
+if (GLSL_ONLY) then
+	DX9_DO = false;
+	DX11_DO = false;
+	NACL_DO = false;
+	ANDROID_DO = false;
+	GLSL_DO = true;
+	METAL_DO = false;
+	ORBIS_DO = false;
+end
+
+if (HLSL_ONLY) then
+	DX9_DO = true;
+	DX11_DO = true;
+	NACL_DO = false;
+	ANDROID_DO = false;
+	GLSL_DO = false;
+	METAL_DO = false;
+	ORBIS_DO = false;
+end
+
 if (GLOBAL_C_DO ~= nil) then C_DO = GLOBAL_C_DO; end -- Used invoking this from other scripts to override value
 if (GLOBAL_DX9_DO ~= nil) then DX9_DO = GLOBAL_DX9_DO; end
 if (GLOBAL_DX11_DO ~= nil) then DX11_DO = GLOBAL_DX11_DO; end
@@ -222,6 +241,7 @@ if (GLOBAL_GLSL_DO ~= nil) then GLSL_DO = GLOBAL_GLSL_DO; end
 if (GLOBAL_METAL_DO ~= nil) then METAL_DO = GLOBAL_METAL_DO; end
 if (GLOBAL_ORBIS_DO ~= nil) then ORBIS_DO = GLOBAL_ORBIS_DO; end
 if (GLOBAL_SPRIV_DO ~= nil) then SPRIV_DO = GLOBAL_SPRIV_DO; end
+
 
 function getBinOutput (path, shaderOutputPath, opPrefix, outputFile,suffix)
 	suffix = suffix or ".bin";
@@ -317,17 +337,17 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 
 	if (not C_ONLY) then
 		if (GLSL_ONLY) then
-			execc (cv_glsl , doit)
-			execc (cf_glsl)
+			execc (cv_glsl , doit and doVert)
+			execc (cf_glsl, doFrag)
 		elseif (HLSL_ONLY) then
-			execc (cv_dx11)
-			execc (cf_dx11)
+			execc (cv_dx11, doVert)
+			execc (cf_dx11, doFrag)
 		else
 			execc (cf_glsl, GLSL_DO and doFrag)
 			--execc (cf_dx9, DX9_DO and doFrag)
 			execc (cf_dx11, DX11_DO and doFrag)
-			execc (cf_vk, SPRIV_DO and doFrag)
 			execc (cf_metal, METAL_DO and doFrag)
+			execc (cf_vk, SPRIV_DO and doFrag)
 			execc (cf_an, ANDROID_DO and doFrag)
 			execc (cf_pssl, ORBIS_DO and doFrag)
 			execc (cf_nacl, NACL_DO and doFrag)
@@ -335,8 +355,8 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 			execc (cv_glsl, GLSL_DO and doVert)
 			--execc (cv_dx9, DX9_DO and doVert)
 			execc (cv_dx11, DX11_DO and doVert)
-			execc (cv_vk, SPRIV_DO and doVert)
 			execc (cv_metal, METAL_DO and doVert)
+			execc (cv_vk, SPRIV_DO and doVert)
 			execc (cv_an, ANDROID_DO and doVert)
 			execc (cv_pssl, ORBIS_DO and doVert)
 			execc (cv_nacl, NACL_DO and doVert)

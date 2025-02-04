@@ -17,12 +17,9 @@
 
 #define SSF_UINT32_ALIASING uint32_t __attribute((__may_alias__))
 
-#ifndef SSF_SORT_BGFX_DRAW_CALLS_GLYPHS
-	#define SSF_SORT_BGFX_DRAW_CALLS_GLYPHS 1
-#endif
-#ifndef SSF_SORT_BGFX_DRAW_CALLS_SHAPES
-	#define SSF_SORT_BGFX_DRAW_CALLS_SHAPES 1
-#endif
+// TBD: drop shadow shader OR double up geometry to render drop shadow
+// TBD: Vertex def -> 5 floats down to 4 norm uint16_t OR 2 floats 2 norm uint16_t
+// Drop shadow shader could use z > 0 for top layer and z < 0 for shadow layer. This will avoid state change
 #define LZZ_INLINE inline
 struct bgfxsfh
 {
@@ -79,9 +76,8 @@ public:
   {
     float m_x;
     float m_y;
-    float m_z;
-    float m_u;
-    float m_v;
+    int16_t m_u;
+    int16_t m_v;
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
@@ -89,7 +85,6 @@ public:
   {
     float m_x;
     float m_y;
-    float m_z;
     static void init ();
     static bgfx::VertexLayout ms_decl;
   };
@@ -98,7 +93,7 @@ public:
   static void pushTexturedQuad (rect const & r, rect const & r2, bool dontFlipY = false);
   static void pushTexturedQuadWScissor (rect const & r, rect const & r2, rect const & scissor, bool dontFlipY = false);
   static void getTexturedQuadWScissor (rect const & r, rect const & r2, rect & rOut, rect & r2Out, rect const & scissor, bool dontFlipY = false);
-  static void pushTexturedQuads (rect const * pos, rect const * uv, draw_quad const * drawQuads, int const numQuads, bool const dontFilpY, float const _framebufferWidth = 0.f, float const _framebufferHeight = 0.f);
+  static void pushTexturedQuads (rect const * pos, rect const * uv, draw_quad const * drawQuads, int const numQuads, bool const dontFilpY);
   static void pushUntexturedQuad (rect const & r);
   static void pushUntexturedQuadWScissor (rect const & r, rect const & scissor);
   static void getUntexturedQuadsWScissor (rect const & r, rect & rOut, rect const & scissor, bool dontFlipY = false);
@@ -355,15 +350,15 @@ void bgfxsfh::deinitialise ()
 void bgfxsfh::PosTexCoord0Vertex::init ()
                                    {
 			ms_decl.begin()
-				.add(bgfx::Attrib::Position,  3, bgfx::AttribType::Float)
-				.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+				.add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
+				.add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Int16, true, true)
 			.end();
 			}
 bgfx::VertexLayout bgfxsfh::PosTexCoord0Vertex::ms_decl;
 void bgfxsfh::PosVertex::init ()
                                    {
 			ms_decl.begin()
-				.add(bgfx::Attrib::Position,  3, bgfx::AttribType::Float)
+				.add(bgfx::Attrib::Position,  2, bgfx::AttribType::Float)
 			.end();
 			}
 bgfx::VertexLayout bgfxsfh::PosVertex::ms_decl;
@@ -413,8 +408,8 @@ void bgfxsfh::getTexturedQuadWScissor (rect const & r, rect const & r2, rect & r
 		rOut  = bgfxsfh::scissorIntersect(r, scissor);
 		r2Out = bgfxsfh::scissorIntersectTexCoord(r, r2, rOut, dontFlipY);
 		}
-void bgfxsfh::pushTexturedQuads (rect const * pos, rect const * uv, draw_quad const * drawQuads, int const numQuads, bool const dontFilpY, float const _framebufferWidth, float const _framebufferHeight)
-                                                                                                                                                                                                                        {
+void bgfxsfh::pushTexturedQuads (rect const * pos, rect const * uv, draw_quad const * drawQuads, int const numQuads, bool const dontFilpY)
+                                                                                                                                             {
 		// Pass drawQuads=NULL to use pos and uv arrays and vice versa
 		/*
 		* From the BGFX Examples, the following license applies to only this function:
@@ -422,7 +417,6 @@ void bgfxsfh::pushTexturedQuads (rect const * pos, rect const * uv, draw_quad co
 		* License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
 		*/
 		const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
-		const float _texelHalf = 0.0f;//bgfx::RendererType::Direct3D9 == renderer ? 0.5f : 0.0f;
 		bool _originBottomLeft = false; 
 		if (!dontFilpY)
 			_originBottomLeft = bgfx::getCaps()->originBottomLeft; // Prevent double flipping
@@ -441,20 +435,18 @@ void bgfxsfh::pushTexturedQuads (rect const * pos, rect const * uv, draw_quad co
 				const float miny = r.y;
 				const float maxy = (r.y + r.h);
 
-				float texelHalfW = 0.f;
-				float texelHalfH = 0.f;
-				if (_framebufferWidth > 0.0f && _framebufferHeight > 0.0f) {
-					texelHalfW = _texelHalf/_framebufferWidth;
-					texelHalfH = _texelHalf/_framebufferHeight;
-					}
-				const float minu = r2.x + texelHalfW;
-				const float maxu = r2.x+r2.w + texelHalfH;
+				//65535
+				uint16_t u_minu = 32767*(r2.x);
+				uint16_t u_maxu = 32767*(r2.x+r2.w);
 
-				const float zz = 0.0f;
+				uint16_t u_minv = 32767*(r2.y);
+				uint16_t u_maxv = 32767*(r2.y+r2.h);
 
-				float minv = r2.y + texelHalfH;
-				float maxv = r2.y+r2.h + texelHalfH;
-
+				int16_t minv = u_minv;
+				int16_t maxv = u_maxv;
+				int16_t minu = u_minu;
+				int16_t maxu = u_maxu;
+				
 				if (_originBottomLeft) {
 					float temp = minv;
 					minv = maxv;
@@ -464,37 +456,31 @@ void bgfxsfh::pushTexturedQuads (rect const * pos, rect const * uv, draw_quad co
 				int j = i*6;
 				vertex[j+0].m_x = minx;
 				vertex[j+0].m_y = miny;
-				vertex[j+0].m_z = zz;
 				vertex[j+0].m_u = minu;
 				vertex[j+0].m_v = minv;
 
 				vertex[j+1].m_x = maxx;
 				vertex[j+1].m_y = miny;
-				vertex[j+1].m_z = zz;
 				vertex[j+1].m_u = maxu;
 				vertex[j+1].m_v = minv;
 
 				vertex[j+2].m_x = maxx;
 				vertex[j+2].m_y = maxy;
-				vertex[j+2].m_z = zz;
 				vertex[j+2].m_u = maxu;
 				vertex[j+2].m_v = maxv;
 				
 				vertex[j+3].m_x = minx;
 				vertex[j+3].m_y = miny;
-				vertex[j+3].m_z = zz;
 				vertex[j+3].m_u = minu;
 				vertex[j+3].m_v = minv;
 
 				vertex[j+4].m_x = maxx;
 				vertex[j+4].m_y = maxy;
-				vertex[j+4].m_z = zz;
 				vertex[j+4].m_u = maxu;
 				vertex[j+4].m_v = maxv;
 				
 				vertex[j+5].m_x = minx;
 				vertex[j+5].m_y = maxy;
-				vertex[j+5].m_z = zz;
 				vertex[j+5].m_u = minu;
 				vertex[j+5].m_v = maxv;
 				}
@@ -536,32 +522,24 @@ void bgfxsfh::pushUntexturedQuads (rect const * pos, untextured_draw_quad const 
 				const float miny = r.y;
 				const float maxy = (r.y + r.h);
 
-				const float zz = 0.0f;
-
 				int j = i*6;
 				vertex[j+0].m_x = minx;
 				vertex[j+0].m_y = miny;
-				vertex[j+0].m_z = zz;
 
 				vertex[j+1].m_x = maxx;
 				vertex[j+1].m_y = miny;
-				vertex[j+1].m_z = zz;
 
 				vertex[j+2].m_x = maxx;
 				vertex[j+2].m_y = maxy;
-				vertex[j+2].m_z = zz;
 				
 				vertex[j+3].m_x = minx;
 				vertex[j+3].m_y = miny;
-				vertex[j+3].m_z = zz;
 
 				vertex[j+4].m_x = maxx;
 				vertex[j+4].m_y = maxy;
-				vertex[j+4].m_z = zz;
 				
 				vertex[j+5].m_x = minx;
 				vertex[j+5].m_y = maxy;
-				vertex[j+5].m_z = zz;
 
 				}
 			bgfx::setVertexBuffer(0, &vb);
@@ -969,9 +947,8 @@ void bgfx_stb_font_cache::onCompletedDrawing ()
 		if (drawBuffer.size()) {
 			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
 			// most strings use the same texture & format so we won't sort for now
-			#if SSF_SORT_BGFX_DRAW_CALLS_GLYPHS
-				std::sort(drawBuffer.begin(), drawBuffer.end()); 
-			#endif
+			//	std::sort(drawBuffer.begin(), drawBuffer.end()); // NO! SORTING CALLS will result in text being drawn ontop of each other in wrong order
+			// if you want to optimise this then submit text with same state in batches 
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
 				if (drawBuffer[i].stateChange(drawBuffer[i-1])) { // state change
@@ -1005,9 +982,7 @@ void bgfx_stb_font_cache::onCompletedDrawing ()
 			}
 		
 		if (untexturedDrawBuffer.size()) {
-			#if SSF_SORT_BGFX_DRAW_CALLS_SHAPES
-				std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end());
-			#endif
+			// std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end()); // Do not sort draw calls, will cause draws to layer ontop of each other in wrong order
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < untexturedDrawBuffer.size(); ++i) {
 				if (untexturedDrawBuffer[i].stateChange(untexturedDrawBuffer[i-1])) { // state change
