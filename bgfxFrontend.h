@@ -18,8 +18,7 @@
 #define SSF_UINT32_ALIASING uint32_t __attribute((__may_alias__))
 
 // TBD: drop shadow shader OR double up geometry to render drop shadow
-// TBD: Vertex def -> 5 floats down to 4 norm uint16_t OR 2 floats 2 norm uint16_t
-// Drop shadow shader could use z > 0 for top layer and z < 0 for shadow layer. This will avoid state change
+// (drop shadows can't be done without changing state as drawing strikethrough lines will cast a shadow, etc)
 #define LZZ_INLINE inline
 struct bgfxsfh
 {
