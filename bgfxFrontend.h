@@ -933,11 +933,13 @@ sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const ta
 		}
 void bgfx_stb_font_cache::onStartDrawing ()
                               {
+		//std::cout << "START DRAWING" << std::endl;
 		if (renderTarget) return;
 		bufferDraws = true;
 		}
 void bgfx_stb_font_cache::onCompletedDrawing ()
                                   {
+		//std::cout << "END DRAWING" << std::endl;
 		if (renderTarget) return;
 		if (!bufferDraws) return;
 		bufferDraws = false;

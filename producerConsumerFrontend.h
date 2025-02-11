@@ -147,6 +147,8 @@ public:
   bool dispatchSingleText (pcfc_handle const texId);
   void * getUserdata ();
   void * consumeUserdata ();
+  state_t * getConsumerState ();
+  state_t * getProducerState ();
 };
 LZZ_INLINE void producer_consumer_font_cache::state_t::push_back_text (producer_consumer_font_cache::pcfc_formatted_text const & prt)
                                                                                                          {
@@ -662,6 +664,10 @@ void * producer_consumer_font_cache::consumeUserdata ()
 		if (r) consumerState.userdata = NULL;
 		return r;
 		}
+producer_consumer_font_cache::state_t * producer_consumer_font_cache::getConsumerState ()
+                                    { return &consumerState; }
+producer_consumer_font_cache::state_t * producer_consumer_font_cache::getProducerState ()
+                                    { return &producerState; }
 #undef LZZ_INLINE
 #endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_producerConsumerFrontend
 #endif //SDL_STB_FONT_IMPL_IMPL

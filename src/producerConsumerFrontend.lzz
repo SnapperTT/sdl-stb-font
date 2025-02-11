@@ -612,4 +612,8 @@ public:
 		if (r) consumerState.userdata = NULL;
 		return r;
 		}
+	
+	// only use these if you know what you're doing (for debugging, etc)
+	state_t* getConsumerState() { return &consumerState; }
+	state_t* getProducerState() { return &producerState; }
 	}

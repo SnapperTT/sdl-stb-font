@@ -839,10 +839,12 @@ public:
 		}
 		
 	void onStartDrawing() {
+		//std::cout << "START DRAWING" << std::endl;
 		if (renderTarget) return;
 		bufferDraws = true;
 		}
 	void onCompletedDrawing() {
+		//std::cout << "END DRAWING" << std::endl;
 		if (renderTarget) return;
 		if (!bufferDraws) return;
 		bufferDraws = false;
