@@ -415,7 +415,7 @@ void bgfxsfh::pushTexturedQuads (rect const * pos, rect const * uv, draw_quad co
 		* Copyright 2011-2018 Branimir Karadzic. All rights reserved.
 		* License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
 		*/
-		const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
+		//const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
 		bool _originBottomLeft = false; 
 		if (!dontFilpY)
 			_originBottomLeft = bgfx::getCaps()->originBottomLeft; // Prevent double flipping
