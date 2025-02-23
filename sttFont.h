@@ -438,9 +438,12 @@ public:
   int getTextWidth (sttfont_formatted_text const & str, sttfont_lookupHint * mHint = NULL, int const * const maxWidth = NULL);
   virtual void onStartDrawing ();
   virtual void onCompletedDrawing ();
+  virtual void startManuallyBuffering (bool const beginBuffering);
+  virtual void endManuallyBuffering (bool const flush);
   int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int processString_worker (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset);
   int processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
+  int processFormatted_worker (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   bool isTofu (sttfont_glyph * G);
@@ -1994,6 +1997,10 @@ void sttfont_font_cache::onStartDrawing ()
                                       {}
 void sttfont_font_cache::onCompletedDrawing ()
                                           {}
+void sttfont_font_cache::startManuallyBuffering (bool const beginBuffering)
+                                                                       {}
+void sttfont_font_cache::endManuallyBuffering (bool const flush)
+                                                            {}
 int sttfont_font_cache::processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
                                                                                                                                                                                                                                                                                                                                                                                                                      {
 		onStartDrawing();
@@ -2102,7 +2109,12 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxHeight, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
                                                                                                                                                                                                                                                                                                                                                                       {
 		onStartDrawing();
-		
+		int ret = processFormatted_worker(text, x, y, isDrawing, widthOut, heightOut, maxHeight, mHint, threshX, threshY, caretPosition, initialXOffset);
+		onCompletedDrawing();
+		return ret;
+		}
+int sttfont_font_cache::processFormatted_worker (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxHeight, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset)
+                                                                                                                                                                                                                                                                                                                                                                             {
 		int xOffset = initialXOffset;
 		int yOffset = 0;
 		
@@ -2157,7 +2169,6 @@ int sttfont_font_cache::processFormatted (sttfont_formatted_text const & text, i
 			}
 		
 		int ret = xOffset + x; 
-		onCompletedDrawing();
 		return ret;
 		}
 int sttfont_font_cache::getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint)

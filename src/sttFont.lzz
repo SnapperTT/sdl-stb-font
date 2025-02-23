@@ -672,6 +672,8 @@ public:
 	
 	virtual void onStartDrawing() {}
 	virtual void onCompletedDrawing() {}
+	virtual void startManuallyBuffering(const bool beginBuffering) {}
+	virtual void endManuallyBuffering(const bool flush) {}
 	
 	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		onStartDrawing();
@@ -679,7 +681,7 @@ public:
 		onCompletedDrawing();
 		return r;
 		}
-		
+	
 	int processString_worker (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut, int * const heightOut, const int * const maxWidth, sttfont_lookupHint * mHint, const int * const threshX, const int * const threshY, int * const caretPosition, int initialXOffset) {
 		// Scan through function and extract the glyphs
 		// returns the x position at the end
@@ -780,7 +782,12 @@ public:
 
 	int processFormatted(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		onStartDrawing();
+		int ret = processFormatted_worker(text, x, y, isDrawing, widthOut, heightOut, maxHeight, mHint, threshX, threshY, caretPosition, initialXOffset);
+		onCompletedDrawing();
+		return ret;
+		}
 		
+	int processFormatted_worker(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		int xOffset = initialXOffset;
 		int yOffset = 0;
 		
@@ -835,7 +842,6 @@ public:
 			}
 		
 		int ret = xOffset + x; 
-		onCompletedDrawing();
 		return ret;
 		}
 	

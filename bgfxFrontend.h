@@ -161,6 +161,7 @@ public:
   SSF_VECTOR <bgfxsfh::draw_quad> drawBuffer;
   SSF_VECTOR <bgfxsfh::untextured_draw_quad> untexturedDrawBuffer;
   bool bufferDraws;
+  bool isManuallyBuffering;
   bgfx_stb_font_cache ();
   ~ bgfx_stb_font_cache ();
   void setScissor (float const x, float const y, float const w, float const h);
@@ -185,6 +186,10 @@ public:
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
   void onStartDrawing ();
   void onCompletedDrawing ();
+  void startManuallyBuffering (bool const beginBuffering);
+  void endManuallyBuffering (bool const flush);
+  void onStartBuffering ();
+  void onCompletedBuffering ();
   void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   bgfx::TextureHandle renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
   bgfx::TextureHandle renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
@@ -690,6 +695,7 @@ bgfx_stb_font_cache::bgfx_stb_font_cache ()
   : sttfont_font_cache (), mViewId (0), mAtlasSize (1024), renderTarget (NULL), bufferDraws (false)
                                                                                                                             {
 		resetScissor();
+		isManuallyBuffering = false;
 		}
 bgfx_stb_font_cache::~ bgfx_stb_font_cache ()
                                 {
@@ -933,13 +939,38 @@ sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const ta
 		}
 void bgfx_stb_font_cache::onStartDrawing ()
                               {
-		//std::cout << "START DRAWING" << std::endl;
-		if (renderTarget) return;
-		bufferDraws = true;
+		if (renderTarget || isManuallyBuffering) return;
+		onStartBuffering();
 		}
 void bgfx_stb_font_cache::onCompletedDrawing ()
                                   {
+		if (renderTarget || isManuallyBuffering) return;
+		onCompletedBuffering();
+		}
+void bgfx_stb_font_cache::startManuallyBuffering (bool const beginBuffering)
+                                                               {
+		isManuallyBuffering = true;
+		
+		if (beginBuffering)
+			onStartBuffering();
+		}
+void bgfx_stb_font_cache::endManuallyBuffering (bool const flush)
+                                                    {
+		isManuallyBuffering = false;
+		if (flush)
+			onCompletedBuffering();
+		}
+void bgfx_stb_font_cache::onStartBuffering ()
+                                {
+		//std::cout << "START DRAWING" << std::endl;
+		//Logger_ldbg("SSF: START DRAWING");
+		if (renderTarget) return;
+		bufferDraws = true;
+		}
+void bgfx_stb_font_cache::onCompletedBuffering ()
+                                    {
 		//std::cout << "END DRAWING" << std::endl;
+		//Logger_ldbg("SSF: END DRAWING");
 		if (renderTarget) return;
 		if (!bufferDraws) return;
 		bufferDraws = false;
@@ -948,11 +979,14 @@ void bgfx_stb_font_cache::onCompletedDrawing ()
 		if (drawBuffer.size()) {
 			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
 			// most strings use the same texture & format so we won't sort for now
-			//	std::sort(drawBuffer.begin(), drawBuffer.end()); // NO! SORTING CALLS will result in text being drawn ontop of each other in wrong order
-			// if you want to optimise this then submit text with same state in batches 
+			std::sort(drawBuffer.begin(), drawBuffer.end()); 
+			
+			//Logger_ldbg("drawBuffer.size(): {}", drawBuffer.size());
+			
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
 				if (drawBuffer[i].stateChange(drawBuffer[i-1])) { // state change
+					//Logger_ldbg("state change {}/{}", i, drawBuffer.size());
 					bgfxsfh::draw_quad & d = drawBuffer[drawLast];
 					bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
 					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
@@ -968,6 +1002,7 @@ void bgfx_stb_font_cache::onCompletedDrawing ()
 				}
 			if (drawBuffer.size() - drawLast) {
 				//drawLast = 0;
+				//Logger_ldbg("state change final {}/{}", drawBuffer.size(), drawBuffer.size());
 				uint32_t i = drawBuffer.size();
 				bgfxsfh::draw_quad & d = drawBuffer[drawLast];
 				bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);

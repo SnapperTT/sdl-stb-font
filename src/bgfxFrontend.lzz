@@ -579,12 +579,16 @@ public:
 	bgfxsfh::cpuBuffer* renderTarget;
 			
 	SSF_MAP<uint64_t, bgfx_stb_glyph> mGlyphs;
-	SSF_VECTOR<bgfxsfh::draw_quad> drawBuffer;
+	SSF_VECTOR<bgfxsfh::draw_quad> drawBuffer;	// Draw buffer for text
+	//SSF_VECTOR<bgfxsfh::draw_quad> drawBufferOptimisedBucketA; // Most text is either white (255,255,255,255) or black(0,0,0,0)
+	//SSF_VECTOR<bgfxsfh::draw_quad> drawBufferOptimisedBucketB; // so two extra buckets are provided to place text directly to prevent sort()ing
 	SSF_VECTOR<bgfxsfh::untextured_draw_quad> untexturedDrawBuffer;
 	bool bufferDraws;	// If true draw commands will be batched into the buffer vectors above and exectured as groups
+	bool isManuallyBuffering; // If true then bufferDraws is being controlled outside of this lib (use this to auto-merge texts on submit)
 	
 	bgfx_stb_font_cache () : sttfont_font_cache(), mViewId(0), mAtlasSize(1024), renderTarget(NULL), bufferDraws(false) {
 		resetScissor();
+		isManuallyBuffering = false;
 		}
 	~bgfx_stb_font_cache () {
 		clearGlyphs();
@@ -838,13 +842,39 @@ public:
 		return getGlyph(target);
 		}
 		
+		
 	void onStartDrawing() {
+		if (renderTarget || isManuallyBuffering) return;
+		onStartBuffering();
+		}
+		
+	void onCompletedDrawing() {
+		if (renderTarget || isManuallyBuffering) return;
+		onCompletedBuffering();
+		}
+	
+	void startManuallyBuffering(const bool beginBuffering) {
+		isManuallyBuffering = true;
+		
+		if (beginBuffering)
+			onStartBuffering();
+		}
+		
+	void endManuallyBuffering(const bool flush) {
+		isManuallyBuffering = false;
+		if (flush)
+			onCompletedBuffering();
+		}
+	
+	void onStartBuffering() {
 		//std::cout << "START DRAWING" << std::endl;
+		//Logger_ldbg("SSF: START DRAWING");
 		if (renderTarget) return;
 		bufferDraws = true;
 		}
-	void onCompletedDrawing() {
+	void onCompletedBuffering() {
 		//std::cout << "END DRAWING" << std::endl;
+		//Logger_ldbg("SSF: END DRAWING");
 		if (renderTarget) return;
 		if (!bufferDraws) return;
 		bufferDraws = false;
@@ -853,11 +883,14 @@ public:
 		if (drawBuffer.size()) {
 			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
 			// most strings use the same texture & format so we won't sort for now
-			//	std::sort(drawBuffer.begin(), drawBuffer.end()); // NO! SORTING CALLS will result in text being drawn ontop of each other in wrong order
-			// if you want to optimise this then submit text with same state in batches 
+			std::sort(drawBuffer.begin(), drawBuffer.end()); 
+			
+			//Logger_ldbg("drawBuffer.size(): {}", drawBuffer.size());
+			
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
 				if (drawBuffer[i].stateChange(drawBuffer[i-1])) { // state change
+					//Logger_ldbg("state change {}/{}", i, drawBuffer.size());
 					bgfxsfh::draw_quad & d = drawBuffer[drawLast];
 					bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
 					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
@@ -873,6 +906,7 @@ public:
 				}
 			if (drawBuffer.size() - drawLast) {
 				//drawLast = 0;
+				//Logger_ldbg("state change final {}/{}", drawBuffer.size(), drawBuffer.size());
 				uint32_t i = drawBuffer.size();
 				bgfxsfh::draw_quad & d = drawBuffer[drawLast];
 				bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
