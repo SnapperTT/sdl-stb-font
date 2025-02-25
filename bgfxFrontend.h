@@ -44,10 +44,17 @@ public:
   typedef SSF_UINT32_ALIASING uint32_aliasing_t;
   static bool compareColoursLt (uint8_t const (rgba1) [4], uint8_t const (rgba2) [4]);
   static bool compareColoursEq (uint8_t const (rgba1) [4], uint8_t const (rgba2) [4]);
-  struct draw_quad
+  struct draw_state
   {
     bgfx::TextureHandle textureId;
     uint8_t (colour) [4];
+    void setColour (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
+    bool operator < (draw_state const & other) const;
+    bool stateChange (draw_state const & other) const;
+  };
+  struct draw_quad
+  {
+    bgfxsfh::draw_state state;
     bgfxsfh::rect drawRect;
     bgfxsfh::rect texRect;
     void setColour (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a);
@@ -213,27 +220,33 @@ LZZ_INLINE bool bgfxsfh::compareColoursEq (uint8_t const (rgba1) [4], uint8_t co
 		const uint32_aliasing_t rgba2_c = *((uint32_aliasing_t*) rgba2);
 		return rgba1_c == rgba2_c;
 		}
-LZZ_INLINE void bgfxsfh::draw_quad::setColour (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+LZZ_INLINE void bgfxsfh::draw_state::setColour (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
                                                                                                           {
 			colour[0] = r;
 			colour[1] = g;
 			colour[2] = b;
 			colour[3] = a;
 			}
-LZZ_INLINE bool bgfxsfh::draw_quad::operator < (draw_quad const & other) const
-                                                                       {
+LZZ_INLINE bool bgfxsfh::draw_state::operator < (draw_state const & other) const
+                                                                        {
 			// sort by texture, then by colour
 			if (textureId.idx == other.textureId.idx) {
 				return compareColoursLt(colour, other.colour);
 				}
 			return (textureId.idx < other.textureId.idx);
 			}
-LZZ_INLINE bool bgfxsfh::draw_quad::stateChange (draw_quad const & other) const
-                                                                        {
+LZZ_INLINE bool bgfxsfh::draw_state::stateChange (draw_state const & other) const
+                                                                         {
 			if (textureId.idx == other.textureId.idx) 
 				return !compareColoursEq(colour, other.colour);
 			return true;
 			}
+LZZ_INLINE void bgfxsfh::draw_quad::setColour (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
+                                                                                                          { state.setColour(r,g,b,a); }
+LZZ_INLINE bool bgfxsfh::draw_quad::operator < (draw_quad const & other) const
+                                                                       { return state < other.state; }
+LZZ_INLINE bool bgfxsfh::draw_quad::stateChange (draw_quad const & other) const
+                                                                        { return state.stateChange(other.state); }
 LZZ_INLINE void bgfxsfh::untextured_draw_quad::setColour (uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
                                                                                                           {
 			colour[0] = r;
@@ -979,9 +992,14 @@ void bgfx_stb_font_cache::onCompletedBuffering ()
 		if (drawBuffer.size()) {
 			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
 			// most strings use the same texture & format so we won't sort for now
+			
+			
+		double now = timer::getRealTime();
 			std::sort(drawBuffer.begin(), drawBuffer.end()); 
 			
-			//Logger_ldbg("drawBuffer.size(): {}", drawBuffer.size());
+		double tend = timer::getRealTime();
+		
+			Logger_ldbg("drawBuffer.size(): {}, time taken: {}us, sizeof() {}", drawBuffer.size(), int((tend - now)*1000000), sizeof(bgfxsfh::draw_quad));
 			
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
@@ -1018,7 +1036,7 @@ void bgfx_stb_font_cache::onCompletedBuffering ()
 			}
 		
 		if (untexturedDrawBuffer.size()) {
-			// std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end()); // Do not sort draw calls, will cause draws to layer ontop of each other in wrong order
+			std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end()); // Do not sort draw calls, will cause draws to layer ontop of each other in wrong order
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < untexturedDrawBuffer.size(); ++i) {
 				if (untexturedDrawBuffer[i].stateChange(untexturedDrawBuffer[i-1])) { // state change

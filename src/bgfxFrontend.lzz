@@ -52,8 +52,8 @@ public:
 		const uint32_aliasing_t rgba1_c = *((uint32_aliasing_t*) rgba1);
 		const uint32_aliasing_t rgba2_c = *((uint32_aliasing_t*) rgba2);
 		return rgba1_c == rgba2_c;
-		} 
-	
+		}
+		
 	struct draw_quad {
 		bgfx::TextureHandle textureId;
 		uint8_t colour[4];
@@ -883,9 +883,14 @@ public:
 		if (drawBuffer.size()) {
 			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
 			// most strings use the same texture & format so we won't sort for now
+			
+			
+		double now = timer::getRealTime();
 			std::sort(drawBuffer.begin(), drawBuffer.end()); 
 			
-			//Logger_ldbg("drawBuffer.size(): {}", drawBuffer.size());
+		double tend = timer::getRealTime();
+		
+			Logger_ldbg("drawBuffer.size(): {}, time taken: {}us, sizeof() {}", drawBuffer.size(), int((tend - now)*1000000), sizeof(bgfxsfh::draw_quad));
 			
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
@@ -922,7 +927,7 @@ public:
 			}
 		
 		if (untexturedDrawBuffer.size()) {
-			// std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end()); // Do not sort draw calls, will cause draws to layer ontop of each other in wrong order
+			std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end()); // Do not sort draw calls, will cause draws to layer ontop of each other in wrong order
 			uint32_t drawLast = 0;
 			for (uint32_t i = 1; i < untexturedDrawBuffer.size(); ++i) {
 				if (untexturedDrawBuffer[i].stateChange(untexturedDrawBuffer[i-1])) { // state change
