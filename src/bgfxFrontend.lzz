@@ -12,8 +12,14 @@
 
 #define SSF_UINT32_ALIASING uint32_t __attribute((__may_alias__))
 
-// TBD: drop shadow shader OR double up geometry to render drop shadow
-// (drop shadows can't be done without changing state as drawing strikethrough lines will cast a shadow, etc)
+#ifndef SSF_BGFX_STACK_TEMPORATY_ALLOCATOR
+	#define SSF_BGFX_STACK_TEMPORATY_ALLOCATOR int
+	#define SSF_BGFX_STACK_TEMPORATY_ALLOCATOR_ENABLED 0
+#else
+	#ifndef SSF_BGFX_STACK_TEMPORATY_ALLOCATOR_ENABLED
+		#define SSF_BGFX_STACK_TEMPORATY_ALLOCATOR_ENABLED 1
+	#endif
+#endif
 #end
 
 #src
@@ -54,11 +60,9 @@ public:
 		return rgba1_c == rgba2_c;
 		}
 		
-	struct draw_quad {
+	struct textured_draw_state {
 		bgfx::TextureHandle textureId;
 		uint8_t colour[4];
-		bgfxsfh::rect drawRect;
-		bgfxsfh::rect texRect;
 		
 		inline void setColour(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
 			colour[0] = r;
@@ -66,8 +70,8 @@ public:
 			colour[2] = b;
 			colour[3] = a;
 			}
-		
-		inline bool operator < (const draw_quad & other) const {
+			
+		inline bool operator < (const textured_draw_state & other) const {
 			// sort by texture, then by colour
 			if (textureId.idx == other.textureId.idx) {
 				return compareColoursLt(colour, other.colour);
@@ -75,16 +79,14 @@ public:
 			return (textureId.idx < other.textureId.idx);
 			}
 			
-		inline bool stateChange (const draw_quad & other) const {
+		inline bool operator == (const textured_draw_state & other) const {
 			if (textureId.idx == other.textureId.idx) 
 				return !compareColoursEq(colour, other.colour);
-			return true;
 			}
 		};
-		
-	struct untextured_draw_quad {
+	
+	struct untextured_draw_state {
 		uint8_t colour[4];
-		bgfxsfh::rect drawRect;
 		
 		inline void setColour(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
 			colour[0] = r;
@@ -92,7 +94,7 @@ public:
 			colour[2] = b;
 			colour[3] = a;
 			}
-		
+			
 		inline bool operator < (const untextured_draw_quad & other) const {
 			return compareColoursLt(colour, other.colour);
 			}
@@ -100,6 +102,25 @@ public:
 		inline bool stateChange (const untextured_draw_quad & other) const {
 			return !compareColoursEq(colour, other.colour);
 			}
+		};
+		
+	struct draw_quad {
+		bgfxsfh::rect drawRect;
+		bgfxsfh::rect texRect;
+		};
+		
+	struct untextured_draw_quad {
+		bgfxsfh::rect drawRect;
+		};
+	
+	struct draw_quad_bucket {
+		textured_draw_state state;
+		SSF_VECTOR<draw_quad> quads;
+		};
+		
+	struct untextured_draw_quad_bucket {
+		untextured_draw_state state;
+		SSF_VECTOR<untextured_draw_quad> quads;
 		};
 	
 	struct Vec4 {
@@ -579,16 +600,24 @@ public:
 	bgfxsfh::cpuBuffer* renderTarget;
 			
 	SSF_MAP<uint64_t, bgfx_stb_glyph> mGlyphs;
-	SSF_VECTOR<bgfxsfh::draw_quad> drawBuffer;	// Draw buffer for text
-	//SSF_VECTOR<bgfxsfh::draw_quad> drawBufferOptimisedBucketA; // Most text is either white (255,255,255,255) or black(0,0,0,0)
-	//SSF_VECTOR<bgfxsfh::draw_quad> drawBufferOptimisedBucketB; // so two extra buckets are provided to place text directly to prevent sort()ing
-	SSF_VECTOR<bgfxsfh::untextured_draw_quad> untexturedDrawBuffer;
+	
+	// Temporary draw buffer - used for batching draw calls
+	SSF_BGFX_STACK_TEMPORATY_ALLOCATOR* drawBufferAlloctor; // avoid using heap to store buckets
+	SSF_VECTOR<bgfxsfh::draw_quad_bucket> drawBuffer;		// Bucketed draw calls for text quads
+	SSF_VECTOR<bgfxsfh::untextured_draw_quad_bucket> untexturedDrawBuffer;
+	// Used for cached insertion into above buckets
+	bgfxsfh::textured_draw_state insertBoundState;
+	bgfxsfh::untextured_draw_state insertBoundStateUt;
+	SSF_VECTOR<bgfxsfh::draw_quad>* insertBoundBucket;
+	SSF_VECTOR<bgfxsfh::untextured_draw_quad>* insertBoundBucketUt;
+	
 	bool bufferDraws;	// If true draw commands will be batched into the buffer vectors above and exectured as groups
 	bool isManuallyBuffering; // If true then bufferDraws is being controlled outside of this lib (use this to auto-merge texts on submit)
 	
 	bgfx_stb_font_cache () : sttfont_font_cache(), mViewId(0), mAtlasSize(1024), renderTarget(NULL), bufferDraws(false) {
 		resetScissor();
 		isManuallyBuffering = false;
+		drawBufferAlloctor = 0;
 		}
 	~bgfx_stb_font_cache () {
 		clearGlyphs();
@@ -871,7 +900,14 @@ public:
 		//Logger_ldbg("SSF: START DRAWING");
 		if (renderTarget) return;
 		bufferDraws = true;
+		
+		insertBoundState.textureId = BGFX_INVALID_HANDLE;
+		insertBoundState.setColour(0,0,0,0);
+		insertBoundStateUt.setColour(0,0,0,0);
+		insertBoundBucket = NULL;
+		insertBoundBucketUt = NULL;
 		}
+		
 	void onCompletedBuffering() {
 		//std::cout << "END DRAWING" << std::endl;
 		//Logger_ldbg("SSF: END DRAWING");
@@ -880,85 +916,92 @@ public:
 		bufferDraws = false;
 		
 		// Submit batched draw commands
-		if (drawBuffer.size()) {
-			// tbd: is sorting more expensive than more draw calls? bucketing can fix this
-			// most strings use the same texture & format so we won't sort for now
+		uint32_t dsz = drawBuffer.size();
+		if (dsz) {
+			draw_quad_bucket* bdata = drawBuffer.data();
 			
-			
-		double now = timer::getRealTime();
-			std::sort(drawBuffer.begin(), drawBuffer.end()); 
-			
-		double tend = timer::getRealTime();
-		
-			Logger_ldbg("drawBuffer.size(): {}, time taken: {}us, sizeof() {}", drawBuffer.size(), int((tend - now)*1000000), sizeof(bgfxsfh::draw_quad));
-			
-			uint32_t drawLast = 0;
-			for (uint32_t i = 1; i < drawBuffer.size(); ++i) {
-				if (drawBuffer[i].stateChange(drawBuffer[i-1])) { // state change
-					//Logger_ldbg("state change {}/{}", i, drawBuffer.size());
-					bgfxsfh::draw_quad & d = drawBuffer[drawLast];
-					bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
-					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
-					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
-					
-					bgfxsfh::pushTexturedQuads(NULL, NULL, &drawBuffer[drawLast], i-drawLast, true); 
-					
-					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(mViewId, bgfxsfh::texturedProgram);
-					
-					drawLast = i;
-					}
-				}
-			if (drawBuffer.size() - drawLast) {
-				//drawLast = 0;
-				//Logger_ldbg("state change final {}/{}", drawBuffer.size(), drawBuffer.size());
-				uint32_t i = drawBuffer.size();
-				bgfxsfh::draw_quad & d = drawBuffer[drawLast];
-				bgfx::setTexture(0, bgfxsfh::s_texture, d.textureId);
-				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
+			for (uint32_t i = 0; i < dsz; ++i) {
+				const draw_quad_bucket& b = bdata[i];
+				if (!b.quads.size()) continue;
+				
+				bgfx::setTexture(0, bgfxsfh::s_texture, b.state.textureId);
+				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(b.state.colour[0], b.state.colour[1], b.state.colour[2], b.state.colour[3]);
 				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
 				
-				bgfxsfh::pushTexturedQuads(NULL, NULL, &drawBuffer[drawLast], i-drawLast, true); 
+				bgfxsfh::pushTexturedQuads(NULL, NULL, b.quads.data(), b.quads.size(), true); 
 				
 				bgfx::setState(bgfxsfh::RENDER_STATE);
 				bgfx::submit(mViewId, bgfxsfh::texturedProgram);
 				}
-			drawBuffer.clear();
 			}
 		
-		if (untexturedDrawBuffer.size()) {
-			std::sort(untexturedDrawBuffer.begin(), untexturedDrawBuffer.end()); // Do not sort draw calls, will cause draws to layer ontop of each other in wrong order
-			uint32_t drawLast = 0;
-			for (uint32_t i = 1; i < untexturedDrawBuffer.size(); ++i) {
-				if (untexturedDrawBuffer[i].stateChange(untexturedDrawBuffer[i-1])) { // state change
-					bgfxsfh::untextured_draw_quad & d = untexturedDrawBuffer[drawLast];
-					bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
-					bgfx::setUniform(bgfxsfh::u_colour, temp.v);
-					
-					bgfxsfh::pushUntexturedQuads(NULL, &untexturedDrawBuffer[drawLast], i-drawLast); 
-					
-					bgfx::setState(bgfxsfh::RENDER_STATE);
-					bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
-					
-					drawLast = i;
-					}
-				}
-			if (untexturedDrawBuffer.size() - drawLast) {
-				//drawLast = 0;
-				uint32_t i = untexturedDrawBuffer.size();
-				bgfxsfh::untextured_draw_quad & d = untexturedDrawBuffer[drawLast];
-				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(d.colour[0],d.colour[1],d.colour[2],d.colour[3]);
+		uint32_t udsz = untexturedDrawBuffer.size();
+		if (udsz) {
+			untextured_draw_quad_bucket* ubdata = untexturedDrawBuffer.data();
+				
+			for (uint32_t i = 0; i < udsz; ++i) {
+				const untextured_draw_quad_bucket& b = ubdata[i];
+				if (!b.quads.size()) continue;
+				
+				bgfxsfh::Vec4 temp = bgfxsfh::toVec4(b.state.colour[0], b.state.colour[1], b.state.colour[2], b.state.colour[3]);
 				bgfx::setUniform(bgfxsfh::u_colour, temp.v);
 				
-				bgfxsfh::pushUntexturedQuads(NULL, &untexturedDrawBuffer[drawLast], i-drawLast); 
+				bgfxsfh::pushUntexturedQuads(NULL, b.quads.data(), b.quads.size()); 
 				
 				bgfx::setState(bgfxsfh::RENDER_STATE);
 				bgfx::submit(mViewId, bgfxsfh::untexturedProgram);
 				}
-			
-			untexturedDrawBuffer.clear();
 			}
 		}
+	
+protected:
+	void bindDrawBufferBucket (const bgfxsfh::textured_draw_state& this_state) {
+		uint32_t sz = bufferDraws.size();
+		for (uint32_t i = 0; i < sz; ++i) {
+			if (bufferDraws[i].state == this_state) {
+				insertBoundBucket = &drawBuffer[i].quads;
+				insertBoundState = drawBuffer[i].state;
+				return;
+				}
+			}
+		// cannot find, insert new state
+		uint32_t bound_index = bufferDraws.size();
+		insertBoundState = this_state;
+		bgfxsfh::draw_quad_bucket b;
+		b.state = this_state;
+		drawBuffer.push_back(b);
+		insertBoundBucket = &drawBuffer[bound_index].quads;
+		
+		#if SSF_BGFX_STACK_TEMPORATY_ALLOCATOR_ENABLED
+		if (drawBufferAlloctor)
+			insertBoundBucket->setAllocator(drawBufferAlloctor);
+		#endif
+		}
+		
+	void bindDrawBufferBucketUt (const bgfxsfh::untextured_draw_state& this_state) {
+		uint32_t sz = untexturedDrawBuffer.size();
+		for (uint32_t i = 0; i < sz; ++i) {
+			if (untexturedDrawBuffer[i].state == this_state) {
+				insertBoundBucketUt = &untexturedDrawBuffer[i].quads;
+				insertBoundStateUt = untexturedDrawBuffer[i].state;
+				return;
+				}
+			}
+		// cannot find, insert new state
+		uint32_t bound_index = bufferDraws.size();
+		insertBoundStateUt = this_state;
+		bgfxsfh::untextured_draw_quad_bucket b;
+		b.state = this_state;
+		untexturedDrawBuffer.push_back(b);
+		insertBoundBucketUt = &untexturedDrawBuffer[bound_index].quads;
+		
+		#if SSF_BGFX_STACK_TEMPORATY_ALLOCATOR_ENABLED
+		if (drawBufferAlloctor)
+			insertBoundBucketUt->setAllocator(drawBufferAlloctor);
+		#endif
+		}
+		
+public:
 	
 	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
@@ -992,18 +1035,25 @@ public:
 				int charAdv = kerningAdv + G->xOffset;
 				//bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
 				
+				
 				// Draw the glypth
 				if (!renderTarget) {
 					if (bgfx::isValid(G->mAtlasTexture)) {
 						if (bufferDraws) {
 							bgfxsfh::draw_quad dc;
-							dc.setColour(format->r, format->g, format->b, format->a);
-							dc.textureId = G->mAtlasTexture;
+							
+							bgfxsfh::textured_draw_state this_state;
+							this_state.setColour(format->r, format->g, format->b, format->a);
+							this_state.textureId = G->mAtlasTexture;
+							
+							if (!(this_state == insertBoundState))
+								bindDrawBufferBucket(this_state);
+							
 							dc.drawRect = r;
 							dc.texRect = rt;
 							if (useScissor)
 								bgfxsfh::getTexturedQuadWScissor(r, rt, dc.drawRect, dc.texRect, scissor, true);
-							drawBuffer.push_back(dc);
+							insertBoundBucket->push_back(dc);
 							}
 						else {
 							bgfx::setUniform(bgfxsfh::u_colour, bgfxsfh::toVec4(format->r, format->g, format->b, format->a).v);
@@ -1030,11 +1080,15 @@ public:
 					if (!renderTarget) {
 						if (bufferDraws) {
 							bgfxsfh::untextured_draw_quad dc;
-							dc.setColour(format->r, format->g, format->b, format->a);
-							dc.drawRect = r2;
 							if (useScissor)
 								bgfxsfh::getUntexturedQuadsWScissor(r2, dc.drawRect, scissor, true);
-							untexturedDrawBuffer.push_back(dc);
+								
+							bgfxsfh::untextured_draw_state this_state;
+							this_state.setColour(format->r, format->g, format->b, format->a);
+							if (!(this_state == insertBoundStateUt))
+								bindDrawBufferBucketUt(this_state);
+								
+							insertBoundBucketUt->push_back(dc);
 							}
 						else {
 							if (useScissor)
@@ -1057,11 +1111,16 @@ public:
 					if (!renderTarget) {
 						if (bufferDraws) {
 							bgfxsfh::untextured_draw_quad dc;
-							dc.setColour(format->r, format->g, format->b, format->a);
 							dc.drawRect = r2;
 							if (useScissor)
 								bgfxsfh::getUntexturedQuadsWScissor(r2, dc.drawRect, scissor, true);
-							untexturedDrawBuffer.push_back(dc);
+												
+							bgfxsfh::untextured_draw_state this_state;
+							this_state.setColour(format->r, format->g, format->b, format->a);
+							if (!(this_state == insertBoundStateUt))
+								bindDrawBufferBucketUt(this_state);
+								
+							insertBoundBucketUt->push_back(dc);
 							}
 						else {
 							if (useScissor)
@@ -1082,15 +1141,20 @@ public:
 					overdraw = SSF_INT_MIN;
 					
 					if (bufferDraws) {
+						bgfxsfh::textured_draw_state this_state;
+						this_state.setColour(format->r, format->g, format->b, format->a);
+						this_state.textureId = G->mAtlasTexture;
+						
+						if (!(this_state == insertBoundState))
+							bindDrawBufferBucket(this_state);
+						
 						bgfxsfh::draw_quad dc;
-						dc.setColour(255,255,255,255);
-						dc.textureId = G->mAtlasTexture;
 						dc.drawRect = r;
 						dc.texRect = rt;
 						if (useScissor)
 							bgfxsfh::getTexturedQuadWScissor(dc.drawRect, dc.texRect, dc.drawRect, dc.texRect, scissor, true);
-						drawBuffer.push_back(dc);
-						//std::cout << "submitting 1! " << char(codepoint) << std::endl;
+							
+						insertBoundBucket->push_back(dc);
 						}
 					else {
 						bgfx::setTexture(0, bgfxsfh::s_texture, G->mAtlasTexture);
