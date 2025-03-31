@@ -2613,6 +2613,10 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 			//	SDL_SetTextureBlendMode(G->mSdlTexture, SDL_BLENDMODE_BLEND); // blendmode none = no bleeding of blank pixlels BUT will override
 			//	}
 		
+			//if (format)
+			//	if (format->format == sttfont_format::FORMAT_ITALIC)
+			//		std::cout << "kerningAdv , " << kerningAdv << " " << G->xOffset << " char " << char(codepoint) << " wdith: " << (G->width ) << " advance: " <<(  G->advance) << std::endl;
+		
 			if (format) {
 				int charAdv = kerningAdv + G->xOffset;
 				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
