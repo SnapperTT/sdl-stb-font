@@ -135,7 +135,7 @@ struct sttfont_uint32_t_range {
 	static void populateRangesLatin (SSF_VECTOR<sttfont_uint32_t_range> & mRanges) {
 		sttfont_uint32_t_range r;
 		r.start = 0x20;
-		r.end  = 0xff;
+		r.end  = 0x7f;
 		mRanges.push_back(r);
 		} 
 	static void populateRangesCyrillic (SSF_VECTOR<sttfont_uint32_t_range> & mRanges) {
@@ -172,10 +172,10 @@ struct sttfont_prerendered_text {
 	};
 
 struct sttfont_glyph {
-	int advance;
-	int leftSideBearing;
-	int width, height;
-	int xOffset, yOffset;
+	int16_t advance;
+	int16_t leftSideBearing;
+	int16_t width, height;
+	int16_t xOffset, yOffset;
 	
 	sttfont_glyph () : advance(0), leftSideBearing(0), width(0), height(0), xOffset(0), yOffset(0) {}
 	};
@@ -438,6 +438,7 @@ public:
 	/// if bitmapOut is set then the bitmap data will by copied there and the glyph not stored, you must store it yourself
 	void genGlyph (const uint32_t codepoint, const uint8_t format, sttfont_glyph * gOut, unsigned char ** bitmapOut = NULL) {
 		// Fetch font and index - existance check for glyph in font
+		// format is a number representing regular, bold, itallic, bold itallic
 		stbtt_fontinfo * mFontContaining;
 		int mIndex;
 		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex);
@@ -450,7 +451,8 @@ public:
 	   	int w,h,woff,hoff;
 		bitmap = stbtt_GetCodepointBitmap(mFontContaining, 0, scale, codepoint, &w, &h, &woff, &hoff);
 		
-        // Convert bitmap to RGBA
+        // Convert bitmap to RGBA8888
+		// Todo - change RBGA8888 to R8
 		unsigned int sz = w*h;
 		if (sz) {
 			if (bitmapOut) {
@@ -483,7 +485,10 @@ public:
 		
 		gOut->width = w;
 		gOut->height = h;
-		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &gOut->advance, &gOut->leftSideBearing);
+		int advance, leftSideBearing;
+		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		gOut->advance = advance;
+		gOut->leftSideBearing = leftSideBearing;
 		
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;

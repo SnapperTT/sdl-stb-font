@@ -94,6 +94,7 @@ protected:
 	SSF_MAP<pcfc_handle, sttfont_prerendered_text*> prerenderMap;
 	SSF_MAP<uint64_t, sttfont_glyph> mGlyphs;
 	
+public:
 	struct state_t {
 		SSF_PCFC_TEMPORARY_ALLOCATOR temporaryAllocator; // if SSF_PCFC_TEMPORARY_ALLOCATOR is defined then this is the allocator for this
 		SSF_VECTOR<producer_consumer_font_cache::pcfc_consumer_prerendered_text> prerender;
@@ -114,7 +115,7 @@ protected:
 				text.setAllocator(&temporaryAllocator);
 			#endif
 			}
-		
+			
 		~state_t() {
 			#if SSF_PCFC_TEMPORARY_ALLOCATOR_ENABLED
 				// no not deallocate or call destructors for the vectors
@@ -217,6 +218,7 @@ protected:
 			}
 		};
 	
+protected:
 	state_t producerState;
 	SSF_STATE_TRANSFER txQueue;
 	state_t consumerState;
@@ -444,6 +446,19 @@ public:
 			mMutex.unlock();
 		#endif
 		numInQueue++;
+		}
+	
+	void swapStateWithProducer(state_t* s) {
+		// Extracts the producer's state. this is used if you're using some kind of external synchornisation system
+		// Producer thread:
+		// state_t* s = new state_t;
+		// pcfc->swapStateWithProducer(s);
+		// (pass s to consumer thread)
+		s->swap(producerState);
+		}
+		
+	void swapStateWithConsumer(state_t* s) {
+		s->swap(consumerState);
 		}
 		
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////

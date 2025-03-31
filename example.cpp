@@ -21,7 +21,7 @@
 //
 
 #include <string>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <iostream>
 #include <fstream>
 
@@ -162,18 +162,18 @@ formattedText << sttfont_format::black << "Plain text "
 	int windowHeight = 1000;
 
 	SDL_Init(0);
-	SDL_Window * mWindow = SDL_CreateWindow("Example Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+	SDL_Window * mWindow = SDL_CreateWindow("Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
 	
-	SDL_Renderer * mSdlRenderer = SDL_CreateRenderer(mWindow, SDL_RENDERER_SOFTWARE, 0);
+	SDL_Renderer * mSdlRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
 	fc.bindRenderer(mSdlRenderer); // Must bind a renderer before generating any glyphs
-	
+		
 	// Profiling variables
 	uint64_t NOW = SDL_GetPerformanceCounter();
 	uint64_t LAST = 0;
 	
 	// Rendering test
 	// Set this to something else to print
-	int test = 5;
+	int test = 1;
 	
 	
 	if (test == 1) {
@@ -182,7 +182,7 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
-					case SDL_QUIT:
+					case SDL_EVENT_QUIT:
 						return 1;
 						break;
 					}
@@ -194,6 +194,7 @@ formattedText << sttfont_format::black << "Plain text "
 			fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum); // Renders the loremIpsum string and stores the glyphs in textures
    
 			SDL_RenderPresent(mSdlRenderer);
+			SDL_UpdateWindowSurface(mWindow);
 			
 			if (i % 100 == 0) {
 				LAST = NOW;
@@ -213,7 +214,7 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
-					case SDL_QUIT:
+					case SDL_EVENT_QUIT:
 						return 1;
 						break;
 					}
@@ -222,14 +223,15 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255);
 			SDL_RenderClear(mSdlRenderer);
 			
-			SDL_Rect r;
+			SDL_FRect r;
 			r.x = 5;
 			r.y = 5;
 			r.w = RTw;
 			r.h = RTh;
-			SDL_RenderCopy(mSdlRenderer , RT , NULL, &r); 
+			SDL_RenderTexture(mSdlRenderer , RT , NULL, &r); 
 			
 			SDL_RenderPresent(mSdlRenderer);
+			SDL_UpdateWindowSurface(mWindow);
 			
 			if (i % 100 == 0) {
 				LAST = NOW;
@@ -252,7 +254,7 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
-					case SDL_QUIT:
+					case SDL_EVENT_QUIT:
 						return 1;
 						break;
 					}
@@ -265,6 +267,7 @@ formattedText << sttfont_format::black << "Plain text "
 			prt.drawWithColorMod(5, 5, 255, 185, 80, 255); // Render in orange
 
 			SDL_RenderPresent(mSdlRenderer);
+			SDL_UpdateWindowSurface(mWindow);
 			
 			if (i % 100 == 0) {
 				LAST = NOW;
@@ -283,7 +286,7 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
-					case SDL_QUIT:
+					case SDL_EVENT_QUIT:
 						return 1;
 						break;
 					}
@@ -296,6 +299,7 @@ formattedText << sttfont_format::black << "Plain text "
 			fc.drawText(5, 5 + fc.faceSize * 5, "Normal text after");	// Test that state is not mutated
    
 			SDL_RenderPresent(mSdlRenderer);
+			SDL_UpdateWindowSurface(mWindow);
 			
 			if (i % 100 == 0) {
 				LAST = NOW;
@@ -321,7 +325,7 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
-					case SDL_QUIT:
+					case SDL_EVENT_QUIT:
 						return 1;
 						break;
 					}
@@ -334,6 +338,7 @@ formattedText << sttfont_format::black << "Plain text "
 			prt2.draw(5, 5 + fc.faceSize * (numRows)); 
 			
 			SDL_RenderPresent(mSdlRenderer);
+			SDL_UpdateWindowSurface(mWindow);
 			
 			if (i % 100 == 0) {
 				LAST = NOW;

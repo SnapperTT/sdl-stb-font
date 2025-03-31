@@ -337,12 +337,12 @@ struct sttfont_prerendered_text
 };
 struct sttfont_glyph
 {
-  int advance;
-  int leftSideBearing;
-  int width;
-  int height;
-  int xOffset;
-  int yOffset;
+  int16_t advance;
+  int16_t leftSideBearing;
+  int16_t width;
+  int16_t height;
+  int16_t xOffset;
+  int16_t yOffset;
   sttfont_glyph ();
 };
 struct sttfont_memory
@@ -1559,7 +1559,7 @@ void sttfont_uint32_t_range::populateRangesLatin (SSF_VECTOR <sttfont_uint32_t_r
                                                                                        {
 		sttfont_uint32_t_range r;
 		r.start = 0x20;
-		r.end  = 0xff;
+		r.end  = 0x7f;
 		mRanges.push_back(r);
 		}
 void sttfont_uint32_t_range::populateRangesCyrillic (SSF_VECTOR <sttfont_uint32_t_range> & mRanges)
@@ -1777,6 +1777,7 @@ void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant
 void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut)
                                                                                                                                 {
 		// Fetch font and index - existance check for glyph in font
+		// format is a number representing regular, bold, itallic, bold itallic
 		stbtt_fontinfo * mFontContaining;
 		int mIndex;
 		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex);
@@ -1789,7 +1790,8 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 	   	int w,h,woff,hoff;
 		bitmap = stbtt_GetCodepointBitmap(mFontContaining, 0, scale, codepoint, &w, &h, &woff, &hoff);
 		
-        // Convert bitmap to RGBA
+        // Convert bitmap to RGBA8888
+		// Todo - change RBGA8888 to R8
 		unsigned int sz = w*h;
 		if (sz) {
 			if (bitmapOut) {
@@ -1822,7 +1824,10 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 		
 		gOut->width = w;
 		gOut->height = h;
-		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &gOut->advance, &gOut->leftSideBearing);
+		int advance, leftSideBearing;
+		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		gOut->advance = advance;
+		gOut->leftSideBearing = leftSideBearing;
 		
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;
@@ -2506,7 +2511,7 @@ public:
 //
 
 #ifndef SDL_STB_FONT_SDL_INCLUDED
-	#include <SDL2/SDL.h>
+	#include <SDL3/SDL.h>
 #endif
 #define LZZ_INLINE inline
 sdl_stb_prerendered_text::sdl_stb_prerendered_text ()
@@ -2520,12 +2525,12 @@ void sdl_stb_prerendered_text::freeTexture ()
 		}
 int sdl_stb_prerendered_text::draw (int const x, int const y)
                                             {
-		SDL_Rect r;
+		SDL_FRect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
-		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		SDL_RenderTexture(mRenderer, mSdlTexture, NULL, &r);
 		return r.x + r.w;
 		}
 int sdl_stb_prerendered_text::drawWithColorMod (int const x, int const y, uint8_t const r, uint8_t const g, uint8_t const b, uint8_t const a)
@@ -2553,7 +2558,7 @@ void sdl_stb_font_cache::clearGlyphs ()
 				g.second.mSdlTexture = NULL;
 				}
 			if (g.second.mSdlSurface) {
-				SDL_FreeSurface(g.second.mSdlSurface);
+				SDL_DestroySurface(g.second.mSdlSurface);
 				g.second.mSdlSurface = NULL;
 				}
 			}
@@ -2566,7 +2571,7 @@ void sdl_stb_font_cache::bindRenderer (SDL_Renderer * _mRenderer)
 void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
                                                                                                                         {
 		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
-		gOut2->mSdlSurface = SDL_CreateRGBSurfaceFrom(bitmap2, w, h, 32, 4*w, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+		gOut2->mSdlSurface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA8888, bitmap2,  4*w);
 		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);
 		}
 sttfont_glyph * sdl_stb_font_cache::getGlyph (uint64_t const target)
@@ -2588,7 +2593,7 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
 		// Draws the character
 		if (G->mSdlTexture) {
-			SDL_Rect r;
+			SDL_FRect r;
 			r.x = x + G->xOffset;
 			r.y = y + G->yOffset + baseline;
 			r.w = G->width;
@@ -2603,7 +2608,7 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 					SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
 					// Remove bleeding pixels
-					SDL_Rect r2;
+					SDL_FRect r2;
 					r2.x = r.x; r2.y = r.y;
 					r2.w = r.w; r2.h = r.h;
 					if (r2.x < overdraw) {
@@ -2616,17 +2621,17 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 					}
 				if (formatCode)
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
-				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				
 				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
-					SDL_Rect r2;
+					SDL_FRect r2;
 					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
 					SDL_RenderFillRect (mRenderer, &r2);
 					}
 				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
-					SDL_Rect r2;
+					SDL_FRect r2;
 					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
@@ -2640,7 +2645,7 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 				}
 			else {
 				overdraw = SSF_INT_MIN;
-				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				}
 			}
 		}
@@ -2660,16 +2665,16 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 		else
 			getTextSize(width, height, c, maxLen);
 		
-		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
+		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
 		SDL_Texture * oldRT = SDL_GetRenderTarget(mRenderer);
-		const bool isClipping = SDL_RenderIsClipEnabled(mRenderer);
+		const bool isClipping = SDL_RenderClipEnabled(mRenderer);
 		SDL_Rect oldScissor;
-		if (isClipping) SDL_RenderGetClipRect(mRenderer, &oldScissor);
+		if (isClipping) SDL_GetRenderClipRect(mRenderer, &oldScissor);
 		SDL_SetRenderTarget(mRenderer, RT);
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
 		// Fill RT with blank pixels. SDL_RenderClear will leave artefacts in SDL Software mode
-		SDL_Rect r;
+		SDL_FRect r;
 		r.x = 0; r.y = 0;
 		r.w = width; r.h = height;
 		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
@@ -2681,7 +2686,7 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 			drawText(0, 0, c, maxLen);
 		
 		SDL_SetRenderTarget(mRenderer, oldRT);
-		if (isClipping) SDL_RenderSetClipRect(mRenderer, &oldScissor);
+		if (isClipping) SDL_SetRenderClipRect(mRenderer, &oldScissor);
 		
 		*widthOut = width;
 		*heightOut = height;

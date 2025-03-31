@@ -781,6 +781,7 @@ public:
 			bgfx_stb_glyph * bOut = (bgfx_stb_glyph*) &mGlyphs[t.target];
 			
 			if (r.was_packed) {
+				//Logger_ldbg("SDL_STB pregenGlyphs_pack {} {}", t.target, char(t.target & 0xff));
 				const bgfx::Memory* mem = bgfx::copy(t.bitmapData, bOut->width*bOut->height*4);
 				bgfx::updateTexture2D(activeAtlas->mAtlasTexture, 0, 0, r.x, r.y, r.w, r.h, mem);
 				bOut->x = r.x/float(mAtlasSize);
@@ -838,8 +839,13 @@ public:
 		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, &r, 1);
 		if (r.was_packed) {
 			//std::cout << "packing: " << r.x << ", " << r.y << ", " << r.w << ", " << r.h << std::endl;
+			//Logger_ldbg("SDL_STB genGlyph_writeData2 {} {} {}, atlas: {} {} {} {}, mem: {}", codepoint, r.id, char(codepoint), r.x, r.y, r.w, r.h, Utils::binToHex(SSF_STRING((const char*) bitmap2, bx::min(w*h*4, 64))));			
+			#warning Known issue: vk backend will sometimes not copy pixels to texture
+			// Possible fix - discard current texture and upload?
+			// putting in a loop (for i = 0, 100) fixes vk issue at cost of perfomance
 			const bgfx::Memory* mem = bgfx::copy(bitmap2, w*h*4);
 			bgfx::updateTexture2D(activeAtlas->mAtlasTexture, 0, 0, r.x, r.y, r.w, r.h, mem);
+				
 			bOut->x = r.x/float(mAtlasSize);
 			bOut->y = r.y/float(mAtlasSize);
 			bOut->w = r.w/float(mAtlasSize);
@@ -850,6 +856,7 @@ public:
 			return;
 			}
 		else {
+			//Logger_ldbg("SDL_STB genGlyph_writeData2 REJECTED CODEPOINT {} {}", codepoint, char(codepoint));
 			activeAtlas->isFull = true;
 			}
 		

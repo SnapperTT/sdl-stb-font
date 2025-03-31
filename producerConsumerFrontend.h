@@ -84,6 +84,7 @@ protected:
   pcfc_handle nextPrerenderTokenId;
   SSF_MAP <pcfc_handle, sttfont_prerendered_text*> prerenderMap;
   SSF_MAP <uint64_t, sttfont_glyph> mGlyphs;
+public:
   struct state_t
   {
     SSF_PCFC_TEMPORARY_ALLOCATOR temporaryAllocator;
@@ -105,6 +106,7 @@ protected:
     void swap (state_t & s);
     void clear (bool const checkForJobs = true);
   };
+protected:
   state_t producerState;
   SSF_STATE_TRANSFER txQueue;
   state_t consumerState;
@@ -131,6 +133,8 @@ public:
   void destroyPrerender (pcfc_handle const handle);
   void pushUserdata (void * data);
   void submitToConsumer ();
+  void swapStateWithProducer (state_t * s);
+  void swapStateWithConsumer (state_t * s);
   pcfc_handle pushTextConsumerSide (int const x, int const y, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   pcfc_handle pushTextConsumerSide (int const x, int const y, SSF_STRING const & str, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
   pcfc_handle pushTextConsumerSide (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen = -1, int * xOut = NULL, int * widthOut = NULL, int * heightOut = NULL);
@@ -535,6 +539,19 @@ void producer_consumer_font_cache::submitToConsumer ()
 			mMutex.unlock();
 		#endif
 		numInQueue++;
+		}
+void producer_consumer_font_cache::swapStateWithProducer (state_t * s)
+                                               {
+		// Extracts the producer's state. this is used if you're using some kind of external synchornisation system
+		// Producer thread:
+		// state_t* s = new state_t;
+		// pcfc->swapStateWithProducer(s);
+		// (pass s to consumer thread)
+		s->swap(producerState);
+		}
+void producer_consumer_font_cache::swapStateWithConsumer (state_t * s)
+                                               {
+		s->swap(consumerState);
 		}
 pcfc_handle producer_consumer_font_cache::pushTextConsumerSide (int const x, int const y, char const * c, uint32_t const maxLen, int * xOut, int * widthOut, int * heightOut)
                                                                                                                                                                              {

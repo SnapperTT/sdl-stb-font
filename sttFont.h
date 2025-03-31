@@ -337,12 +337,12 @@ struct sttfont_prerendered_text
 };
 struct sttfont_glyph
 {
-  int advance;
-  int leftSideBearing;
-  int width;
-  int height;
-  int xOffset;
-  int yOffset;
+  int16_t advance;
+  int16_t leftSideBearing;
+  int16_t width;
+  int16_t height;
+  int16_t xOffset;
+  int16_t yOffset;
   sttfont_glyph ();
 };
 struct sttfont_memory
@@ -1559,7 +1559,7 @@ void sttfont_uint32_t_range::populateRangesLatin (SSF_VECTOR <sttfont_uint32_t_r
                                                                                        {
 		sttfont_uint32_t_range r;
 		r.start = 0x20;
-		r.end  = 0xff;
+		r.end  = 0x7f;
 		mRanges.push_back(r);
 		}
 void sttfont_uint32_t_range::populateRangesCyrillic (SSF_VECTOR <sttfont_uint32_t_range> & mRanges)
@@ -1777,6 +1777,7 @@ void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant
 void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut)
                                                                                                                                 {
 		// Fetch font and index - existance check for glyph in font
+		// format is a number representing regular, bold, itallic, bold itallic
 		stbtt_fontinfo * mFontContaining;
 		int mIndex;
 		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex);
@@ -1789,7 +1790,8 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 	   	int w,h,woff,hoff;
 		bitmap = stbtt_GetCodepointBitmap(mFontContaining, 0, scale, codepoint, &w, &h, &woff, &hoff);
 		
-        // Convert bitmap to RGBA
+        // Convert bitmap to RGBA8888
+		// Todo - change RBGA8888 to R8
 		unsigned int sz = w*h;
 		if (sz) {
 			if (bitmapOut) {
@@ -1822,7 +1824,10 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 		
 		gOut->width = w;
 		gOut->height = h;
-		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &gOut->advance, &gOut->leftSideBearing);
+		int advance, leftSideBearing;
+		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		gOut->advance = advance;
+		gOut->leftSideBearing = leftSideBearing;
 		
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;

@@ -22,7 +22,7 @@
 
 #include <string>
 #include <vector>
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <iostream>
 #include <fstream>
 #include <thread>
@@ -117,6 +117,7 @@ public:
 	producer_consumer_font_cache mPcCache;
 	sdl_stb_font_cache mSdlFontCache;
 	CommandBuffer mCommandBuffer; // an example of this is at https://github.com/SnapperTT/nanovg_command_buffer
+	SDL_Window* mWindow;
 	std::atomic<int> killFlag;
 	
 	void initExample(std::string & fontData) {
@@ -193,7 +194,7 @@ public:
 			SDL_Event ev;
 			while (SDL_PollEvent(&ev)) {
 				switch (ev.type) {
-					case SDL_QUIT:
+					case SDL_EVENT_QUIT:
 						{
 						killFlag = 1;
 						mCommandBuffer.workFlag = 0;
@@ -224,9 +225,9 @@ public:
 					case COMMAND_TYPE_RECT:
 						{
 						SDL_SetRenderDrawColor(mSdlRenderer, 55, 55, 55, 255); // dark grey rectangle
-						SDL_Rect r;
+						SDL_FRect r;
 						r.x = mCommand.x; r.y = mCommand.y; r.w = mCommand.w; r.h = mCommand.h;
-						SDL_RenderDrawRect(mSdlRenderer, &r);
+						SDL_RenderRect(mSdlRenderer, &r);
 						continue;
 						}
 					default:
@@ -241,6 +242,7 @@ public:
 			mSdlFontCache.drawText(5, 65, ss.str());
 			
 			SDL_RenderPresent(mSdlRenderer);
+			SDL_UpdateWindowSurface(mWindow);
 			frameCounter++;
 			//SDL_Delay(13);
 			
@@ -260,12 +262,13 @@ int main(int argc, char**argv) {
 	int windowHeight = 1000;
 
 	SDL_Init(0);
-	SDL_Window * mWindow = SDL_CreateWindow("Producer Consumer Example Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+	SDL_Window * mWindow = SDL_CreateWindow("Producer Consumer Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
 	
-	SDL_Renderer * mSdlRenderer = SDL_CreateRenderer(mWindow, SDL_RENDERER_SOFTWARE, 0);
+	SDL_Renderer * mSdlRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
 	
 	pcfc_example ex;
 	ex.mSdlFontCache.bindRenderer(mSdlRenderer);  // Must bind a renderer before generating any glyphs
+	ex.mWindow = mWindow;
 	
 	{
 	std::string fontData;

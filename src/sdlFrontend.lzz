@@ -11,7 +11,7 @@ struct SDL_Surface;
 
 #src
 #ifndef SDL_STB_FONT_SDL_INCLUDED
-	#include <SDL2/SDL.h>
+	#include <SDL3/SDL.h>
 #endif
 #end
 
@@ -31,12 +31,12 @@ struct sdl_stb_prerendered_text : public sttfont_prerendered_text {
 	/// Draws this prerendered text object, returns the x coordinate
 	/// at the end of the drawing
 	int draw (const int x, const int y) {
-		SDL_Rect r;
+		SDL_FRect r;
 		r.x = x;
 		r.y = y;
 		r.w = width;
 		r.h = height;
-		SDL_RenderCopy(mRenderer, mSdlTexture, NULL, &r);
+		SDL_RenderTexture(mRenderer, mSdlTexture, NULL, &r);
 		return r.x + r.w;
 		}
 		
@@ -76,7 +76,7 @@ public:
 				g.second.mSdlTexture = NULL;
 				}
 			if (g.second.mSdlSurface) {
-				SDL_FreeSurface(g.second.mSdlSurface);
+				SDL_DestroySurface(g.second.mSdlSurface);
 				g.second.mSdlSurface = NULL;
 				}
 			}
@@ -93,7 +93,7 @@ public:
 	// Override - write 
 	void genGlyph_writeData (const uint32_t codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
 		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
-		gOut2->mSdlSurface = SDL_CreateRGBSurfaceFrom(bitmap2, w, h, 32, 4*w, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+		gOut2->mSdlSurface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA8888, bitmap2,  4*w);
 		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);
 		}
 	
@@ -115,7 +115,7 @@ public:
 		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
 		// Draws the character
 		if (G->mSdlTexture) {
-			SDL_Rect r;
+			SDL_FRect r;
 			r.x = x + G->xOffset;
 			r.y = y + G->yOffset + baseline;
 			r.w = G->width;
@@ -130,7 +130,7 @@ public:
 					SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
 					// Remove bleeding pixels
-					SDL_Rect r2;
+					SDL_FRect r2;
 					r2.x = r.x; r2.y = r.y;
 					r2.w = r.w; r2.h = r.h;
 					if (r2.x < overdraw) {
@@ -143,17 +143,17 @@ public:
 					}
 				if (formatCode)
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
-				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				
 				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
-					SDL_Rect r2;
+					SDL_FRect r2;
 					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
 					SDL_RenderFillRect (mRenderer, &r2);
 					}
 				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
-					SDL_Rect r2;
+					SDL_FRect r2;
 					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
@@ -167,7 +167,7 @@ public:
 				}
 			else {
 				overdraw = SSF_INT_MIN;
-				SDL_RenderCopy(mRenderer, G->mSdlTexture, NULL, &r);
+				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				}
 			}
 		}
@@ -187,16 +187,16 @@ protected:
 		else
 			getTextSize(width, height, c, maxLen);
 		
-		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888,SDL_TEXTUREACCESS_TARGET, width, height);
+		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
 		SDL_Texture * oldRT = SDL_GetRenderTarget(mRenderer);
-		const bool isClipping = SDL_RenderIsClipEnabled(mRenderer);
+		const bool isClipping = SDL_RenderClipEnabled(mRenderer);
 		SDL_Rect oldScissor;
-		if (isClipping) SDL_RenderGetClipRect(mRenderer, &oldScissor);
+		if (isClipping) SDL_GetRenderClipRect(mRenderer, &oldScissor);
 		SDL_SetRenderTarget(mRenderer, RT);
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
 		// Fill RT with blank pixels. SDL_RenderClear will leave artefacts in SDL Software mode
-		SDL_Rect r;
+		SDL_FRect r;
 		r.x = 0; r.y = 0;
 		r.w = width; r.h = height;
 		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
@@ -208,7 +208,7 @@ protected:
 			drawText(0, 0, c, maxLen);
 		
 		SDL_SetRenderTarget(mRenderer, oldRT);
-		if (isClipping) SDL_RenderSetClipRect(mRenderer, &oldScissor);
+		if (isClipping) SDL_SetRenderClipRect(mRenderer, &oldScissor);
 		
 		*widthOut = width;
 		*heightOut = height;
