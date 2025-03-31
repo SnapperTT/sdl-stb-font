@@ -32,6 +32,7 @@ class sdl_stb_font_cache : public sttfont_font_cache
 {
 public:
   SDL_Renderer * mRenderer;
+  bool isRenderingToTexture;
   sdl_stb_font_cache ();
   ~ sdl_stb_font_cache ();
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
@@ -96,8 +97,8 @@ sdl_stb_glyph::sdl_stb_glyph ()
   : sttfont_glyph (), mSdlTexture (0), mSdlSurface (0)
                                                                            {}
 sdl_stb_font_cache::sdl_stb_font_cache ()
-  : sttfont_font_cache (), mRenderer (NULL)
-                                                                      {}
+  : sttfont_font_cache (), mRenderer (NULL), isRenderingToTexture (false)
+                                                                                                   {}
 sdl_stb_font_cache::~ sdl_stb_font_cache ()
                                {
 		clearGlyphs();
@@ -123,7 +124,7 @@ void sdl_stb_font_cache::bindRenderer (SDL_Renderer * _mRenderer)
 void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
                                                                                                                         {
 		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
-		gOut2->mSdlSurface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA8888, bitmap2,  4*w);
+		gOut2->mSdlSurface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, bitmap2,  4*w);
 		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);
 		}
 sttfont_glyph * sdl_stb_font_cache::getGlyph (uint64_t const target)
@@ -151,13 +152,28 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 			r.w = G->width;
 			r.h = G->height;
 			
+			// rgba = (r,g,b,0) <--- (r,g,b,a) correct!
+
+			bool blendModeSuccess = false;
+			
+			// Texture bleeding is still being worked on
+			// BLENDMODE NONE => no bleeding but negative kerning will override previous characters
+			// BLENDMODE_BLEND => need to draw under the character to prevent bleeding
+			// Todo Optimisation -> blendmode none if no negative kerning 
+			//if (isRenderingToTexture) {
+			//	//SDL_BlendMode bm = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDFACTOR_DST_ALPHA, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDFACTOR_DST_ALPHA, SDL_BLENDOPERATION_MAXIMUM); // does not work in software
+			//	SDL_SetTextureBlendMode(G->mSdlTexture, SDL_BLENDMODE_BLEND); // blendmode none = no bleeding of blank pixlels BUT will override
+			//	}
+		
 			if (format) {
 				int charAdv = kerningAdv + G->xOffset;
 				bool isColoured = (format->r < 255) || (format->g < 255) || (format->b < 255);
+				
 				uint8_t cr,cg,cb,ca;
 				if (isColoured || formatCode) {
-					SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
 					SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+					if (isRenderingToTexture)
+						SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_NONE);
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
 					// Remove bleeding pixels
 					SDL_FRect r2;
@@ -170,9 +186,13 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 						}
 					overdraw = r.x + r.w;
 					SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+					SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_BLEND);
 					}
 				if (formatCode)
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 255);
+				if (isColoured)
+					SDL_SetTextureColorMod(G->mSdlTexture, format->r, format->g, format->b);
+					
 				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				
 				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
@@ -196,9 +216,34 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 					}
 				}
 			else {
-				overdraw = SSF_INT_MIN;
+				if (isRenderingToTexture) {
+					uint8_t cr,cg,cb,ca;
+					SDL_GetRenderDrawColor(mRenderer, &cr,&cg,&cb,&ca);
+					SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_NONE);
+					SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, 0);
+					
+					// Remove bleeding pixels
+					SDL_FRect r2;
+					r2.x = r.x; r2.y = r.y;
+					r2.w = r.w; r2.h = r.h;
+					if (r2.x < overdraw) {
+						int dx = overdraw - r2.x;
+						r2.x += dx;
+						r2.w -= dx;
+						}
+					overdraw = r.x + r.w;
+					SDL_RenderFillRect(mRenderer, &r2); //TODO: prevent overlapping!
+					
+					SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, ca);
+					}
+				else {
+					overdraw = SSF_INT_MIN;
+					}
 				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				}
+				
+			//if (isRenderingToTexture)
+			//	SDL_SetTextureBlendMode(G->mSdlTexture, SDL_BLENDMODE_BLEND);
 			}
 		}
 SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
@@ -217,14 +262,18 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 		else
 			getTextSize(width, height, c, maxLen);
 		
-		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, width, height);
+		SDL_Texture * RT = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height);
 		SDL_Texture * oldRT = SDL_GetRenderTarget(mRenderer);
 		const bool isClipping = SDL_RenderClipEnabled(mRenderer);
+		const bool oldIsRenderingToTexture = isRenderingToTexture;
+		isRenderingToTexture = true;
 		SDL_Rect oldScissor;
 		if (isClipping) SDL_GetRenderClipRect(mRenderer, &oldScissor);
 		SDL_SetRenderTarget(mRenderer, RT);
-		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
+		//SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_NONE);
+		SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_NONE);
 		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 0); // Must be the same colour as the text
+		SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_BLEND);
 		// Fill RT with blank pixels. SDL_RenderClear will leave artefacts in SDL Software mode
 		SDL_FRect r;
 		r.x = 0; r.y = 0;
@@ -232,6 +281,7 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 		SDL_RenderFillRect (mRenderer, &r); // Must be rendered with a fill rect
 		
 		SDL_SetTextureBlendMode(RT, SDL_BLENDMODE_BLEND);
+		SDL_SetRenderDrawColor(mRenderer, 255, 255, 255, 255);
 		if (formatted)
 			drawText(0, 0, *formatted);
 		else
@@ -239,6 +289,7 @@ SDL_Texture * sdl_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_
 		
 		SDL_SetRenderTarget(mRenderer, oldRT);
 		if (isClipping) SDL_SetRenderClipRect(mRenderer, &oldScissor);
+		isRenderingToTexture = oldIsRenderingToTexture;
 		
 		*widthOut = width;
 		*heightOut = height;

@@ -164,7 +164,9 @@ formattedText << sttfont_format::black << "Plain text "
 	SDL_Init(0);
 	SDL_Window * mWindow = SDL_CreateWindow("Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
 	
-	SDL_Renderer * mSdlRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
+	//SDL_Renderer * mSdlRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
+	SDL_Renderer * mSdlRenderer = SDL_CreateRenderer(mWindow, NULL); // Test opengl. Note that for the sdl frontend
+	std::cout << "SDL_Renderer Type: " << SDL_GetRendererName(mSdlRenderer) << std::endl;
 	fc.bindRenderer(mSdlRenderer); // Must bind a renderer before generating any glyphs
 		
 	// Profiling variables
@@ -173,8 +175,12 @@ formattedText << sttfont_format::black << "Plain text "
 	
 	// Rendering test
 	// Set this to something else to print
-	int test = 1;
-	
+	int test = 5;
+	if (argc > 1) {
+		test = atoi(argv[1]);
+		if (test > 5) test = 5;
+		if (test < 1) test = 1;
+		}
 	
 	if (test == 1) {
 		// Directly rendering text
@@ -296,7 +302,7 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_RenderClear(mSdlRenderer);
 			
 			fc.drawText(5, 5, formattedText);
-			fc.drawText(5, 5 + fc.faceSize * 5, "Normal text after");	// Test that state is not mutated
+			fc.drawText(5, 5 + fc.faceSize * 6, "Normal text after");	// Test that state is not mutated
    
 			SDL_RenderPresent(mSdlRenderer);
 			SDL_UpdateWindowSurface(mWindow);
