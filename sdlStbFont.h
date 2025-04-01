@@ -337,8 +337,8 @@ struct sttfont_prerendered_text
 };
 struct sttfont_glyph
 {
-  int16_t advance;
-  int16_t leftSideBearing;
+  int advance;
+  int leftSideBearing;
   int16_t width;
   int16_t height;
   int16_t xOffset;
@@ -2600,22 +2600,16 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 			r.w = G->width;
 			r.h = G->height;
 			
-			// rgba = (r,g,b,0) <--- (r,g,b,a) correct!
-
-			bool blendModeSuccess = false;
-			
-			// Texture bleeding is still being worked on
-			// BLENDMODE NONE => no bleeding but negative kerning will override previous characters
-			// BLENDMODE_BLEND => need to draw under the character to prevent bleeding
-			// Todo Optimisation -> blendmode none if no negative kerning 
-			//if (isRenderingToTexture) {
-			//	//SDL_BlendMode bm = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDFACTOR_DST_ALPHA, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_SRC_ALPHA, SDL_BLENDFACTOR_DST_ALPHA, SDL_BLENDOPERATION_MAXIMUM); // does not work in software
-			//	SDL_SetTextureBlendMode(G->mSdlTexture, SDL_BLENDMODE_BLEND); // blendmode none = no bleeding of blank pixlels BUT will override
-			//	}
-		
-			//if (format)
-			//	if (format->format == sttfont_format::FORMAT_ITALIC)
-			//		std::cout << "kerningAdv , " << kerningAdv << " " << G->xOffset << " char " << char(codepoint) << " wdith: " << (G->width ) << " advance: " <<(  G->advance) << std::endl;
+			// There is an issue with alpha blending when rendering to texture
+			// this happens because dstRGB =/= srcRGB and blend mode uses (1-srcA)*dstRGB
+			// This can be fixed by disabling alpha blending `SDL_SetTextureBlendMode(G->mSdlTexture, SDL_BLENDMODE_NONE);`,
+			// but this will overdraw part of the previous glyph in some circumstances
+			// (when `(G->width < (G->advance*scale))` for the previous character)
+			//
+			// So I solve this by prerendering a srcRGB with alpha = 0 quad.
+			//
+			// @TODO: We could optimise this and save some draw calls by detecting overdraw
+			// and then selecting SDL_BLENDMODE_NONE if not overdrawing, and pre-drawing srcRGB0 quad if we are
 		
 			if (format) {
 				int charAdv = kerningAdv + G->xOffset;
@@ -2627,7 +2621,7 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 					if (isRenderingToTexture)
 						SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_NONE);
 					SDL_SetRenderDrawColor(mRenderer, format->r, format->g, format->b, 0);
-					// Remove bleeding pixels
+					// Remove bleeding pixels by first rendering a transparent quad with zero alpha
 					SDL_FRect r2;
 					r2.x = r.x; r2.y = r.y;
 					r2.w = r.w; r2.h = r.h;
@@ -2674,7 +2668,7 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 					SDL_SetRenderDrawBlendMode(mRenderer, SDL_BLENDMODE_NONE);
 					SDL_SetRenderDrawColor(mRenderer, cr, cg, cb, 0);
 					
-					// Remove bleeding pixels
+					// Remove bleeding pixels by first rendering a transparent quad with zero alpha
 					SDL_FRect r2;
 					r2.x = r.x; r2.y = r.y;
 					r2.w = r.w; r2.h = r.h;
@@ -2693,9 +2687,6 @@ void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int cons
 					}
 				SDL_RenderTexture(mRenderer, G->mSdlTexture, NULL, &r);
 				}
-				
-			//if (isRenderingToTexture)
-			//	SDL_SetTextureBlendMode(G->mSdlTexture, SDL_BLENDMODE_BLEND);
 			}
 		}
 SDL_Texture * sdl_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)

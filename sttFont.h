@@ -337,8 +337,8 @@ struct sttfont_prerendered_text
 };
 struct sttfont_glyph
 {
-  int16_t advance;
-  int16_t leftSideBearing;
+  int advance;
+  int leftSideBearing;
   int16_t width;
   int16_t height;
   int16_t xOffset;
