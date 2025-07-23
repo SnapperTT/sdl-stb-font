@@ -1,6 +1,6 @@
 #hdr
 namespace stt {
-	struct allocatorI;
+	class allocatorI;
 	}
 // purpose: an allocator that puts string objects onto a stack memory buffer
 // when the buffer falls out of scope then the buffer is released

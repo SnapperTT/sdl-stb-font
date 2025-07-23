@@ -104,7 +104,7 @@ struct sttfont_tmpArr {
 struct sttfont_formatted_text;
 class sttfont_font_cache;
 namespace stt {
-	struct allocatorI;
+	class allocatorI;
 	}
 // purpose: an allocator that puts string objects onto a stack memory buffer
 // when the buffer falls out of scope then the buffer is released
