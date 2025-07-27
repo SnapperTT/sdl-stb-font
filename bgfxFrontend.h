@@ -1338,12 +1338,8 @@ bgfx::TextureHandle bgfx_stb_font_cache::renderTextToTexture_worker (sttfont_for
 		buff.h = height;
 		buff.sz = buff.w*buff.h*4;
 		
-		#ifdef _MSC_VER
-			sttfont_tmpArr<uint8_t, 4096> tmpArr(buff.sz);
-			uint8_t* chr = tmpArr.arr;
-		#else
-			uint8_t chr[buff.sz];
-		#endif
+		sttfont_tmpArr4096 tmpArr(buff.sz);
+		uint8_t* chr = tmpArr.arr;
 		
 		buff.buff = &chr[0];
 		buff.clearBuff();

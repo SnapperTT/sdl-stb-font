@@ -87,6 +87,10 @@ struct sttfont_tmpArr {
 	inline sttfont_tmpArr(const uint64_t sz) : heapBuff(NULL), arr(&stackBuff[0]) { reserve(sz); }
 	inline ~sttfont_tmpArr() { if (heapBuff) SSF_DEL_ARR(heapBuff); }
 	};
+#ifndef SSF_sttfont_tmpArr4096_buffer_size
+	#define SSF_sttfont_tmpArr4096_buffer_size 4096
+#endif
+typedef sttfont_tmpArr<uint8_t,SSF_sttfont_tmpArr4096_buffer_size> sttfont_tmpArr4096;
 
 #include <cstdint>
 
@@ -1808,7 +1812,9 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 				}
 			else {
 				// wirte single character directly
-				unsigned char bitmap2[sz*4];
+				sttfont_tmpArr4096 bitmapStore(sz * 4);
+				unsigned char* bitmap2 = (unsigned char*) bitmapStore.arr;
+				
 				for (unsigned int i = 0; i < sz; ++i) {
 					bitmap2[i*4+0] = 255;
 					bitmap2[i*4+1] = 255;
