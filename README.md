@@ -2,7 +2,7 @@ SDL STB Font Renderer
 =====================
 A header-only library for rendering text in pure [SDL3](https://www.libsdl.org/) with [STB_Truetype](https://github.com/nothings/stb). This caches glyphs as they are drawn allowing for fast text rendering. It also provides a couple of easy ways to render a string to texture for even faster text rendering.
 
-New (2023)! Upgraded to SDL3! You can still use SDL2 by accessing the SDL2 branch
+New (2025)! Upgraded to SDL3! You can still use SDL2 by accessing the SDL2 branch
 
 New (2022)! Can prerender in multithreaded enviroments with `producerConsumerFrontend.h`!
 
