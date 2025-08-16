@@ -2,5 +2,8 @@
 src/temp/*.cpp
 src/temp/*.hh
 
+#ignore harfbuzz
+harfbuzz.o
+
 #ignore compiled binaries
 *xample

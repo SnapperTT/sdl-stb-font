@@ -12,7 +12,7 @@ namespace sttr {
 	}
 #endif
 
-#ifndef STB_TRUETYPE_INCLUDE_HANDLED
+#ifndef SSF_STB_TRUETYPE_INCLUDE_HANDLED
 	////////////////////////////////////////
 	// STB TRUETYPE 
 	// Handle double-including
@@ -21,6 +21,19 @@ namespace sttr {
 	#endif
 	#include "stb_truetype.h"
 	////////////////////////////////////////
+#endif
+
+#ifdef SSF_HARFBUZZ_ENABLED
+	#ifndef SSF_HARFBUZZ_INCLUDE_HANDLED
+		#include "harfbuzz/src/hb.h"
+	#endif
+	#define SSF_HB_BLOB_TYPE hb_blob_t
+	#define SSF_HB_FACE_TYPE hb_face_t
+	#define SSF_HB_FONT_TYPE hb_font_t	
+#else
+	#define SSF_HB_BLOB_TYPE int
+	#define SSF_HB_FACE_TYPE int
+	#define SSF_HB_FONT_TYPE int	
 #endif
 
 // Defines
@@ -67,6 +80,10 @@ struct sttfont_uintQuad {
 	inline sttfont_uintQuad() : first(0), second(0), third(0), fourth(0) {}
 	inline sttfont_uintQuad(uint32_t a, uint32_t b = 0, uint32_t c = 0, uint32_t d = 0) : first(a), second(b), third(c), fourth(d) {}
 	};
+
+// min/max
+#define SSF_MIN(X,Y) (X < Y ? X : Y)
+#define SSF_MAX(X,Y) (X > Y ? X : Y)
 
 // workaround for temp arrays not being a thing on msvc
 // used for stack allocated temporary arrays in function or block scope
@@ -213,7 +230,7 @@ struct sttfont_format
   SSF_STRING debugDump () const;
   static void sttr_register ();
   void * sttr_getClassSig () const;
-  char const * const sttr_getClassName () const;
+  char const * sttr_getClassName () const;
 };
 struct sttfont_formatted_text_item
 {
@@ -227,7 +244,7 @@ struct sttfont_formatted_text_item
   void setAllocator (stt::allocatorI * alloc);
   static void sttr_register ();
   void * sttr_getClassSig () const;
-  char const * const sttr_getClassName () const;
+  char const * sttr_getClassName () const;
 };
 struct sttfont_formatted_uipair
 {
@@ -235,7 +252,7 @@ struct sttfont_formatted_uipair
   unsigned int b;
   static void sttr_register ();
   void * sttr_getClassSig () const;
-  char const * const sttr_getClassName () const;
+  char const * sttr_getClassName () const;
 };
 struct sttfont_formatted_text
 {
@@ -273,7 +290,7 @@ struct sttfont_formatted_text
   void allocatorAwareAssignMv (sttfont_formatted_text_MS other);
   static void sttr_register ();
   void * sttr_getClassSig () const;
-  char const * const sttr_getClassName () const;
+  char const * sttr_getClassName () const;
   void setAllocator (stt::allocatorI * alloc);
   void setCustomAllocatorForTextItem (sttfont_formatted_text_item & ti);
   static void copyInterned (stt::allocatorI * alloc, sttfont_formatted_text & dst, sttfont_formatted_text const & src, bool const internStrings);
@@ -352,9 +369,9 @@ struct sttfont_glyph
 struct sttfont_memory
 {
   char * data;
-  size_t size;
+  uint32_t size;
   bool ownsData;
-  void alloc (size_t const _size);
+  void alloc (uint32_t const _size);
   void transferTo (sttfont_memory & destination);
   void cloneTo (sttfont_memory & other);
   sttfont_memory ();
@@ -367,6 +384,9 @@ struct sttfont_font_list
   uint8_t format;
   SSF_VECTOR <sttfont_font_list*> mFormatedVariants;
   sttfont_font_list * next;
+  SSF_HB_BLOB_TYPE * hbFontBlob;
+  SSF_HB_FACE_TYPE * hbFace;
+  SSF_HB_FONT_TYPE * hbFont;
   sttfont_font_list ();
   ~ sttfont_font_list ();
   void fetchFontForCodepoint (uint32_t const codepoint, uint8_t const format, stbtt_fontinfo * * mFontOut, int * indexOut);
@@ -395,6 +415,9 @@ public:
   int getScaledRowSize () const;
   void syncFrom (sttfont_font_cache const & other);
   void loadFont (char const * ttf_buffer, int index = 0);
+protected:
+  static void loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, int index);
+public:
   void loadFontManaged (sttfont_memory & memory, int index = 0);
   void addFont (char const * ttf_buffer, int index = 0);
   void addFontManaged (sttfont_memory & memory, int index = 0);
@@ -540,6 +563,12 @@ LZZ_INLINE void sttfont_formatted_text::tokenise_luasafe (SSF_VECTOR <sttfont_fo
 	#include <stdlib.h>
 	#include "stb_truetype.h"
 	////////////////////////////////////////
+#endif
+
+#ifdef SSF_HARFBUZZ_ENABLED
+	#ifndef SSF_HARFBUZZ_IMPL_HANDLED
+		#include "harfbuzz/src/harfbuzz.cc"
+	#endif
 #endif
 
 #define LZZ_INLINE inline
@@ -765,7 +794,7 @@ void sttfont_format::sttr_register ()
 		}
 void * sttfont_format::sttr_getClassSig () const
         { return ( void * ) sttr :: getTypeSignature < sttfont_format > ( ) ; }
-char const * const sttfont_format::sttr_getClassName () const
+char const * sttfont_format::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_format > ( ) ; }
 sttfont_formatted_text_item::sttfont_formatted_text_item ()
   : callback (0)
@@ -796,7 +825,7 @@ void sttfont_formatted_text_item::sttr_register ()
 		}
 void * sttfont_formatted_text_item::sttr_getClassSig () const
         { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text_item > ( ) ; }
-char const * const sttfont_formatted_text_item::sttr_getClassName () const
+char const * sttfont_formatted_text_item::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_formatted_text_item > ( ) ; }
 void sttfont_formatted_uipair::sttr_register ()
                                     {
@@ -810,7 +839,7 @@ void sttfont_formatted_uipair::sttr_register ()
 		}
 void * sttfont_formatted_uipair::sttr_getClassSig () const
         { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text_item > ( ) ; }
-char const * const sttfont_formatted_uipair::sttr_getClassName () const
+char const * sttfont_formatted_uipair::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_formatted_text_item > ( ) ; }
 sttfont_formatted_text::sttfont_formatted_text ()
                                 {}
@@ -958,7 +987,7 @@ void sttfont_formatted_text::sttr_register ()
 		}
 void * sttfont_formatted_text::sttr_getClassSig () const
         { return ( void * ) sttr :: getTypeSignature < sttfont_formatted_text > ( ) ; }
-char const * const sttfont_formatted_text::sttr_getClassName () const
+char const * sttfont_formatted_text::sttr_getClassName () const
         { return sttr :: getTypeName < sttfont_formatted_text > ( ) ; }
 void sttfont_formatted_text::setAllocator (stt::allocatorI * alloc)
                                                    {
@@ -1599,8 +1628,8 @@ int sttfont_prerendered_text::drawWithColorMod (sttfont_font_cache * fc, int con
 sttfont_glyph::sttfont_glyph ()
   : advance (0), leftSideBearing (0), width (0), height (0), xOffset (0), yOffset (0)
                                                                                                        {}
-void sttfont_memory::alloc (size_t const _size)
-                                       {
+void sttfont_memory::alloc (uint32_t const _size)
+                                         {
 		data = SSF_NEW_ARR(char, _size);
 		size = _size;
 		ownsData = true;
@@ -1629,10 +1658,25 @@ sttfont_memory::~ sttfont_memory ()
 			}
 		}
 sttfont_font_list::sttfont_font_list ()
-  : format (0), next (NULL)
-                                                    {}
+  : format (0), next (NULL), hbFontBlob (NULL), hbFace (NULL), hbFont (NULL)
+                                                                                                  {
+		}
 sttfont_font_list::~ sttfont_font_list ()
                              {
+		#ifdef SSF_HARFBUZZ_ENABLED
+		if (hbFont) {
+			hb_font_destroy(hbFont);
+			hbFont = NULL;
+			}
+		if (hbFace) {
+			hb_face_destroy(hbFace);
+			hbFace = NULL;
+			}
+		if (hbFontBlob) {
+			hb_blob_destroy (hbFontBlob);
+			hbFontBlob = NULL;
+			}
+		#endif
 		for (sttfont_font_list * fl : mFormatedVariants)
 			delete fl;
 		if (next) delete next;
@@ -1705,16 +1749,16 @@ void sttfont_font_cache::syncFrom (sttfont_font_cache const & other)
 		}
 void sttfont_font_cache::loadFont (char const * ttf_buffer, int index)
                                                                {
-		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
-		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
+		sttfont_font_cache::loadFontCommonWorker(mFont, ttf_buffer, index);
 		
+		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
 		scale = stbtt_ScaleForPixelHeight(&mFont.mFont, faceSize);
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
 		
-		strikethroughThickness = faceSize/20.0;
+		strikethroughThickness = faceSize/20.0f;
 		if (strikethroughThickness < 1) strikethroughThickness = 1;
-		strikethroughPosition = baseline * 0.75 - strikethroughThickness/2;
+		strikethroughPosition = baseline * 0.75f - strikethroughThickness/2.0f;
 		underlineThickness = strikethroughThickness;
 		underlinePosition = baseline + underlineThickness;
 		
@@ -1722,6 +1766,18 @@ void sttfont_font_cache::loadFont (char const * ttf_buffer, int index)
 		getTextSize(w,h,"                                                                                                                                ", tabWidthInSpaces <= 128 ? tabWidthInSpaces : 128);
 		tabWidth = w;
 		if (tabWidth < 1) tabWidth = 1;
+		}
+void sttfont_font_cache::loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, int index)
+                                                                                                         {
+		// used by loadFont, addFont
+		const int offset = stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer, index);
+		stbtt_InitFont(&target.mFont, (const unsigned char *) ttf_buffer, offset);
+	
+		#ifdef SSF_HARFBUZZ_ENABLED
+			target.hbFontBlob = hb_blob_create(ttf_buffer + offset, strlen(ttf_buffer + offset), HB_MEMORY_MODE_READONLY, NULL, NULL);
+			target.hbFace = hb_face_create(target.hbFontBlob, 0);
+			target.hbFont = hb_font_create(target.hbFace);
+		#endif
 		}
 void sttfont_font_cache::loadFontManaged (sttfont_memory & memory, int index)
                                                                       {
@@ -1768,10 +1824,10 @@ void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant
 		if (fwm.memory) {
 			sttfont_memory & memory = *(fwm.memory);
 			memory.transferTo(n->mMemory);
-			stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,fwm.index));
+			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) n->mMemory.data, fwm.index);
 			}
 		else {
-			stbtt_InitFont(&n->mFont, (const unsigned char *) fwm.ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) fwm.ttf_buffer,fwm.index));
+			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) fwm.ttf_buffer, fwm.index);
 			}
 		if (isFormatVariant)
 			w->mFormatedVariants.push_back(n);
@@ -1855,6 +1911,7 @@ void sttfont_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_g
 sttfont_glyph * sttfont_font_cache::getGlyph (uint64_t const target)
                                                                 {
 		// Make your own implmentation for your own frontend here
+		abort();
 		return NULL;
 		}
 sttfont_glyph * sttfont_font_cache::getGenGlyph (uint32_t const codepoint, uint8_t const format)
@@ -1867,7 +1924,8 @@ sttfont_glyph * sttfont_font_cache::getGenGlyph (uint32_t const codepoint, uint8
 sttfont_glyph * sttfont_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
                                                                                                                                 {
 		// Make your own implmentation for your own frontend here
-		return getGlyph(target);
+		abort();
+		return NULL;
 		}
 int sttfont_font_cache::getKerningAdvance (uint32_t const cp1, uint32_t const cp2)
                                                                       {
@@ -2597,7 +2655,7 @@ sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const tar
 		}
 void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
                                                                                                                                                                                                                      {
-		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		const sdl_stb_glyph * const G = (const sdl_stb_glyph *) GS;
 		// Draws the character
 		if (G->mSdlTexture) {
 			SDL_FRect r;

@@ -400,10 +400,10 @@ bgfx::VertexLayout bgfxsfh::PosVertex::ms_decl;
 bgfxsfh::rect bgfxsfh::scissorIntersect (rect const & r, rect const & scissor)
                                                                            {
 		rect rIntersect;
-		rIntersect.x = bx::max(r.x, scissor.x);
-		rIntersect.y = bx::max(r.y, scissor.y);
-		rIntersect.w = bx::max(0.f, bx::min(r.x + r.w, scissor.x + scissor.w) - rIntersect.x);
-		rIntersect.h = bx::max(0.f, bx::min(r.y + r.h, scissor.y + scissor.h) - rIntersect.y);
+		rIntersect.x = SSF_MAX(r.x, scissor.x);
+		rIntersect.y = SSF_MAX(r.y, scissor.y);
+		rIntersect.w = SSF_MAX(0.f, bx::min(r.x + r.w, scissor.x + scissor.w) - rIntersect.x);
+		rIntersect.h = SSF_MAX(0.f, bx::min(r.y + r.h, scissor.y + scissor.h) - rIntersect.y);
 	
 		return rIntersect;
 		}
@@ -601,10 +601,10 @@ void bgfxsfh::cpuBuffer::blend (uint8_t * dst, uint8_t const r, uint8_t const g,
                                                                                                              {
 			float srcf = 255.f/a;
 			if (a == 255 || dst[3] == 0) { 
-				dst[0] = bx::min(255.f, float(dst[0]) + r*srcf);
-				dst[1] = bx::min(255.f, float(dst[1]) + g*srcf);
-				dst[2] = bx::min(255.f, float(dst[2]) + b*srcf);
-				dst[3] = bx::max(dst[3], a);
+				dst[0] = SSF_MIN(255.f, float(dst[0]) + r*srcf);
+				dst[1] = SSF_MIN(255.f, float(dst[1]) + g*srcf);
+				dst[2] = SSF_MIN(255.f, float(dst[2]) + b*srcf);
+				dst[3] = SSF_MAX(dst[3], a);
 				}
 				
 			}
@@ -1133,7 +1133,7 @@ void bgfx_stb_font_cache::bindDrawBufferBucketUt (bgfxsfh::untextured_draw_state
 		}
 void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
                                                                                                                                                                                                                      {
-		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
+		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph *) GS;
 		// Draws the character
 		const uint64_t RSTATE = renderTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
 		const bgfx::ViewId _viewId = renderTarget ? 0 : mViewId; 

@@ -1,11 +1,11 @@
 // control-f -> "// Make your own implmentation for your own frontend here" for notes w.r.t making your own rendering frontend
 #define STTFONT_STTR_CLASS_SIG(X)															\
 	virtual void * sttr_getClassSig() const { return (void*) sttr::getTypeSignature<X>(); } \
-	virtual const char * const sttr_getClassName() const { return sttr::getTypeName<X>(); }
+	virtual const char * sttr_getClassName() const { return sttr::getTypeName<X>(); }
 	
 #define STTFONT_STTR_CLASS_SIG_NON_POLY(X)													\
 	void * sttr_getClassSig() const { return (void*) sttr::getTypeSignature<X>(); } \
-	const char * const sttr_getClassName() const { return sttr::getTypeName<X>(); }
+	const char * sttr_getClassName() const { return sttr::getTypeName<X>(); }
 
 
 #hdr
@@ -17,7 +17,7 @@ namespace sttr {
 	}
 #endif
 
-#ifndef STB_TRUETYPE_INCLUDE_HANDLED
+#ifndef SSF_STB_TRUETYPE_INCLUDE_HANDLED
 	////////////////////////////////////////
 	// STB TRUETYPE 
 	// Handle double-including
@@ -26,6 +26,19 @@ namespace sttr {
 	#endif
 	#include "stb_truetype.h"
 	////////////////////////////////////////
+#endif
+
+#ifdef SSF_HARFBUZZ_ENABLED
+	#ifndef SSF_HARFBUZZ_INCLUDE_HANDLED
+		#include "harfbuzz/src/hb.h"
+	#endif
+	#define SSF_HB_BLOB_TYPE hb_blob_t
+	#define SSF_HB_FACE_TYPE hb_face_t
+	#define SSF_HB_FONT_TYPE hb_font_t	
+#else
+	#define SSF_HB_BLOB_TYPE int
+	#define SSF_HB_FACE_TYPE int
+	#define SSF_HB_FONT_TYPE int	
 #endif
 
 // Defines
@@ -72,6 +85,10 @@ struct sttfont_uintQuad {
 	inline sttfont_uintQuad() : first(0), second(0), third(0), fourth(0) {}
 	inline sttfont_uintQuad(uint32_t a, uint32_t b = 0, uint32_t c = 0, uint32_t d = 0) : first(a), second(b), third(c), fourth(d) {}
 	};
+
+// min/max
+#define SSF_MIN(X,Y) (X < Y ? X : Y)
+#define SSF_MAX(X,Y) (X > Y ? X : Y)
 
 // workaround for temp arrays not being a thing on msvc
 // used for stack allocated temporary arrays in function or block scope
@@ -127,6 +144,12 @@ class sttfont_font_cache;
 	#include <stdlib.h>
 	#include "stb_truetype.h"
 	////////////////////////////////////////
+#endif
+
+#ifdef SSF_HARFBUZZ_ENABLED
+	#ifndef SSF_HARFBUZZ_IMPL_HANDLED
+		#include "harfbuzz/src/harfbuzz.cc"
+	#endif
 #endif
 
 #end
@@ -187,10 +210,10 @@ struct sttfont_glyph {
 /// Memory management
 struct sttfont_memory {
 	char * data;
-	size_t size;
+	uint32_t size;
 	bool ownsData;
 	
-	void alloc(const size_t _size) {
+	void alloc(const uint32_t _size) {
 		data = SSF_NEW_ARR(char, _size);
 		size = _size;
 		ownsData = true;
@@ -225,9 +248,28 @@ struct sttfont_font_list {
 	uint8_t format;			// Value is one of sttfont_format::FORMAT_*
 	SSF_VECTOR<sttfont_font_list*> mFormatedVariants;	// Variants for bold, italic, etc
 	sttfont_font_list * next;
+	
+	SSF_HB_BLOB_TYPE* hbFontBlob;
+	SSF_HB_FACE_TYPE* hbFace;
+	SSF_HB_FONT_TYPE* hbFont;
 		
-	sttfont_font_list() : format(0), next(NULL) {}
+	sttfont_font_list() : format(0), next(NULL), hbFontBlob(NULL), hbFace(NULL), hbFont(NULL) {
+		}
 	~sttfont_font_list() {
+		#ifdef SSF_HARFBUZZ_ENABLED
+		if (hbFont) {
+			hb_font_destroy(hbFont);
+			hbFont = NULL;
+			}
+		if (hbFace) {
+			hb_face_destroy(hbFace);
+			hbFace = NULL;
+			}
+		if (hbFontBlob) {
+			hb_blob_destroy (hbFontBlob);
+			hbFontBlob = NULL;
+			}
+		#endif
 		for (sttfont_font_list * fl : mFormatedVariants)
 			delete fl;
 		if (next) delete next;
@@ -285,7 +327,7 @@ struct sttfont_font_list {
 			}
 		}
 	};
-	
+
 /// Cache of a font
 class sttfont_font_cache {
 public:
@@ -331,16 +373,16 @@ public:
 	/// Also computes font properties (ascent/decent/basline/scale/rowSize/etc)
 	/// ttf_buffer must be null terminated
 	void loadFont (const char * ttf_buffer, int index = 0) {
-		stbtt_InitFont(&mFont.mFont, (const unsigned char *) ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer,index));
-		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
+		sttfont_font_cache::loadFontCommonWorker(mFont, ttf_buffer, index);
 		
+		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
 		scale = stbtt_ScaleForPixelHeight(&mFont.mFont, faceSize);
 		baseline = ascent*scale;
 		rowSize = ascent - descent + lineGap;
 		
-		strikethroughThickness = faceSize/20.0;
+		strikethroughThickness = faceSize/20.0f;
 		if (strikethroughThickness < 1) strikethroughThickness = 1;
-		strikethroughPosition = baseline * 0.75 - strikethroughThickness/2;
+		strikethroughPosition = baseline * 0.75f - strikethroughThickness/2.0f;
 		underlineThickness = strikethroughThickness;
 		underlinePosition = baseline + underlineThickness;
 		
@@ -350,6 +392,20 @@ public:
 		if (tabWidth < 1) tabWidth = 1;
 		}
 	
+protected:
+	static void loadFontCommonWorker(sttfont_font_list& target,  const char * ttf_buffer, int index) {
+		// used by loadFont, addFont
+		const int offset = stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer, index);
+		stbtt_InitFont(&target.mFont, (const unsigned char *) ttf_buffer, offset);
+	
+		#ifdef SSF_HARFBUZZ_ENABLED
+			target.hbFontBlob = hb_blob_create(ttf_buffer + offset, strlen(ttf_buffer + offset), HB_MEMORY_MODE_READONLY, NULL, NULL);
+			target.hbFace = hb_face_create(target.hbFontBlob, 0);
+			target.hbFont = hb_font_create(target.hbFace);
+		#endif
+		}
+	
+public:
 	/// Does the dame as loadFont, but transfers ownership of the memory to here
 	/// ttf_buffer must be null terminated
 	/// ttf_buffer will be deallocated when this class is destroyed
@@ -425,10 +481,10 @@ protected:
 		if (fwm.memory) {
 			sttfont_memory & memory = *(fwm.memory);
 			memory.transferTo(n->mMemory);
-			stbtt_InitFont(&n->mFont, (const unsigned char *) n->mMemory.data, stbtt_GetFontOffsetForIndex((const unsigned char *) n->mMemory.data,fwm.index));
+			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) n->mMemory.data, fwm.index);
 			}
 		else {
-			stbtt_InitFont(&n->mFont, (const unsigned char *) fwm.ttf_buffer, stbtt_GetFontOffsetForIndex((const unsigned char *) fwm.ttf_buffer,fwm.index));
+			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) fwm.ttf_buffer, fwm.index);
 			}
 		if (isFormatVariant)
 			w->mFormatedVariants.push_back(n);
@@ -518,6 +574,7 @@ public:
 	
 	virtual sttfont_glyph * getGlyph(const uint64_t target) {
 		// Make your own implmentation for your own frontend here
+		abort();
 		return NULL;
 		}
 	
@@ -531,7 +588,8 @@ public:
 		
 	virtual sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
 		// Make your own implmentation for your own frontend here
-		return getGlyph(target);
+		abort();
+		return NULL;
 		}
 		
 	int getKerningAdvance(const uint32_t cp1, const uint32_t cp2) {

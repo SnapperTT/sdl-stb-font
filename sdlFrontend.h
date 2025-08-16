@@ -143,7 +143,7 @@ sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const tar
 		}
 void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
                                                                                                                                                                                                                      {
-		const sdl_stb_glyph * const G = (const sdl_stb_glyph * const) GS;
+		const sdl_stb_glyph * const G = (const sdl_stb_glyph *) GS;
 		// Draws the character
 		if (G->mSdlTexture) {
 			SDL_FRect r;

@@ -3,6 +3,10 @@
 // By Liam Twigger - 2020
 // Public Domain
 #define SDL_STB_FONT_IMPL
+
+#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
+//#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
+#define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc
 #end
 
 #src
@@ -14,29 +18,8 @@
 #define SDL_STB_FONT_IMPL
 #include "sdlStbFont.h"
 
-/// Opens a file and returns a string of the raw data
-void readFileRaw (const std::string & fullPath, std::string & output) {
-	std::ifstream fs(fullPath.c_str(), std::ios::in | std::ios::binary);
-	
-	if (!fs.is_open()) {
-		std::cout << "readFileRaw: " << fullPath << " -- " << "WARNING: Could not open file." << std::endl;
-		return;
-		}
-	else {
-		std::cout << "Opened! " << fullPath << std::endl;
-		}
-				
-	fs.seekg (0, std::ios::end);
-	const size_t LEN = fs.tellg();
-	fs.seekg (0, std::ios::beg);
-	
-	output.resize(LEN);
-	fs.read(&output[0], LEN);
-	fs.close();
-	}
-
 /// Opens a file and stores it in a stb_memory for automatic management
-void readFileRaw_toMemory (const std::string & fullPath, sttfont_memory & mem) {
+static void readFileRaw_toMemory (const std::string & fullPath, sttfont_memory & mem) {
 	std::ifstream fs(fullPath.c_str(), std::ios::in | std::ios::binary);
 	
 	if (!fs.is_open()) {
@@ -178,7 +161,7 @@ formattedText << sttfont_format::black << "Plain text "
 	
 	// Rendering test
 	// Set this to something else to print
-	int test = 5;
+	int test = 1;
 	if (argc > 1) {
 		test = atoi(argv[1]);
 		if (test > 5) test = 5;

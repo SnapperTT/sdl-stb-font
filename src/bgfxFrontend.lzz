@@ -232,10 +232,10 @@ public:
 		
 	static rect scissorIntersect(const rect & r, const rect & scissor) {
 		rect rIntersect;
-		rIntersect.x = bx::max(r.x, scissor.x);
-		rIntersect.y = bx::max(r.y, scissor.y);
-		rIntersect.w = bx::max(0.f, bx::min(r.x + r.w, scissor.x + scissor.w) - rIntersect.x);
-		rIntersect.h = bx::max(0.f, bx::min(r.y + r.h, scissor.y + scissor.h) - rIntersect.y);
+		rIntersect.x = SSF_MAX(r.x, scissor.x);
+		rIntersect.y = SSF_MAX(r.y, scissor.y);
+		rIntersect.w = SSF_MAX(0.f, bx::min(r.x + r.w, scissor.x + scissor.w) - rIntersect.x);
+		rIntersect.h = SSF_MAX(0.f, bx::min(r.y + r.h, scissor.y + scissor.h) - rIntersect.y);
 	
 		return rIntersect;
 		}
@@ -437,10 +437,10 @@ public:
 		void blend(uint8_t* dst, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
 			float srcf = 255.f/a;
 			if (a == 255 || dst[3] == 0) { 
-				dst[0] = bx::min(255.f, float(dst[0]) + r*srcf);
-				dst[1] = bx::min(255.f, float(dst[1]) + g*srcf);
-				dst[2] = bx::min(255.f, float(dst[2]) + b*srcf);
-				dst[3] = bx::max(dst[3], a);
+				dst[0] = SSF_MIN(255.f, float(dst[0]) + r*srcf);
+				dst[1] = SSF_MIN(255.f, float(dst[1]) + g*srcf);
+				dst[2] = SSF_MIN(255.f, float(dst[2]) + b*srcf);
+				dst[3] = SSF_MAX(dst[3], a);
 				}
 				
 			}
@@ -1039,7 +1039,7 @@ protected:
 public:
 	
 	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
-		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph * const) GS;
+		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph *) GS;
 		// Draws the character
 		const uint64_t RSTATE = renderTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
 		const bgfx::ViewId _viewId = renderTarget ? 0 : mViewId; 
