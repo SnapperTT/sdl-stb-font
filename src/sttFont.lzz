@@ -79,6 +79,10 @@ namespace sttr {
 	#define SSF_DEL_ARR(X) delete[] X
 #endif
 
+#ifndef SSF_ERROR
+	#define SSF_ERROR(X,...) printf(X, ##__VA_ARGS__); abort();
+#endif
+
 struct sttfont_uintQuad {
 	uint32_t first, second, third, fourth;
 	
@@ -89,6 +93,9 @@ struct sttfont_uintQuad {
 // min/max
 #define SSF_MIN(X,Y) (X < Y ? X : Y)
 #define SSF_MAX(X,Y) (X > Y ? X : Y)
+
+// constants
+#define SSF_FONT_IDX_SHIFT 4
 
 // workaround for temp arrays not being a thing on msvc
 // used for stack allocated temporary arrays in function or block scope
@@ -199,12 +206,12 @@ struct sttfont_prerendered_text {
 	};
 
 struct sttfont_glyph {
-	int advance;
-	int leftSideBearing;
+	int16_t advance, leftSideBearing;
+	uint16_t fontIdx, _padding;
 	int16_t width, height;
 	int16_t xOffset, yOffset;
 	
-	sttfont_glyph () : advance(0), leftSideBearing(0), width(0), height(0), xOffset(0), yOffset(0) {}
+	inline sttfont_glyph () : advance(0), leftSideBearing(0), fontIdx(0), _padding(0), width(0), height(0), xOffset(0), yOffset(0) {}
 	};
 
 /// Memory management
@@ -274,13 +281,33 @@ struct sttfont_font_list {
 			delete fl;
 		if (next) delete next;
 		}
+		
+	
+	sttfont_font_list* getSubFont(const uint16_t idx) {
+		uint16_t idxw = idx;
+		
+		sttfont_font_list* working = this;
+		while (working) {
+			if (idxw == 0) return working;
+			idxw--;
+			if (idxw < mFormatedVariants.size())
+				return mFormatedVariants[idxw];
+			idxw -= mFormatedVariants.size();
+			working = working->next;
+			}
+		return this;
+		
+		}
 	
 	/// Finds the font with the code point for 
-	void fetchFontForCodepoint(const uint32_t codepoint, const uint8_t format, stbtt_fontinfo ** mFontOut, int * indexOut) {
+	void fetchFontForCodepoint(const uint32_t codepoint, const uint8_t format, stbtt_fontinfo ** mFontOut, int * indexOut, uint16_t * fontIdxOut) {
 		sttfont_font_list * working = this;
 		
 		*mFontOut = NULL;
 		*indexOut = 0;
+		*fontIdxOut = 0;
+		
+		uint16_t fontIdxWorking = 0;
 		
 		while (working) {
 			int index = stbtt_FindGlyphIndex(&(working->mFont), codepoint);
@@ -290,16 +317,29 @@ struct sttfont_font_list {
 					int bestBitsCount = 0;
 					sttfont_font_list * bestMatch = NULL;
 					sttfont_font_list * bestMatch2 = NULL;
-					for (sttfont_font_list * f : mFormatedVariants) {
+					uint16_t bestIdx = -1;
+					uint16_t bestIdx2 = -1;
+					uint16_t sz = mFormatedVariants.size();
+					sttfont_font_list** d = mFormatedVariants.data();
+					for (uint16_t i = 0; i < sz; ++i) {
+						sttfont_font_list * f = d[i];
 						uint8_t mask = (format & f->format);
 						if (mask) {
 							int nBits = 0;
-							for (int i = 0; i < 7; ++i)
-								if (mask & (1 << i)) nBits++;
+							#if defined(_MSC_VER)
+								nBits = __popcnt(mask);
+							#elseif defined(__GNUC__) || defined(__clang__)
+								nBits = __builtin_popcount(mask);
+							#else
+								for (int i = 0; i < 7; ++i)
+									if (mask & (1 << i)) nBits++;
+							#endif
 							if (nBits > bestBitsCount) {
 								bestBitsCount = nBits;
 								bestMatch2 = bestMatch;
+								bestIdx2 = bestIdx;
 								bestMatch = f;
+								bestIdx = i;
 								}
 							}
 						}
@@ -308,12 +348,14 @@ struct sttfont_font_list {
 						int index2 = stbtt_FindGlyphIndex(&(bestMatch->mFont), codepoint);
 						*mFontOut = &(bestMatch->mFont);
 						*indexOut = index2;
+						*fontIdxOut = (fontIdxWorking << SSF_FONT_IDX_SHIFT) | bestIdx;
 						return;
 						}
 					if (bestMatch2) {
 						int index2 = stbtt_FindGlyphIndex(&(bestMatch2->mFont), codepoint);
 						*mFontOut = &(bestMatch2->mFont);
 						*indexOut = index2;
+						*fontIdxOut = (fontIdxWorking << SSF_FONT_IDX_SHIFT) | bestIdx2;
 						return;
 						}
 					}
@@ -321,8 +363,10 @@ struct sttfont_font_list {
 				// Format not found/no format
 				*mFontOut = &(working->mFont);
 				*indexOut = index;
+				*fontIdxOut = fontIdxWorking << SSF_FONT_IDX_SHIFT;
 				return;
 				}
+			fontIdxWorking++;
 			working = working->next;
 			}
 		}
@@ -486,8 +530,12 @@ protected:
 		else {
 			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) fwm.ttf_buffer, fwm.index);
 			}
-		if (isFormatVariant)
+		if (isFormatVariant) {
 			w->mFormatedVariants.push_back(n);
+			if (w->mFormatedVariants.size() >= (1 << SSF_FONT_IDX_SHIFT)) {
+				SSF_ERROR("Too many subfonts");
+				}
+			}
 		else
 			w->next = n;
 		}
@@ -501,20 +549,29 @@ public:
 		// format is a number representing regular, bold, itallic, bold itallic
 		stbtt_fontinfo * mFontContaining;
 		int mIndex;
-		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex);
+		uint16_t fontIdx;
+		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex, &fontIdx);
 		
 		if (!mIndex)
 			return;
 		
 		// found the font! generate the glyph
-	   	unsigned char *bitmap;
 	   	int w,h,woff,hoff;
-		bitmap = stbtt_GetCodepointBitmap(mFontContaining, 0, scale, codepoint, &w, &h, &woff, &hoff);
-		
-        // Convert bitmap to RGBA8888
-		// Todo - change RBGA8888 to R8
+	   	int x0,x1,y0,y1;
+	   	stbtt_GetCodepointBitmapBox(mFontContaining, codepoint, scale, scale, &x0, &y0, &x1, &y1);
+	   	w = x1-x0;
+	   	h = y1-y0;
+	   	woff = x0;
+	   	hoff = y0;
+	   	
 		unsigned int sz = w*h;
 		if (sz) {
+			sttfont_tmpArr4096 bitmapStore(sz);
+			unsigned char* bitmap = (unsigned char*) bitmapStore.arr;
+			stbtt_MakeCodepointBitmap(mFontContaining, bitmap, w, h, w, scale, scale, codepoint);
+			
+			// Convert bitmap to RGBA8888
+			// Todo - change RBGA8888 to R8
 			if (bitmapOut) {
 				//memcpy, the frontend will bulk store glyphs
 				(*bitmapOut) = SSF_NEW_ARR(unsigned char,sz*4);
@@ -529,8 +586,8 @@ public:
 				}
 			else {
 				// wirte single character directly
-				sttfont_tmpArr4096 bitmapStore(sz * 4);
-				unsigned char* bitmap2 = (unsigned char*) bitmapStore.arr;
+				sttfont_tmpArr4096 bitmapStore2(sz * 4);
+				unsigned char* bitmap2 = (unsigned char*) bitmapStore2.arr;
 				
 				for (unsigned int i = 0; i < sz; ++i) {
 					bitmap2[i*4+0] = 255;
@@ -540,17 +597,18 @@ public:
 					}
 				genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
 				}
-			}
-        
-			
-        stbtt_FreeBitmap (bitmap, 0);
+		}
 		
 		gOut->width = w;
 		gOut->height = h;
 		int advance, leftSideBearing;
 		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		if (abs(advance) >= 0x7fff || abs(leftSideBearing) >= 0x7fff) {
+			SSF_ERROR("Invalid glyph metrics! Advance: %i, leftSideBearing %i", advance, leftSideBearing );
+			}
 		gOut->advance = advance;
 		gOut->leftSideBearing = leftSideBearing;
+		gOut->fontIdx = fontIdx;
 		
 		gOut->xOffset = woff;
 		gOut->yOffset = hoff;
@@ -591,9 +649,40 @@ public:
 		abort();
 		return NULL;
 		}
+	
+	struct findSubfontLookupHint {
+		// used to cache the result of findSubfontByIndex(...) to prevent
+		// redundant lookups in a look
+		uint16_t fontIdx;
+		stbtt_fontinfo * font;
 		
-	int getKerningAdvance(const uint32_t cp1, const uint32_t cp2) {
-		return stbtt_GetCodepointKernAdvance(&mFont.mFont, cp1, cp2);
+		inline findSubfontLookupHint() : fontIdx(-1), font(NULL) {}
+		};
+		
+	stbtt_fontinfo* findSubfontByIndex(const uint16_t fontIdx) {
+		uint16_t depth = fontIdx >> SSF_FONT_IDX_SHIFT;
+		uint16_t formatIdx = fontIdx & ((uint16_t(1) << SSF_FONT_IDX_SHIFT) - 1);
+		
+		uint16_t currentDepth = 0;
+		sttfont_font_list * w = &mFont;
+		while (currentDepth < depth) {
+			w = w->next;
+			currentDepth++;
+			}
+		if (formatIdx)
+			return &w->mFormatedVariants[formatIdx-1]->mFont;
+		else
+			return &w->mFont;
+		}
+	
+	int getKerningAdvance(const sttfont_glyph* G1, const sttfont_glyph* G2, const uint32_t cp1, const uint32_t cp2, findSubfontLookupHint& mHint) {
+		if ((!G1) || (!G2)) return 0;
+		if (G1->fontIdx != G2->fontIdx) return 0;
+		if (G1->fontIdx != mHint.fontIdx) {
+			mHint.font = findSubfontByIndex(G1->fontIdx);
+			mHint.fontIdx = G1->fontIdx;
+			}
+		return stbtt_GetCodepointKernAdvance(mHint.font, cp1, cp2);
 		}
 	
 	static int utf8_charsize(const char* c) {
@@ -744,12 +833,14 @@ public:
 	virtual void startManuallyBuffering(const bool beginBuffering) {}
 	virtual void endManuallyBuffering(const bool flush) {}
 	
+	
 	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		onStartDrawing();
 		int r = processString_worker(x, y, c, maxLen, format, isDrawing, widthOut, heightOut, maxWidth, mHint, threshX, threshY, caretPosition, initialXOffset);
 		onCompletedDrawing();
 		return r;
 		}
+		
 	
 	int processString_worker (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut, int * const heightOut, const int * const maxWidth, sttfont_lookupHint * mHint, const int * const threshX, const int * const threshY, int * const caretPosition, int initialXOffset) {
 		// Scan through function and extract the glyphs
@@ -780,6 +871,8 @@ public:
 			}
 		
 		int xxl = xx;
+		sttfont_glyph * GLast = NULL;
+		findSubfontLookupHint fontLookupHint;
 		while (uChar && seek <= maxLen) {
 			//if (mHint)
 			//	std::cout << "Processing: (" << seekLast << "," << (seek-seekLast) << ") " << std::string(&c[seekLast], seek-seekLast) << ", codePoint " << uChar << ", suibstring: [" << std::string(&c[seekLast]) << "], fullstring:["<<maxLen<<"] " << c << std::endl;
@@ -797,9 +890,7 @@ public:
 				overdraw = SSF_INT_MIN;
 				}
 			else {
-				int dx = scale*getKerningAdvance(uCharLast, uChar);
-				xx += dx;
-				processCodepoint(xx, yy, uChar, format, isDrawing, dx, overdraw);
+				GLast = processCodepoint(GLast, uCharLast, xx, yy, uChar, format, isDrawing, overdraw, fontLookupHint);
 				}
 			
 			if (lookupCaret) {
@@ -954,7 +1045,7 @@ public:
 		}
 	
 	// NOTE: 2022 - processCodepoint is no longer virtual - instead use drawCodepoint as your injection point for frontends
-	void processCodepoint (int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int kerningAdv, int & overdraw) {
+	sttfont_glyph* processCodepoint (sttfont_glyph* GLast, const uint32_t codepointLast, int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint) {
 		// Draws the character, advances x & y to the next position
 		uint8_t formatCode = 0;
 		if (format)
@@ -963,12 +1054,18 @@ public:
 		sttfont_glyph * G = getGlyphOrTofu(codepoint, formatCode);
 		if (!G) {
 			x += faceSize/2;
-			return;
+			return NULL;
 			}
+		
+		int kerningAdv = scale*getKerningAdvance(GLast, G, codepointLast, codepoint, mHint);
+		x += kerningAdv;
+		
 		if (isDrawing) {
 			drawCodepoint(G, x, y, codepoint, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
+		
+		return G;
 		}
 		
 	virtual void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
