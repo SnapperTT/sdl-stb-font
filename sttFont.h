@@ -29,11 +29,13 @@ namespace sttr {
 	#endif
 	#define SSF_HB_BLOB_TYPE hb_blob_t
 	#define SSF_HB_FACE_TYPE hb_face_t
-	#define SSF_HB_FONT_TYPE hb_font_t	
+	#define SSF_HB_FONT_TYPE hb_font_t
+	#define SSF_HB_BUFFER_TYPE hb_buffer_t	
 #else
 	#define SSF_HB_BLOB_TYPE int
 	#define SSF_HB_FACE_TYPE int
-	#define SSF_HB_FONT_TYPE int	
+	#define SSF_HB_FONT_TYPE int
+	#define SSF_HB_BUFFER_TYPE int
 #endif
 
 // Defines
@@ -419,12 +421,16 @@ public:
   int faceSize;
   int tabWidthInSpaces;
   void * userData;
+  SSF_HB_BUFFER_TYPE * hbShapingScratchpad;
+  bool ownsHbShapingScratchPad;
   sttfont_font_cache ();
   virtual ~ sttfont_font_cache ();
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
   void syncFrom (sttfont_font_cache const & other);
   void loadFont (char const * ttf_buffer, int index = 0);
+  void setHbScrachpad (SSF_HB_BUFFER_TYPE * buffer);
+  void generateHbScratchpad ();
 protected:
   static void loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, int index);
 public:
@@ -452,10 +458,11 @@ public:
   struct findSubfontLookupHint
   {
     uint16_t fontIdx;
-    stbtt_fontinfo * font;
+    sttfont_font_list * font;
     findSubfontLookupHint ();
   };
-  stbtt_fontinfo * findSubfontByIndex (uint16_t const fontIdx);
+  void findSubfontByIndexWHint (uint16_t const fontIdx, findSubfontLookupHint & mHint);
+  sttfont_font_list * findSubfontByIndex (uint16_t const fontIdx);
   int getKerningAdvance (sttfont_glyph const * G1, sttfont_glyph const * G2, uint32_t const cp1, uint32_t const cp2, findSubfontLookupHint & mHint);
   static int utf8_charsize (char const * c);
   static int utf8_charsize (uint32_t const codepoint);
@@ -492,6 +499,7 @@ public:
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   bool isTofu (sttfont_glyph * G);
   sttfont_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
+  sttfont_glyph * getCodepointGlyph (uint32_t const codepoint, sttfont_format const * const format);
   sttfont_glyph * processCodepoint (sttfont_glyph * GLast, uint32_t const codepointLast, int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint);
   virtual void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
@@ -1789,10 +1797,16 @@ void sttfont_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 			}
 		}
 sttfont_font_cache::sttfont_font_cache ()
-  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL)
-                                                                  {}
+  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL), hbShapingScratchpad (NULL), ownsHbShapingScratchPad (false)
+                                                                                                                             {}
 sttfont_font_cache::~ sttfont_font_cache ()
-                                       {}
+                                       {
+		#ifdef SSF_HARFBUZZ_ENABLED
+			if (hbShapingScratchpad && ownsHbShapingScratchPad) {
+				hb_buffer_destroy(hbShapingScratchpad);
+				}
+		#endif
+		}
 void sttfont_font_cache::setFaceSize (int const _faceSize)
                                               { faceSize = _faceSize; }
 int sttfont_font_cache::getScaledRowSize () const
@@ -1822,6 +1836,31 @@ void sttfont_font_cache::loadFont (char const * ttf_buffer, int index)
 		getTextSize(w,h,"                                                                                                                                ", tabWidthInSpaces <= 128 ? tabWidthInSpaces : 128);
 		tabWidth = w;
 		if (tabWidth < 1) tabWidth = 1;
+		
+		#ifdef SSF_HARFBUZZ_ENABLED
+			if (!hbShapingScratchpad)
+				generateHbScratchpad();
+		#endif
+		}
+void sttfont_font_cache::setHbScrachpad (SSF_HB_BUFFER_TYPE * buffer)
+                                                        {
+		#ifdef SSF_HARFBUZZ_ENABLED
+		if (hbShapingScratchpad && ownsHbShapingScratchPad) {
+			hb_buffer_destroy(hbShapingScratchpad);
+			}
+		hbShapingScratchpad = buffer;
+		ownsHbShapingScratchPad = false;
+		#endif
+		}
+void sttfont_font_cache::generateHbScratchpad ()
+                                    {
+		#ifdef SSF_HARFBUZZ_ENABLED
+		if (hbShapingScratchpad && ownsHbShapingScratchPad) {
+			hb_buffer_destroy(hbShapingScratchpad);
+			}
+		hbShapingScratchpad = hb_buffer_create();
+		ownsHbShapingScratchPad = true;
+		#endif
 		}
 void sttfont_font_cache::loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, int index)
                                                                                                          {
@@ -1997,8 +2036,16 @@ sttfont_glyph * sttfont_font_cache::genGlyph_createAndInsert (uint64_t const tar
 		abort();
 		return NULL;
 		}
-stbtt_fontinfo * sttfont_font_cache::findSubfontByIndex (uint16_t const fontIdx)
-                                                                   {
+void sttfont_font_cache::findSubfontByIndexWHint (uint16_t const fontIdx, findSubfontLookupHint & mHint)
+                                                                                           {
+		// Checks if re-lookup is required. Result is stored in hint structure
+		if (fontIdx != mHint.fontIdx) {
+			mHint.font = findSubfontByIndex(fontIdx);
+			mHint.fontIdx = fontIdx;
+			}
+		}
+sttfont_font_list * sttfont_font_cache::findSubfontByIndex (uint16_t const fontIdx)
+                                                                      {
 		uint16_t depth = fontIdx >> SSF_FONT_IDX_SHIFT;
 		uint16_t formatIdx = fontIdx & ((uint16_t(1) << SSF_FONT_IDX_SHIFT) - 1);
 		
@@ -2009,19 +2056,16 @@ stbtt_fontinfo * sttfont_font_cache::findSubfontByIndex (uint16_t const fontIdx)
 			currentDepth++;
 			}
 		if (formatIdx)
-			return &w->mFormatedVariants[formatIdx-1]->mFont;
+			return w->mFormatedVariants[formatIdx-1];
 		else
-			return &w->mFont;
+			return w;
 		}
 int sttfont_font_cache::getKerningAdvance (sttfont_glyph const * G1, sttfont_glyph const * G2, uint32_t const cp1, uint32_t const cp2, findSubfontLookupHint & mHint)
                                                                                                                                                       {
 		if ((!G1) || (!G2)) return 0;
 		if (G1->fontIdx != G2->fontIdx) return 0;
-		if (G1->fontIdx != mHint.fontIdx) {
-			mHint.font = findSubfontByIndex(G1->fontIdx);
-			mHint.fontIdx = G1->fontIdx;
-			}
-		return stbtt_GetCodepointKernAdvance(mHint.font, cp1, cp2);
+		findSubfontByIndexWHint(G1->fontIdx, mHint);
+		return stbtt_GetCodepointKernAdvance(&(mHint.font->mFont), cp1, cp2);
 		}
 int sttfont_font_cache::utf8_charsize (char const * c)
                                                 {
@@ -2198,9 +2242,120 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 			*caretPosition = -1;
 			}
 		
+		
 		int xxl = xx;
 		sttfont_glyph * GLast = NULL;
 		findSubfontLookupHint fontLookupHint;
+		
+		#ifdef SSF_HARFBUZZ_ENABLED
+		// scan for chunk, shape chunk, process chunk, move to next chunk
+		
+		bool isSearchingForNextChunk = true;
+		uint32_t chunkStart = 0;
+		uint32_t chunkEnd = 0;
+		uint32_t lastSeek = 0;
+		uint16_t currentSubfontIdx = -1;
+		uint16_t boundSubfontIdx = -1;
+		int nextYy = yy;
+		
+		int newlineOffset = 0;
+		
+		while (uChar && seek <= maxLen) {
+			bool endsInNewline = false;
+			int thisYy = yy;
+			int thisXx = xx;
+			if (isSearchingForNextChunk) {
+				
+				bool isChunkEnd = false;
+				bool isStringEnd = false;
+				bool isWhitespace = false;
+				
+				if (uChar == ' ') {
+					isWhitespace = true; // do not chunk because of a whitespace char
+					}
+				else if (uChar == '\n') {
+					isChunkEnd = true;
+					yy += scale*rowSize;
+					xx = 0;
+					newlineOffset = 1;
+					}
+				else {
+					sttfont_glyph * G = getCodepointGlyph(uChar, format);
+					if (G) {
+						if (currentSubfontIdx == uint16_t(-1))
+							currentSubfontIdx = G->fontIdx;
+						else if (G->fontIdx != currentSubfontIdx)
+							isChunkEnd = true;
+						}
+					}
+				
+				// we have to read the next character to check if this is the end of string
+				uint32_t lastLastSeek = lastSeek;
+				lastSeek = seek;
+				uCharLast = uChar;
+				uChar = utf8_read(c + seek, seek, maxLen);
+				if (uChar == 0) {
+					isStringEnd = true;
+					}
+				
+				if (isChunkEnd || isStringEnd) {
+					// new font!
+					isSearchingForNextChunk = false;
+					boundSubfontIdx = currentSubfontIdx;
+					currentSubfontIdx = -1;
+					chunkEnd = lastLastSeek;
+					}
+				else {
+					continue;
+					}
+				}
+			
+			uint32_t thisChunkStart = chunkStart;
+			chunkStart = chunkEnd + newlineOffset;
+			newlineOffset = 0;
+			
+			// prepare next search
+			isSearchingForNextChunk = true;
+			if (boundSubfontIdx == uint16_t(-1)) // no valid font
+				continue;
+			
+			findSubfontByIndexWHint(boundSubfontIdx, fontLookupHint);
+			if (!fontLookupHint.font) continue; // no valid font (this should never be true)
+			
+			// shaping note: harfbuzz wants to read a few characters a bit before and after to get "context"
+			// But if the font changes then the context does not matter
+			hb_buffer_reset(hbShapingScratchpad);
+			hb_buffer_add_utf8(hbShapingScratchpad, c, maxLen, thisChunkStart, chunkEnd-thisChunkStart);
+			hb_shape(fontLookupHint.font->hbFont, hbShapingScratchpad, NULL, 0);
+			
+			unsigned int glyph_count;
+			hb_glyph_info_t *glyph_info    = hb_buffer_get_glyph_infos(hbShapingScratchpad, &glyph_count);
+			hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hbShapingScratchpad, &glyph_count);
+			
+			printf("glyph count %i, string: %.*s\n", int(glyph_count), chunkEnd-thisChunkStart, &c[thisChunkStart]);
+			
+			hb_position_t cursor_x = 0;
+			hb_position_t cursor_y = 0;
+			for (unsigned int i = 0; i < glyph_count; i++) {
+				hb_codepoint_t glyphid  = glyph_info[i].codepoint;
+				hb_position_t x_offset  = glyph_pos[i].x_offset;
+				hb_position_t y_offset  = glyph_pos[i].y_offset;
+				hb_position_t x_advance = glyph_pos[i].x_advance;
+				hb_position_t y_advance = glyph_pos[i].y_advance;
+				/* draw_glyph(glyphid, cursor_x + x_offset, cursor_y + y_offset); */
+				xx += x_advance;
+				//yy += y_advance;
+				
+				processCodepoint(NULL, 0, xx, thisYy, glyphid, format, isDrawing, overdraw, fontLookupHint);
+					
+				if (maxWidth) {
+					if (xx > *maxWidth) break;
+					}
+				
+				}
+				
+			}
+		#else		
 		while (uChar && seek <= maxLen) {
 			//if (mHint)
 			//	std::cout << "Processing: (" << seekLast << "," << (seek-seekLast) << ") " << std::string(&c[seekLast], seek-seekLast) << ", codePoint " << uChar << ", suibstring: [" << std::string(&c[seekLast]) << "], fullstring:["<<maxLen<<"] " << c << std::endl;
@@ -2256,6 +2411,7 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				if (xx > *maxWidth) break;
 				}
 			}
+		#endif
 		if (widthOut) {
 			if (*widthOut < xx) *widthOut = xx;
 			*widthOut -= x;
@@ -2366,6 +2522,13 @@ sttfont_glyph * sttfont_font_cache::getGlyphOrTofu (uint32_t const codepoint, ui
 			return getGlyphOrTofu(codepoint, 0);
 		
 		return NULL;
+		}
+sttfont_glyph * sttfont_font_cache::getCodepointGlyph (uint32_t const codepoint, sttfont_format const * const format)
+                                                                                                        {
+		uint8_t formatCode = 0;
+		if (format)
+			formatCode = format->format;
+		return getGlyphOrTofu(codepoint, formatCode);
 		}
 sttfont_glyph * sttfont_font_cache::processCodepoint (sttfont_glyph * GLast, uint32_t const codepointLast, int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint)
                                                                                                                                                                                                                                              {
