@@ -950,7 +950,6 @@ public:
 				else if (uChar == '\n') {
 					isChunkEnd = true;
 					yy += scale*rowSize;
-					xx = 0;
 					newlineOffset = 1;
 					}
 				else {
@@ -987,6 +986,7 @@ public:
 			uint32_t thisChunkStart = chunkStart;
 			chunkStart = chunkEnd + newlineOffset;
 			newlineOffset = 0;
+			xx = 0;
 			
 			// prepare next search
 			isSearchingForNextChunk = true;
