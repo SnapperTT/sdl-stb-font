@@ -1,4 +1,7 @@
 #!/bin/bash
+OPT=-O0
+
+
 compile_harfbuzz() {
 	if [[ harfbuzz -nt harfbuzz.o ]]; then
 	    echo "Building harfbuzz.o..."
@@ -11,13 +14,13 @@ compile_harfbuzz() {
 
 compile_example() {
 	echo "Building example.cpp => ./example ..."
-	g++ example.cpp harfbuzz.o -std=c++17 -O2 -g  -o example `pkg-config --cflags --libs sdl3` && \
+	g++ example.cpp harfbuzz.o -std=c++17 $OPT -g  -o example `pkg-config --cflags --libs sdl3` && \
 	echo "Done building example"
 	}
 
 compile_producer_consumer() {
 	echo "Building producerConsumerExample.cpp => ./producerConsumerExample..."
-	g++ producerConsumerExample.cpp -std=c++17 -O2 -g  -o producerConsumerExample `pkg-config --cflags --libs sdl3` && \
+	g++ producerConsumerExample.cpp -std=c++17 $OPT -g  -o producerConsumerExample `pkg-config --cflags --libs sdl3` && \
 	echo "Done building producerConsumer!"
 	}
 
