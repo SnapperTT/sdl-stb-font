@@ -2060,6 +2060,7 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 			intIdx = mIndex;
 			}
 		else {
+			#warning todo - cache last font lookup here
 			sttfont_font_list* l = findSubfontByIndex(fontIdx);
 			if (l)
 				mFontContaining = &l->mFont;
@@ -2372,6 +2373,9 @@ int sttfont_font_cache::processHarfbuzzChunk (char const * c, uint32_t maxLen, i
                                                                                                                                                                                                                                                                                                                           {
 		#ifdef SSF_HARFBUZZ_ENABLED
 			findSubfontByIndexWHint(fontIdx, fontLookupHint);
+			
+			printf("fontLookupHint.font %x, %i\n", fontLookupHint.font, fontIdx);
+			
 			if (!fontLookupHint.font) return xx; // no valid font (this should never be true)
 			
 			// shaping note: harfbuzz wants to read a few characters a bit before and after to get "context"
@@ -2390,35 +2394,24 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				}
 			#endif
    
-			//hb_buffer_add_utf8(hbShapingScratchpad, c, maxLen, chunkStart, chunkEnd-chunkStart);
+			hb_buffer_add_utf8(hbShapingScratchpad, c, maxLen, chunkStart, chunkEnd-chunkStart);
 			//hb_buffer_add_utf8(hbShapingScratchpad, "hello", -1, 0, -1);
-			const char* text = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ";//argv[2];
+			//const char* text = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ";//argv[2];
 			
 			
-			uint32_t codepoints[200];
+			//hb_buffer_add_utf8(hbShapingScratchpad, text, -1, 0, -1);
 			
-			hb_buffer_add_utf8(hbShapingScratchpad, text, -1, 0, -1);
-
-			{
-				
-			unsigned int glyph_count;
-			hb_glyph_info_t *glyph_info    = hb_buffer_get_glyph_infos(hbShapingScratchpad, &glyph_count);
-			
-			for (unsigned int i = 0; i < glyph_count; i++) {
-				codepoints[i] = glyph_info[i].codepoint;;
-				}
-			}
 			// if (LTR... RTL) {
 				// do something?
 				// manually setting hb_buffer_... properties mangles all strings
 			//	}
 
-			//hb_buffer_guess_segment_properties(hbShapingScratchpad); //<-- will mangles all string
+			hb_buffer_guess_segment_properties(hbShapingScratchpad); //<-- will mangles all string
 			
       
-    hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_LTR);
-    hb_buffer_set_script(hbShapingScratchpad, HB_SCRIPT_THAI);
-    hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("th", -1));
+ //   hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_LTR);
+ //   hb_buffer_set_script(hbShapingScratchpad, HB_SCRIPT_THAI);
+    //hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("th", -1));
     
 			hb_shape(fontLookupHint.font->hbFont, hbShapingScratchpad, NULL, 0);
 			//hb_shape(thaiFont, buf, NULL, 0);
@@ -2434,7 +2427,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 			hb_position_t cursor_y = 0;
 			
 			for (unsigned int i = 0; i < glyph_count; i++) {
-				hb_codepoint_t glyphid  = codepoints[i];//glyph_info[i].codepoint;
+				hb_codepoint_t glyphid  = glyph_info[i].codepoint;
 				hb_position_t x_offset  = glyph_pos[i].x_offset;
 				hb_position_t y_offset  = glyph_pos[i].y_offset;
 				hb_position_t x_advance = glyph_pos[i].x_advance;
@@ -2446,8 +2439,16 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				
 				int xx2 = xx;
 				int yy2 = yy;
-				processCodepoint(NULL, 0, xx2, yy2, glyphid, format, isDrawing, overdraw, fontLookupHint);
+				//processCodepoint(NULL, 0, xx2, yy2, glyphid, format, isDrawing, overdraw, fontLookupHint);
 				
+				if (isDrawing) {
+					uint8_t formatCode = 0;
+					if (format)
+						formatCode = format->format;
+					sttfont_glyph* G = hbGetGlyphOrTofu(fontIdx, glyphid, formatCode);
+					if (G)
+						drawGlyph(G, xx, yy, format, formatCode, 0, overdraw);
+					}
 				
 				xx += 0*x_offset + x_advance*0.05;
 				//yy += y_advance;
@@ -2561,13 +2562,24 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 					}
 				}
 			#endif //SSF_HARFBUZZ_AUTO_BIDI_ENABLED
-			
+						
 			auto it = hbFontLookup.find(uChar);
+			uint16_t gFontIdx = 0;
 			if (it == hbFontLookup.end()) {
-				// glyph not found
-				continue;
+				// glyph not found. Generate it
+				uint16_t fontIdx2;
+				int index2;
+				stbtt_fontinfo* mFont2;
+				//			int index = stbtt_FindGlyphIndex(&(working->mFont), codepoint);
+				mFont.fetchFontForCodepoint(uChar, format ? format->format : 0, &mFont2, &index2, &fontIdx2);
+				if (fontIdx2 != uint16_t(-1)) {
+					hbFontLookup[uChar] = fontIdx2;
+					gFontIdx = fontIdx2; 
+					}
 				}
-			uint16_t gFontIdx = it->second;
+			else {
+				gFontIdx = it->second;
+				}
 			
 			if (currentFont == uint16_t(-1)) {
 				currentFont = gFontIdx;

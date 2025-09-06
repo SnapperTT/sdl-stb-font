@@ -9,7 +9,7 @@
 // Public Domain
 #define SDL_STB_FONT_IMPL
 
-//#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
+#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
 //#define SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 ////#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
 #define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc, instead use the precompiled .o object file
