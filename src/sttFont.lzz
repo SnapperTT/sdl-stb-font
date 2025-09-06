@@ -1024,13 +1024,9 @@ public:
 				hb_position_t x_advance = glyph_pos[i].x_advance;
 				hb_position_t y_advance = glyph_pos[i].y_advance;
 				
-				char cbuff[5];
-				sttfont_utf8::utf8_encode(glyphid, &cbuff[0]);
-				printf("(%#04x, %s) ", glyphid, cbuff);
-				
-				int xx2 = xx;
-				int yy2 = yy;
-				//processCodepoint(NULL, 0, xx2, yy2, glyphid, format, isDrawing, overdraw, fontLookupHint);
+				//char cbuff[5];
+				//sttfont_utf8::utf8_encode(glyphid, &cbuff[0]);
+				//printf("(%#04x, %s) ", glyphid, cbuff);
 				
 				if (isDrawing) {
 					uint8_t formatCode = 0;
@@ -1038,17 +1034,17 @@ public:
 						formatCode = format->format;
 					sttfont_glyph* G = hbGetGlyphOrTofu(fontIdx, glyphid, formatCode);
 					if (G)
-						drawGlyph(G, xx, yy, format, formatCode, 0, overdraw);
+						drawGlyph(G, xx + x_offset*hbScaleFactor, yy + y_offset*hbScaleFactor, format, formatCode, 0, overdraw);
 					}
 				
-				xx += 0*x_offset + x_advance*hbScaleFactor;
+				xx += x_advance*hbScaleFactor;
 				//yy += y_advance;
 					
 				if (maxWidth) {
 					if (xx > *maxWidth) break;
 					}
 				}
-			printf("\n");
+			//printf("\n");
 		#endif //SSF_HARFBUZZ_ENABLED
 		return xx;
 		}
@@ -1115,6 +1111,8 @@ public:
 
 				// Move to next line
 				yy += scale*rowSize;
+				if (widthOut)
+					if (*widthOut < xx) *widthOut = xx;
 				xx = xxl;
 
 				// Skip the newline and start new chunk
@@ -1150,6 +1148,7 @@ public:
 				}
 			else if (currentFont != gFontIdx) {
 				// Font change → emit chunk
+				#warning ToDo: Do not break fonts based on punctuation, if the punctuation mark exists in currentFont
 				if (chunkStart < seekLast) {
 					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, gFontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
 					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
