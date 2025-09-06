@@ -4,7 +4,7 @@
 // Public Domain
 #define SDL_STB_FONT_IMPL
 
-#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
+//#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
 //#define SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 ////#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
 #define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc, instead use the precompiled .o object file
@@ -49,11 +49,11 @@ int main(int argc, char**argv) {
 // This does not support HarfBuzz or FriBidi
 // 
 
-const std::string loremIpsum  = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ ";
+//const std::string loremIpsum  = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ ";
 
 //const std::string loremIpsum  = "أنا قادر على أكل الزجاج و هذا لا يؤلمن";
     
-//const std::string loremIpsum = "\"I can eat glass\" sample text:\n\
+const std::string loremIpsum = "\"I can eat glass\" sample text:\n\
 \n\
 Euro Symbol: €.\n\
 Greek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\n\
@@ -142,9 +142,9 @@ formattedText << sttfont_format::black << "Plain text "
 		#warning remove me
 		
 		//fc.loadFontManaged(notoSansArabic);
-		fc.loadFontManaged(notoSansThai);
+		//fc.loadFontManaged(notoSansThai);
 		
-		/*
+		
 		fc.loadFontManaged(notoSans);
 			fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansBold);
 			fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansItalic);
@@ -155,7 +155,7 @@ formattedText << sttfont_format::black << "Plain text "
 		fc.addFontManaged(notoSansHindi);
 		fc.addFontManaged(notoSansArabic);
 		fc.addFontManaged(notoSansThai);
-		fc.addFontManaged(notoSansCJK);*/
+		fc.addFontManaged(notoSansCJK);
 	}
 	
 		

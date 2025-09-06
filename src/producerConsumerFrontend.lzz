@@ -254,9 +254,9 @@ public:
 		return &((*it).second);
 		}
 		
-	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
+	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
 		sttfont_glyph g;
-		genGlyph(codepoint, format, &g);
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}

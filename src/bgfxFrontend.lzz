@@ -744,7 +744,10 @@ public:
 				
 				t.bitmapData = NULL;
 				
-				genGlyph(codepoint, format, &g, &t.bitmapData);
+				#ifdef SSF_HARFBUZZ_ENABLED
+					abort(); //codepoint mode with harfbuzz not allowed
+				#endif
+				genGlyph(codepoint, format, 0, 0, &g, &t.bitmapData);
 				
 				if (t.bitmapData) {
 					r.id = *((int*) &codepoint);
@@ -807,7 +810,7 @@ public:
 		}
 		
 	// Override - write 
-	void genGlyph_writeData (const uint32_t codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
+	void genGlyph_writeData (const uint32_t codepoint, const uint16_t fontIdx, const uint32_t intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
 		genGlyph_writeData2(codepoint, gOut, bitmap2, w, h, true);
 		}
 	
@@ -872,9 +875,10 @@ public:
 		return &((*it).second);
 		}
 		
-	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
+	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
 		bgfx_stb_glyph g;
-		genGlyph(codepoint, format, &g);
+		if (fontIdx || intIdx) abort();
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
@@ -1038,7 +1042,7 @@ protected:
 		
 public:
 	
-	void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
+	void drawGlyph (const sttfont_glyph * const GS, const int x, const int y, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph *) GS;
 		// Draws the character
 		const uint64_t RSTATE = renderTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;

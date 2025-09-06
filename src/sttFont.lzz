@@ -381,6 +381,77 @@ struct sttfont_font_list {
 		}
 	};
 
+struct sttfont_utf8 {
+	static int utf8_charsize(const char* c) {
+		if (!c) return 0;
+		if ((uint8_t)*c <= 0x7F) return 1;
+		else if ((uint8_t)*c <= 0xDF) return 2;
+		else if ((uint8_t)*c <= 0xEF) return 3;
+		else if ((uint8_t)*c <= 0xF7) return 4;
+		else
+			return 4;
+		}
+	
+	static int utf8_charsize_from_codepoint(const uint32_t codepoint) {
+		if (codepoint <= 0x7F)        return 1; 
+		else if (codepoint <= 0x7FF)  return 2; 
+		else if (codepoint <= 0xFFFF) return 3;
+		return 4;
+		}
+		
+	static int utf8_encode(const uint32_t codepoint, char *buf) {
+		if (codepoint <= 0x7F) {
+			buf[0] = (char)codepoint;
+			buf[1] = '\0';
+			return 1;
+			}
+		else if (codepoint <= 0x7FF) {
+			buf[0] = (char)(0xC0 | (codepoint >> 6));
+			buf[1] = (char)(0x80 | (codepoint & 0x3F));
+			buf[2] = '\0';
+			return 2;
+			}
+		else if (codepoint <= 0xFFFF) {
+			buf[0] = (char)(0xE0 | (codepoint >> 12));
+			buf[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+			buf[2] = (char)(0x80 | (codepoint & 0x3F));
+			buf[3] = '\0';
+			return 3;
+			}
+		else if (codepoint <= 0x10FFFF) {
+			buf[0] = (char)(0xF0 | (codepoint >> 18));
+			buf[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+			buf[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+			buf[3] = (char)(0x80 | (codepoint & 0x3F));
+			buf[4] = '\0';
+			return 4;
+			}
+		else {
+			buf[0] = '\0';
+			return 0;
+			}
+		}
+	
+	/// Reads a utf8 codepoint from a string
+	static uint32_t utf8_read(const char* c, uint32_t & seek, const uint32_t maxLen) {
+		if (!c) return 0;
+		int chsz = utf8_charsize(c);
+		seek += chsz;
+	
+		if (seek > maxLen) {
+			return *c; //Buffer overflow - stop to be safe!
+			}
+			
+		if (chsz == 1) return *c;		
+		if (chsz == 2)
+			return (((uint32_t((uint8_t) c[0] & 0b00111111) << 6)) | uint32_t((uint8_t) c[1] & 0b00111111));
+		if (chsz == 3)
+			return (uint32_t((uint8_t) c[0] & 0b00011111) << 12) | (uint32_t((uint8_t) c[1] & 0b00111111) << 6) | uint32_t((uint8_t) c[2] & 0b00111111);
+		return (uint32_t((uint8_t) c[0] & 0b00001111) << 18) | (uint32_t((uint8_t) c[1] & 0b00111111) << 12) | (uint32_t((uint8_t) c[2] & 0b00111111) << 6) | uint32_t((uint8_t) c[3] & 0b00111111);
+		}
+	
+	};
+
 /// Cache of a font
 class sttfont_font_cache {
 public:
@@ -403,13 +474,16 @@ public:
 	int tabWidthInSpaces;	// Default is 8, set this before loadFont(). Max 128. Sets tabWidth when font is loaded
 	void* userData;			// Pointer for whatever purpose you see fit
 
+	// Harfbuzz stuff
 	SSF_HB_BUFFER_TYPE* hbShapingScratchpad;
 	SSF_MAP<uint32_t,uint16_t> hbFontLookup;
+	uint32_t hb_unicodeReplacementCodeGlyphIndex;	// For the first font loaded, what is the 0xFFFD character?
+	uint32_t hb_questionMarkGlyphIndex;				// For the first font loaded, what is the '?' character?
 	bool ownsHbShapingScratchPad;
 	
 	sttfont_font_cache () : ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), tabWidth(1), scale(1.f),
 		underlineThickness(1.0), strikethroughThickness(1.0), underlinePosition(0.0), strikethroughPosition(0.0),
-		faceSize(20), tabWidthInSpaces(8), userData(NULL), hbShapingScratchpad(NULL), ownsHbShapingScratchPad(false) {}
+		faceSize(20), tabWidthInSpaces(8), userData(NULL), hbShapingScratchpad(NULL), hb_unicodeReplacementCodeGlyphIndex(0), hb_questionMarkGlyphIndex(0), ownsHbShapingScratchPad(false) {}
 	
 	virtual ~sttfont_font_cache () {
 		#ifdef SSF_HARFBUZZ_ENABLED
@@ -455,6 +529,9 @@ public:
 		#ifdef SSF_HARFBUZZ_ENABLED
 			if (!hbShapingScratchpad)
 				generateHbScratchpad();
+			
+			hb_unicodeReplacementCodeGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, 0xFFFD);
+			hb_questionMarkGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, (uint32_t) '?');
 		#endif
 		
 		int w,h;
@@ -603,22 +680,31 @@ public:
 	void genGlyph (const uint32_t codepoint, const uint8_t format, uint16_t fontIdx, uint32_t intIdx, sttfont_glyph * gOut, unsigned char ** bitmapOut = NULL) {
 		// Fetch font and index - existance check for glyph in font
 		// format is a number representing regular, bold, itallic, bold itallic
-		stbtt_fontinfo * mFontContaining;
+		stbtt_fontinfo * mFontContaining = NULL;
 		
 		if (codepoint != 0) {
 			// Lookup font and index for codepoint
 			int mIndex;
 			mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex, &fontIdx);
+	   	printf("genGlyph lookup %#04x %i %i \n", codepoint, fontIdx, intIdx);
 			if (!mIndex)
 				return;
 			intIdx = mIndex;
-			}		
+			}
+		else {
+			sttfont_font_list* l = findSubfontByIndex(fontIdx);
+			if (l)
+				mFontContaining = &l->mFont;
+			}
+			
+		if (!mFontContaining) abort();
 		
 		// found the font! generate the glyph
 	   	int w,h,woff,hoff;
 	   	int x0,x1,y0,y1;
 	   	
-	   	if (codepoint == 0) {
+	   	
+	   	if (codepoint == 0)
 			stbtt_GetGlyphBitmapBox(mFontContaining, intIdx, scale, scale, &x0, &y0, &x1, &y1);
 	   	else
 			stbtt_GetCodepointBitmapBox(mFontContaining, codepoint, scale, scale, &x0, &y0, &x1, &y1);
@@ -628,6 +714,8 @@ public:
 	   	hoff = y0;
 	   	
 		unsigned int sz = w*h;
+	   	
+	   	printf("genGlyph %#04x %i %i, sz %i, w %i, h %i \n", codepoint, fontIdx, intIdx, sz, w, h);
 		if (sz) {
 			sttfont_tmpArr4096 bitmapStore(sz);
 			unsigned char* bitmap = (unsigned char*) bitmapStore.arr;
@@ -692,7 +780,7 @@ public:
 		for (const sttfont_uint32_t_range & r : mRanges) {
 			for (uint32_t codepoint = r.start; codepoint <= r.end; ++codepoint) {
 				uint64_t target = getGlyphKey(codepoint, format, 0, 0);
-				genGlyph_createAndInsert(target, codepoint, format);
+				genGlyph_createAndInsert(target, codepoint, format, 0, 0);
 				}
 			}
 		}
@@ -700,6 +788,8 @@ public:
 	virtual void genGlyph_writeData (const uint32_t codepoint, const uint16_t fontIdx, const uint32_t intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
 		// Make your own implmentation for your own frontend here
 		// If codepoint == 0, then use fontIdx and fontGlypthIdx to encode your key
+		// note that fontIdx and intIdx will be set here regardless if you are using codepoint mode or not
+		abort();
 		}
 	
 	virtual sttfont_glyph * getGlyph(const uint64_t target) {
@@ -729,6 +819,8 @@ public:
 		
 	virtual sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
 		// Make your own implmentation for your own frontend here
+		// Codepoint mode -> fontIdx = 0, intIdx = 0
+		// Harfbuzz mode -> codepoint = 0 
 		abort();
 		return NULL;
 		}
@@ -771,76 +863,7 @@ public:
 		if (G1->fontIdx != G2->fontIdx) return 0;
 		findSubfontByIndexWHint(G1->fontIdx, mHint);
 		return stbtt_GetCodepointKernAdvance(&(mHint.font->mFont), cp1, cp2);
-		}
-	
-	static int utf8_charsize(const char* c) {
-		if (!c) return 0;
-		if ((uint8_t)*c <= 0x7F) return 1;
-		else if ((uint8_t)*c <= 0xDF) return 2;
-		else if ((uint8_t)*c <= 0xEF) return 3;
-		else if ((uint8_t)*c <= 0xF7) return 4;
-		else
-			return 4;
-		}
-		
-	static int utf8_charsize_from_codepoint(const uint32_t codepoint) {
-		if ((codepoint & 0x000000ff) == codepoint) return 1;
-		if ((codepoint & 0x0000ffff) == codepoint) return 2;
-		if ((codepoint & 0x00ffffff) == codepoint) return 3;
-		return 4;
-		}
-		
-	static int utf8_encode(const uint32_t codepoint, char *buf) {
-		if (codepoint <= 0x7F) {
-			buf[0] = (char)codepoint;
-			buf[1] = '\0';
-			return 1;
-			}
-		else if (codepoint <= 0x7FF) {
-			buf[0] = (char)(0xC0 | (codepoint >> 6));
-			buf[1] = (char)(0x80 | (codepoint & 0x3F));
-			buf[2] = '\0';
-			return 2;
-			}
-		else if (codepoint <= 0xFFFF) {
-			buf[0] = (char)(0xE0 | (codepoint >> 12));
-			buf[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-			buf[2] = (char)(0x80 | (codepoint & 0x3F));
-			buf[3] = '\0';
-			return 3;
-			}
-		else if (codepoint <= 0x10FFFF) {
-			buf[0] = (char)(0xF0 | (codepoint >> 18));
-			buf[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
-			buf[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-			buf[3] = (char)(0x80 | (codepoint & 0x3F));
-			buf[4] = '\0';
-			return 4;
-			}
-		else {
-			buf[0] = '\0';
-			return 0;
-			}
-		}
-	
-	/// Reads a utf8 codepoint from a string
-	static uint32_t utf8_read(const char* c, uint32_t & seek, const uint32_t maxLen) {
-		if (!c) return 0;
-		int chsz = utf8_charsize(c);
-		seek += chsz;
-	
-		if (seek > maxLen) {
-			return *c; //Buffer overflow - stop to be safe!
-			}
-			
-		if (chsz == 1) return *c;		
-		if (chsz == 2)
-			return (((uint32_t((uint8_t) c[0] & 0b00111111) << 6)) | uint32_t((uint8_t) c[1] & 0b00111111));
-		if (chsz == 3)
-			return (uint32_t((uint8_t) c[0] & 0b00011111) << 12) | (uint32_t((uint8_t) c[1] & 0b00111111) << 6) | uint32_t((uint8_t) c[2] & 0b00111111);
-		return (uint32_t((uint8_t) c[0] & 0b00001111) << 18) | (uint32_t((uint8_t) c[1] & 0b00111111) << 12) | (uint32_t((uint8_t) c[2] & 0b00111111) << 6) | uint32_t((uint8_t) c[3] & 0b00111111);
-		}
-	
+		}	
 	
 	/// Draws a c string at position x, y
 	/// maxLen should be set if you want to use non-zero terminated strings
@@ -909,7 +932,7 @@ public:
 		uint32_t seek = 0;
 		const uint32_t len = str.length();
 		while (seek < len) {
-			uint32_t uChar = sttfont_font_cache::utf8_read(&str[seek], seek, len);
+			uint32_t uChar = sttfont_utf8::utf8_read(&str[seek], seek, len);
 			if (uChar == uint32_t('\n')) n++;
 			}
 		return n;
@@ -1083,7 +1106,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				hb_position_t y_advance = glyph_pos[i].y_advance;
 				
 				char cbuff[5];
-				utf8_encode(glyphid, &cbuff[0]);
+				sttfont_utf8::utf8_encode(glyphid, &cbuff[0]);
 				printf("(%#04x, %s) ", glyphid, cbuff);
 				
 				int xx2 = xx;
@@ -1122,7 +1145,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 			uCharLast = mHint->uCharLast;
 			}
 			
-		uint32_t uChar = utf8_read(c+seek, seek, maxLen);
+		uint32_t uChar = sttfont_utf8::utf8_read(c+seek, seek, maxLen);
 		if (widthOut) { *widthOut = 0; if (mHint) *widthOut = mHint->workingX-x; }
 		if (heightOut) { *heightOut = 0; if (mHint) *heightOut = mHint->workingY-y; }
 		
@@ -1149,7 +1172,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		while (seek < maxLen) {
 			seekLast = seek; // seek before utf8_read()
 			uCharLast = uChar;
-			uChar = utf8_read(c+seekLast, seek, maxLen); // seek is now at the character *after* uChar
+			uChar = sttfont_utf8::utf8_read(c+seekLast, seek, maxLen); // seek is now at the character *after* uChar
 			if (uChar == 0) {
 				len = seek;
 				break;
@@ -1209,7 +1232,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				// glyph not found
 				continue;
 				}
-			uint16_t gFontIdx = *it;
+			uint16_t gFontIdx = it->second;
 			
 			if (currentFont == uint16_t(-1)) {
 				currentFont = gFontIdx;
@@ -1286,7 +1309,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				}
 			uCharLast = uChar;
 			seekLast = seek;
-			uChar = utf8_read(c + seek, seek, maxLen);
+			uChar = sttfont_utf8::utf8_read(c + seek, seek, maxLen);
 			if (maxWidth) {
 				if (xx > *maxWidth) break;
 				}
@@ -1394,20 +1417,22 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		}
 	
 	/// Returns either a glyph with a valid texture, or a tofu glyph with a valid texture or NULL
-	sttfont_glyph * getGlyphOrTofu (const uint32_t codepoint, const uint8_t format) {
+	sttfont_glyph * getCodepointGlyphOrTofu (const uint32_t codepoint, const uint8_t format) {
 		const uint8_t format_wo_underline_or_strike = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
-		sttfont_glyph * G = getGenGlyph(codepoint, format_wo_underline_or_strike);
+		sttfont_glyph * G = getGenGlyph(codepoint, format_wo_underline_or_strike, 0, 0);
 		
 		if (!isTofu(G)) return G;
 		
-		G = getGenGlyph((uint32_t) 0xFFFD, format_wo_underline_or_strike); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
+		printf("failed to find %#04x\n", codepoint);
+		
+		G = getGenGlyph((uint32_t) 0xFFFD, format_wo_underline_or_strike, 0, 0); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
 		if (!isTofu(G)) return G;
 			
-		G = getGenGlyph((uint32_t) '?', format_wo_underline_or_strike);
+		G = getGenGlyph((uint32_t) '?', format_wo_underline_or_strike, 0, 0);
 		if (!isTofu(G)) return G;
 		
 		if (format_wo_underline_or_strike)
-			return getGlyphOrTofu(codepoint, 0);
+			return getCodepointGlyphOrTofu(codepoint, 0);
 		
 		return NULL;
 		}
@@ -1417,7 +1442,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		uint8_t formatCode = 0;
 		if (format)
 			formatCode = format->format;
-		return getGlyphOrTofu(codepoint, formatCode);
+		return getCodepointGlyphOrTofu(codepoint, formatCode);
 		}
 	
 	sttfont_glyph* processCodepoint (sttfont_glyph* GLast, const uint32_t codepointLast, int & x, int & y, const uint32_t codepoint, const sttfont_format * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint) {
@@ -1426,7 +1451,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		if (format)
 			formatCode = format->format;
 			
-		sttfont_glyph * G = getGlyphOrTofu(codepoint, formatCode);
+		sttfont_glyph * G = getCodepointGlyphOrTofu(codepoint, formatCode);
 		if (!G) {
 			x += faceSize/2;
 			return NULL;
@@ -1438,14 +1463,14 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		x += kerningAdv;
 		
 		if (isDrawing) {
-			drawCodepoint(G, x, y, codepoint, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
+			drawGlyph(G, x, y, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
 		
 		return G;
 		}
 		
-	virtual void drawCodepoint (const sttfont_glyph * const GS, const int x, const int y, const uint32_t codepoint, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
+	virtual void drawGlyph (const sttfont_glyph * const GS, const int x, const int y, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
 		// Draws the character
 		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
 		// Make your own implmentation for your own frontend here
@@ -1455,7 +1480,21 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 	// HarfBuzz based glyph processing
 	
 	sttfont_glyph * hbGetGlyphOrTofu (const uint16_t fontIdx, const uint16_t intIdx, const uint8_t format) {
+		const uint8_t format_wo_underline_or_strike = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
+		sttfont_glyph * G = getGenGlyph(0, format_wo_underline_or_strike, fontIdx, intIdx);
 		
+		if (!isTofu(G)) return G;
+		
+		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hb_unicodeReplacementCodeGlyphIndex);
+		if (!isTofu(G)) return G;
+		
+		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hb_questionMarkGlyphIndex);
+		if (!isTofu(G)) return G;
+		
+		if (format_wo_underline_or_strike)
+			return hbGetGlyphOrTofu(fontIdx, intIdx, 0);
+		
+		return NULL;
 		}
 		
 	virtual void drawHbGlyph (const int x, const int y, const uint16_t fontIdx, const uint16_t intIdx, const sttfont_format * const format, const uint8_t formatCode) {
@@ -1581,7 +1620,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 					
 					while (seek < len) {
 						seekBefore = seek;
-						sttfont_font_cache::utf8_read(&s[seek], seek, len); // Look ahead and discard value
+						sttfont_utf8::utf8_read(&s[seek], seek, len); // Look ahead and discard value
 					
 						sttfont_formatted_text subToken2 =  thisTokenS.extract(seekBefore+subWorkingLen, seek-seekBefore, &mHint2);
 						subToken.append(std::move(subToken2));

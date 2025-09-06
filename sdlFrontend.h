@@ -38,10 +38,10 @@ public:
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
   void clearGlyphs ();
   void bindRenderer (SDL_Renderer * _mRenderer);
-  void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   sttfont_glyph * getGlyph (uint64_t const target);
-  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
-  void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
+  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
+  void drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   SDL_Texture * renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
   SDL_Texture * renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
 protected:
@@ -121,8 +121,8 @@ void sdl_stb_font_cache::bindRenderer (SDL_Renderer * _mRenderer)
                                                      {
 		mRenderer = _mRenderer;
 		}
-void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
-                                                                                                                        {
+void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                                                                       {
 		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
 		gOut2->mSdlSurface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, bitmap2,  4*w);
 		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);
@@ -134,15 +134,15 @@ sttfont_glyph * sdl_stb_font_cache::getGlyph (uint64_t const target)
 			return NULL;
 		return &((*it).second);
 		}
-sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
-                                                                                                                        {
+sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                                                       {
 		sdl_stb_glyph g;
-		genGlyph(codepoint, format, &g);
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
-void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
-                                                                                                                                                                                                                     {
+void sdl_stb_font_cache::drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                       {
 		const sdl_stb_glyph * const G = (const sdl_stb_glyph *) GS;
 		// Draws the character
 		if (G->mSdlTexture) {

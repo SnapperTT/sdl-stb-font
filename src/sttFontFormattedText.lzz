@@ -807,7 +807,7 @@ public:
 		
 		// Lookup to 3 characters back and get the charSize
 		for (unsigned int lookup = 0; lookup <= offset;) {
-			int thisSz = sttfont_font_cache::utf8_charsize(&mItems[index].text[lookup]);
+			int thisSz = sttfont_utf8::utf8_charsize(&mItems[index].text[lookup]);
 			
 			//std::cout << "Lookup utf8_charsizeAt " << lookup << " " << thisSz
 			//		<< " char[" << mItems[index].text.substr(lookup, thisSz) << "] " << offset << std::endl;
@@ -1020,7 +1020,7 @@ public:
 			
 			while (seek < len) {
 				const uint32_t seekBefore = seek;
-				uint32_t uChar = sttfont_font_cache::utf8_read(&s[seek], seek, len);
+				uint32_t uChar = sttfont_utf8::utf8_read(&s[seek], seek, len);
 				
 				if (escape) {
 					escape = false;
@@ -1053,7 +1053,7 @@ public:
 					
 					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset, &mHint);
 					segmentStart = workingPos + seekBefore;
-					offset = sttfont_font_cache::utf8_charsize_from_codepoint(uChar); // Used to skip including the newline
+					offset = sttfont_utf8::utf8_charsize_from_codepoint(uChar); // Used to skip including the newline
 					arrOut.push_back(std::move(d));
 					}
 				}

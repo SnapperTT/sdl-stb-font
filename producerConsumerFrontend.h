@@ -117,7 +117,7 @@ public:
   int getNumInQueue ();
   void freeStoredPrerenderedText (bool const freeTextures);
   sttfont_glyph * getGlyph (uint64_t const target);
-  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
+  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
   void loadFontManagedBoth (sttfont_memory & memory, int index = 0);
   void addFontManagedBoth (sttfont_memory & memory, int index = 0);
   void addFormatFontManagedBoth (uint8_t formatMask, sttfont_memory & memory, int index = 0);
@@ -355,10 +355,10 @@ sttfont_glyph * producer_consumer_font_cache::getGlyph (uint64_t const target)
 			return NULL;
 		return &((*it).second);
 		}
-sttfont_glyph * producer_consumer_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
-                                                                                                                        {
+sttfont_glyph * producer_consumer_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                                                       {
 		sttfont_glyph g;
-		genGlyph(codepoint, format, &g);
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}

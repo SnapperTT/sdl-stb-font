@@ -206,11 +206,11 @@ public:
   };
   void pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format);
   void pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs, SSF_VECTOR <stbrp_rect> & rects, bool force);
-  void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   void populateGlyphData (bgfx_stb_glyph * bOut, unsigned char * bitmap2, int w, int h);
   void genGlyph_writeData2 (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall);
   sttfont_glyph * getGlyph (uint64_t const target);
-  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
+  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
   void onStartDrawing ();
   void onCompletedDrawing ();
   void startManuallyBuffering (bool const beginBuffering);
@@ -221,7 +221,7 @@ protected:
   void bindDrawBufferBucket (bgfxsfh::textured_draw_state const & this_state);
   void bindDrawBufferBucketUt (bgfxsfh::untextured_draw_state const & this_state);
 public:
-  void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
+  void drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   bgfx::TextureHandle renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
   bgfx::TextureHandle renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
 protected:
@@ -831,7 +831,7 @@ void bgfx_stb_font_cache::pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mR
 		
 		for (sttfont_uint32_t_range & sur : mRanges) {
 			for (uint32_t codepoint = sur.start; codepoint <= sur.end; ++codepoint) {
-				uint64_t target = codepoint | (uint64_t(format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE)) << 32);
+				uint64_t target = getGlyphKey(codepoint, format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE));
 				
 				// does the codepoint exist already?
 				auto check = mGlyphs.find(target);
@@ -843,7 +843,10 @@ void bgfx_stb_font_cache::pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mR
 				
 				t.bitmapData = NULL;
 				
-				genGlyph(codepoint, format, &g, &t.bitmapData);
+				#ifdef SSF_HARFBUZZ_ENABLED
+					abort(); //codepoint mode with harfbuzz not allowed
+				#endif
+				genGlyph(codepoint, format, 0, 0, &g, &t.bitmapData);
 				
 				if (t.bitmapData) {
 					r.id = *((int*) &codepoint);
@@ -904,8 +907,8 @@ void bgfx_stb_font_cache::pregenGlyphs_pack (SSF_VECTOR <tempGlyph> & tempGlyphs
 		if ((glyphs_rejected.size() != tempGlyphs.size() || force) && glyphs_rejected.size())
 			pregenGlyphs_pack(glyphs_rejected, rects_rejected, false);
 		}
-void bgfx_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
-                                                                                                                        {
+void bgfx_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                                                                       {
 		genGlyph_writeData2(codepoint, gOut, bitmap2, w, h, true);
 		}
 void bgfx_stb_font_cache::populateGlyphData (bgfx_stb_glyph * bOut, unsigned char * bitmap2, int w, int h)
@@ -969,10 +972,11 @@ sttfont_glyph * bgfx_stb_font_cache::getGlyph (uint64_t const target)
 			return NULL;
 		return &((*it).second);
 		}
-sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
-                                                                                                                        {
+sttfont_glyph * bgfx_stb_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                                                       {
 		bgfx_stb_glyph g;
-		genGlyph(codepoint, format, &g);
+		if (fontIdx || intIdx) abort();
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
@@ -1131,8 +1135,8 @@ void bgfx_stb_font_cache::bindDrawBufferBucketUt (bgfxsfh::untextured_draw_state
 			insertBoundBucketUt->setAllocator(drawBufferAlloctor);
 		#endif
 		}
-void bgfx_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
-                                                                                                                                                                                                                     {
+void bgfx_stb_font_cache::drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                       {
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph *) GS;
 		// Draws the character
 		const uint64_t RSTATE = renderTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;

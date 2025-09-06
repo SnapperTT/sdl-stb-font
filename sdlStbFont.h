@@ -406,6 +406,13 @@ struct sttfont_font_list
   int hasCodepoint (uint32_t const codepoint) const;
   void fetchFontForCodepoint (uint32_t const codepoint, uint8_t const format, stbtt_fontinfo * * mFontOut, int * indexOut, uint16_t * fontIdxOut);
 };
+struct sttfont_utf8
+{
+  static int utf8_charsize (char const * c);
+  static int utf8_charsize_from_codepoint (uint32_t const codepoint);
+  static int utf8_encode (uint32_t const codepoint, char * buf);
+  static uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
+};
 class sttfont_font_cache
 {
 public:
@@ -425,6 +432,9 @@ public:
   int tabWidthInSpaces;
   void * userData;
   SSF_HB_BUFFER_TYPE * hbShapingScratchpad;
+  SSF_MAP <uint32_t,uint16_t> hbFontLookup;
+  uint32_t hb_unicodeReplacementCodeGlyphIndex;
+  uint32_t hb_questionMarkGlyphIndex;
   bool ownsHbShapingScratchPad;
   sttfont_font_cache ();
   virtual ~ sttfont_font_cache ();
@@ -453,12 +463,13 @@ protected:
   };
   void addFont_worker (addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0);
 public:
-  void genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut = NULL);
+  void genGlyph (uint32_t const codepoint, uint8_t const format, uint16_t fontIdx, uint32_t intIdx, sttfont_glyph * gOut, unsigned char * * bitmapOut = NULL);
   virtual void pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRanges, uint8_t const format);
-  virtual void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  virtual void genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   virtual sttfont_glyph * getGlyph (uint64_t const target);
-  sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format);
-  virtual sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
+  static uint64_t getGlyphKey (uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
+  sttfont_glyph * getGenGlyph (uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
+  virtual sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
   struct findSubfontLookupHint
   {
     uint16_t fontIdx;
@@ -468,10 +479,6 @@ public:
   void findSubfontByIndexWHint (uint16_t const fontIdx, findSubfontLookupHint & mHint);
   sttfont_font_list * findSubfontByIndex (uint16_t const fontIdx);
   int getKerningAdvance (sttfont_glyph const * G1, sttfont_glyph const * G2, uint32_t const cp1, uint32_t const cp2, findSubfontLookupHint & mHint);
-  static int utf8_charsize (char const * c);
-  static int utf8_charsize_from_codepoint (uint32_t const codepoint);
-  static int utf8_encode (uint32_t const codepoint, char * buf);
-  static uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
   int drawText (int const x, int const y, char const * c, uint32_t const maxLen = -1);
   int drawText (int const x, int const y, SSF_STRING const & str);
   int drawText (int const x, int const y, sttfont_format const format, char const * c, uint32_t const maxLen = -1);
@@ -507,10 +514,12 @@ public:
   int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   static bool isTofu (sttfont_glyph * G);
-  sttfont_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
+  sttfont_glyph * getCodepointGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
   sttfont_glyph * getCodepointGlyph (uint32_t const codepoint, sttfont_format const * const format);
   sttfont_glyph * processCodepoint (sttfont_glyph * GLast, uint32_t const codepointLast, int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint);
-  virtual void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
+  virtual void drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
+  sttfont_glyph * hbGetGlyphOrTofu (uint16_t const fontIdx, uint16_t const intIdx, uint8_t const format);
+  virtual void drawHbGlyph (int const x, int const y, uint16_t const fontIdx, uint16_t const intIdx, sttfont_format const * const format, uint8_t const formatCode);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
   virtual void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
@@ -577,6 +586,14 @@ LZZ_INLINE void sttfont_formatted_text::tokenise_luasafe (SSF_VECTOR <sttfont_fo
 LZZ_INLINE sttfont_glyph::sttfont_glyph ()
   : advance (0), leftSideBearing (0), fontIdx (0), _padding (0), width (0), height (0), xOffset (0), yOffset (0)
                                                                                                                                        {}
+LZZ_INLINE uint64_t sttfont_font_cache::getGlyphKey (uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                          {
+		if (codepoint) {
+			if (fontIdx || intIdx)
+				abort(); // invalid lookup
+			}
+		return codepoint | (uint64_t(format) << 48) | (uint64_t(fontIdx) << 32) | intIdx;
+		}
 LZZ_INLINE sttfont_font_cache::findSubfontLookupHint::findSubfontLookupHint ()
   : fontIdx (-1), font (NULL)
                                                                          {}
@@ -1383,7 +1400,7 @@ void sttfont_formatted_text::utf8_charsizeAt (unsigned int const position, unsig
 		
 		// Lookup to 3 characters back and get the charSize
 		for (unsigned int lookup = 0; lookup <= offset;) {
-			int thisSz = sttfont_font_cache::utf8_charsize(&mItems[index].text[lookup]);
+			int thisSz = sttfont_utf8::utf8_charsize(&mItems[index].text[lookup]);
 			
 			//std::cout << "Lookup utf8_charsizeAt " << lookup << " " << thisSz
 			//		<< " char[" << mItems[index].text.substr(lookup, thisSz) << "] " << offset << std::endl;
@@ -1588,7 +1605,7 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 			
 			while (seek < len) {
 				const uint32_t seekBefore = seek;
-				uint32_t uChar = sttfont_font_cache::utf8_read(&s[seek], seek, len);
+				uint32_t uChar = sttfont_utf8::utf8_read(&s[seek], seek, len);
 				
 				if (escape) {
 					escape = false;
@@ -1621,7 +1638,7 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 					
 					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset, &mHint);
 					segmentStart = workingPos + seekBefore;
-					offset = sttfont_font_cache::utf8_charsize_from_codepoint(uChar); // Used to skip including the newline
+					offset = sttfont_utf8::utf8_charsize_from_codepoint(uChar); // Used to skip including the newline
 					arrOut.push_back(std::move(d));
 					}
 				}
@@ -1815,9 +1832,76 @@ void sttfont_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 			working = working->next;
 			}
 		}
+int sttfont_utf8::utf8_charsize (char const * c)
+                                                {
+		if (!c) return 0;
+		if ((uint8_t)*c <= 0x7F) return 1;
+		else if ((uint8_t)*c <= 0xDF) return 2;
+		else if ((uint8_t)*c <= 0xEF) return 3;
+		else if ((uint8_t)*c <= 0xF7) return 4;
+		else
+			return 4;
+		}
+int sttfont_utf8::utf8_charsize_from_codepoint (uint32_t const codepoint)
+                                                                          {
+		if (codepoint <= 0x7F)        return 1; 
+		else if (codepoint <= 0x7FF)  return 2; 
+		else if (codepoint <= 0xFFFF) return 3;
+		return 4;
+		}
+int sttfont_utf8::utf8_encode (uint32_t const codepoint, char * buf)
+                                                                    {
+		if (codepoint <= 0x7F) {
+			buf[0] = (char)codepoint;
+			buf[1] = '\0';
+			return 1;
+			}
+		else if (codepoint <= 0x7FF) {
+			buf[0] = (char)(0xC0 | (codepoint >> 6));
+			buf[1] = (char)(0x80 | (codepoint & 0x3F));
+			buf[2] = '\0';
+			return 2;
+			}
+		else if (codepoint <= 0xFFFF) {
+			buf[0] = (char)(0xE0 | (codepoint >> 12));
+			buf[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+			buf[2] = (char)(0x80 | (codepoint & 0x3F));
+			buf[3] = '\0';
+			return 3;
+			}
+		else if (codepoint <= 0x10FFFF) {
+			buf[0] = (char)(0xF0 | (codepoint >> 18));
+			buf[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+			buf[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+			buf[3] = (char)(0x80 | (codepoint & 0x3F));
+			buf[4] = '\0';
+			return 4;
+			}
+		else {
+			buf[0] = '\0';
+			return 0;
+			}
+		}
+uint32_t sttfont_utf8::utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen)
+                                                                                         {
+		if (!c) return 0;
+		int chsz = utf8_charsize(c);
+		seek += chsz;
+	
+		if (seek > maxLen) {
+			return *c; //Buffer overflow - stop to be safe!
+			}
+			
+		if (chsz == 1) return *c;		
+		if (chsz == 2)
+			return (((uint32_t((uint8_t) c[0] & 0b00111111) << 6)) | uint32_t((uint8_t) c[1] & 0b00111111));
+		if (chsz == 3)
+			return (uint32_t((uint8_t) c[0] & 0b00011111) << 12) | (uint32_t((uint8_t) c[1] & 0b00111111) << 6) | uint32_t((uint8_t) c[2] & 0b00111111);
+		return (uint32_t((uint8_t) c[0] & 0b00001111) << 18) | (uint32_t((uint8_t) c[1] & 0b00111111) << 12) | (uint32_t((uint8_t) c[2] & 0b00111111) << 6) | uint32_t((uint8_t) c[3] & 0b00111111);
+		}
 sttfont_font_cache::sttfont_font_cache ()
-  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL), hbShapingScratchpad (NULL), ownsHbShapingScratchPad (false)
-                                                                                                                             {}
+  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL), hbShapingScratchpad (NULL), hb_unicodeReplacementCodeGlyphIndex (0), hb_questionMarkGlyphIndex (0), ownsHbShapingScratchPad (false)
+                                                                                                                                                                                                   {}
 sttfont_font_cache::~ sttfont_font_cache ()
                                        {
 		#ifdef SSF_HARFBUZZ_ENABLED
@@ -1854,6 +1938,9 @@ void sttfont_font_cache::loadFont (char const * ttf_buffer, size_t const ttf_buf
 		#ifdef SSF_HARFBUZZ_ENABLED
 			if (!hbShapingScratchpad)
 				generateHbScratchpad();
+			
+			hb_unicodeReplacementCodeGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, 0xFFFD);
+			hb_questionMarkGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, (uint32_t) '?');
 		#endif
 		
 		int w,h;
@@ -1957,32 +2044,54 @@ void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant
 		else
 			w->next = n;
 		}
-void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const format, sttfont_glyph * gOut, unsigned char * * bitmapOut)
-                                                                                                                                {
+void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const format, uint16_t fontIdx, uint32_t intIdx, sttfont_glyph * gOut, unsigned char * * bitmapOut)
+                                                                                                                                                                   {
 		// Fetch font and index - existance check for glyph in font
 		// format is a number representing regular, bold, itallic, bold itallic
-		stbtt_fontinfo * mFontContaining;
-		int mIndex;
-		uint16_t fontIdx;
-		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex, &fontIdx);
+		stbtt_fontinfo * mFontContaining = NULL;
 		
-		if (!mIndex)
-			return;
+		if (codepoint != 0) {
+			// Lookup font and index for codepoint
+			int mIndex;
+			mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex, &fontIdx);
+	   	printf("genGlyph lookup %#04x %i %i \n", codepoint, fontIdx, intIdx);
+			if (!mIndex)
+				return;
+			intIdx = mIndex;
+			}
+		else {
+			sttfont_font_list* l = findSubfontByIndex(fontIdx);
+			if (l)
+				mFontContaining = &l->mFont;
+			}
+			
+		if (!mFontContaining) abort();
 		
 		// found the font! generate the glyph
 	   	int w,h,woff,hoff;
 	   	int x0,x1,y0,y1;
-	   	stbtt_GetCodepointBitmapBox(mFontContaining, codepoint, scale, scale, &x0, &y0, &x1, &y1);
+	   	
+	   	
+	   	if (codepoint == 0)
+			stbtt_GetGlyphBitmapBox(mFontContaining, intIdx, scale, scale, &x0, &y0, &x1, &y1);
+	   	else
+			stbtt_GetCodepointBitmapBox(mFontContaining, codepoint, scale, scale, &x0, &y0, &x1, &y1);
 	   	w = x1-x0;
 	   	h = y1-y0;
 	   	woff = x0;
 	   	hoff = y0;
 	   	
 		unsigned int sz = w*h;
+	   	
+	   	printf("genGlyph %#04x %i %i, sz %i, w %i, h %i \n", codepoint, fontIdx, intIdx, sz, w, h);
 		if (sz) {
 			sttfont_tmpArr4096 bitmapStore(sz);
 			unsigned char* bitmap = (unsigned char*) bitmapStore.arr;
-			stbtt_MakeCodepointBitmap(mFontContaining, bitmap, w, h, w, scale, scale, codepoint);
+			
+			if (codepoint == 0)
+				stbtt_MakeGlyphBitmap(mFontContaining, bitmap, w, h, w, scale, scale, intIdx);
+			else
+				stbtt_MakeCodepointBitmap(mFontContaining, bitmap, w, h, w, scale, scale, codepoint);
 			
 			// Convert bitmap to RGBA8888
 			// Todo - change RBGA8888 to R8
@@ -2009,14 +2118,18 @@ void sttfont_font_cache::genGlyph (uint32_t const codepoint, uint8_t const forma
 					bitmap2[i*4+2] = 255;
 					bitmap2[i*4+3] = bitmap[i];
 					}
-				genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
+				genGlyph_writeData(codepoint, fontIdx, intIdx, gOut, bitmap2, w, h);
 				}
 		}
 		
 		gOut->width = w;
 		gOut->height = h;
 		int advance, leftSideBearing;
-		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		if (codepoint == 0)
+			stbtt_GetGlyphHMetrics(mFontContaining, intIdx, &advance, &leftSideBearing);
+		else
+			stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		
 		if (abs(advance) >= 0x7fff || abs(leftSideBearing) >= 0x7fff) {
 			SSF_ERROR("Invalid glyph metrics! Advance: %i, leftSideBearing %i", advance, leftSideBearing );
 			}
@@ -2032,14 +2145,17 @@ void sttfont_font_cache::pregenGlyphs (SSF_VECTOR <sttfont_uint32_t_range> & mRa
 		// Make your own implmentation for your own frontend here
 		for (const sttfont_uint32_t_range & r : mRanges) {
 			for (uint32_t codepoint = r.start; codepoint <= r.end; ++codepoint) {
-				uint64_t target = codepoint | (uint64_t(format) << 32);
-				genGlyph_createAndInsert(target, codepoint, format);
+				uint64_t target = getGlyphKey(codepoint, format, 0, 0);
+				genGlyph_createAndInsert(target, codepoint, format, 0, 0);
 				}
 			}
 		}
-void sttfont_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
-                                                                                                                                {
+void sttfont_font_cache::genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                                                                               {
 		// Make your own implmentation for your own frontend here
+		// If codepoint == 0, then use fontIdx and fontGlypthIdx to encode your key
+		// note that fontIdx and intIdx will be set here regardless if you are using codepoint mode or not
+		abort();
 		}
 sttfont_glyph * sttfont_font_cache::getGlyph (uint64_t const target)
                                                                 {
@@ -2047,16 +2163,18 @@ sttfont_glyph * sttfont_font_cache::getGlyph (uint64_t const target)
 		abort();
 		return NULL;
 		}
-sttfont_glyph * sttfont_font_cache::getGenGlyph (uint32_t const codepoint, uint8_t const format)
-                                                                                    {
-		uint64_t target = codepoint | (uint64_t(format) << 32);
+sttfont_glyph * sttfont_font_cache::getGenGlyph (uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                   {
+		const uint64_t target = getGlyphKey(codepoint, format, fontIdx, intIdx);
 		sttfont_glyph * r = getGlyph(target);
 		if (r) return r;
-		return genGlyph_createAndInsert(target, codepoint, format);
+		return genGlyph_createAndInsert(target, codepoint, format, fontIdx, intIdx);
 		}
-sttfont_glyph * sttfont_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
-                                                                                                                                {
+sttfont_glyph * sttfont_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                                                               {
 		// Make your own implmentation for your own frontend here
+		// Codepoint mode -> fontIdx = 0, intIdx = 0
+		// Harfbuzz mode -> codepoint = 0 
 		abort();
 		return NULL;
 		}
@@ -2090,73 +2208,6 @@ int sttfont_font_cache::getKerningAdvance (sttfont_glyph const * G1, sttfont_gly
 		if (G1->fontIdx != G2->fontIdx) return 0;
 		findSubfontByIndexWHint(G1->fontIdx, mHint);
 		return stbtt_GetCodepointKernAdvance(&(mHint.font->mFont), cp1, cp2);
-		}
-int sttfont_font_cache::utf8_charsize (char const * c)
-                                                {
-		if (!c) return 0;
-		if ((uint8_t)*c <= 0x7F) return 1;
-		else if ((uint8_t)*c <= 0xDF) return 2;
-		else if ((uint8_t)*c <= 0xEF) return 3;
-		else if ((uint8_t)*c <= 0xF7) return 4;
-		else
-			return 4;
-		}
-int sttfont_font_cache::utf8_charsize_from_codepoint (uint32_t const codepoint)
-                                                                          {
-		if ((codepoint & 0x000000ff) == codepoint) return 1;
-		if ((codepoint & 0x0000ffff) == codepoint) return 2;
-		if ((codepoint & 0x00ffffff) == codepoint) return 3;
-		return 4;
-		}
-int sttfont_font_cache::utf8_encode (uint32_t const codepoint, char * buf)
-                                                                    {
-		if (codepoint <= 0x7F) {
-			buf[0] = (char)codepoint;
-			buf[1] = '\0';
-			return 1;
-			}
-		else if (codepoint <= 0x7FF) {
-			buf[0] = (char)(0xC0 | (codepoint >> 6));
-			buf[1] = (char)(0x80 | (codepoint & 0x3F));
-			buf[2] = '\0';
-			return 2;
-			}
-		else if (codepoint <= 0xFFFF) {
-			buf[0] = (char)(0xE0 | (codepoint >> 12));
-			buf[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-			buf[2] = (char)(0x80 | (codepoint & 0x3F));
-			buf[3] = '\0';
-			return 3;
-			}
-		else if (codepoint <= 0x10FFFF) {
-			buf[0] = (char)(0xF0 | (codepoint >> 18));
-			buf[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
-			buf[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
-			buf[3] = (char)(0x80 | (codepoint & 0x3F));
-			buf[4] = '\0';
-			return 4;
-			}
-		else {
-			buf[0] = '\0';
-			return 0;
-			}
-		}
-uint32_t sttfont_font_cache::utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen)
-                                                                                         {
-		if (!c) return 0;
-		int chsz = utf8_charsize(c);
-		seek += chsz;
-	
-		if (seek > maxLen) {
-			return *c; //Buffer overflow - stop to be safe!
-			}
-			
-		if (chsz == 1) return *c;		
-		if (chsz == 2)
-			return (((uint32_t((uint8_t) c[0] & 0b00111111) << 6)) | uint32_t((uint8_t) c[1] & 0b00111111));
-		if (chsz == 3)
-			return (uint32_t((uint8_t) c[0] & 0b00011111) << 12) | (uint32_t((uint8_t) c[1] & 0b00111111) << 6) | uint32_t((uint8_t) c[2] & 0b00111111);
-		return (uint32_t((uint8_t) c[0] & 0b00001111) << 18) | (uint32_t((uint8_t) c[1] & 0b00111111) << 12) | (uint32_t((uint8_t) c[2] & 0b00111111) << 6) | uint32_t((uint8_t) c[3] & 0b00111111);
 		}
 int sttfont_font_cache::drawText (int const x, int const y, char const * c, uint32_t const maxLen)
                                                                                            {
@@ -2218,7 +2269,7 @@ int sttfont_font_cache::countNewlines (SSF_STRING const & str)
 		uint32_t seek = 0;
 		const uint32_t len = str.length();
 		while (seek < len) {
-			uint32_t uChar = sttfont_font_cache::utf8_read(&str[seek], seek, len);
+			uint32_t uChar = sttfont_utf8::utf8_read(&str[seek], seek, len);
 			if (uChar == uint32_t('\n')) n++;
 			}
 		return n;
@@ -2390,7 +2441,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				hb_position_t y_advance = glyph_pos[i].y_advance;
 				
 				char cbuff[5];
-				utf8_encode(glyphid, &cbuff[0]);
+				sttfont_utf8::utf8_encode(glyphid, &cbuff[0]);
 				printf("(%#04x, %s) ", glyphid, cbuff);
 				
 				int xx2 = xx;
@@ -2429,7 +2480,7 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 			uCharLast = mHint->uCharLast;
 			}
 			
-		uint32_t uChar = utf8_read(c+seek, seek, maxLen);
+		uint32_t uChar = sttfont_utf8::utf8_read(c+seek, seek, maxLen);
 		if (widthOut) { *widthOut = 0; if (mHint) *widthOut = mHint->workingX-x; }
 		if (heightOut) { *heightOut = 0; if (mHint) *heightOut = mHint->workingY-y; }
 		
@@ -2444,6 +2495,7 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 		findSubfontLookupHint fontLookupHint;
 		
 		#ifdef SSF_HARFBUZZ_ENABLED
+		// Harfbuzz based shaping
 		// scan for chunk, shape chunk, process chunk, move to next chunk
 		
 		uint32_t chunkStart = 0;
@@ -2455,7 +2507,7 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 		while (seek < maxLen) {
 			seekLast = seek; // seek before utf8_read()
 			uCharLast = uChar;
-			uChar = utf8_read(c+seekLast, seek, maxLen); // seek is now at the character *after* uChar
+			uChar = sttfont_utf8::utf8_read(c+seekLast, seek, maxLen); // seek is now at the character *after* uChar
 			if (uChar == 0) {
 				len = seek;
 				break;
@@ -2510,19 +2562,23 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				}
 			#endif //SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 			
-			sttfont_glyph* G = getCodepointGlyph(uChar, format);
-			if (!G) continue;
+			auto it = hbFontLookup.find(uChar);
+			if (it == hbFontLookup.end()) {
+				// glyph not found
+				continue;
+				}
+			uint16_t gFontIdx = it->second;
 			
 			if (currentFont == uint16_t(-1)) {
-				currentFont = G->fontIdx;
+				currentFont = gFontIdx;
 				}
-			else if (currentFont != G->fontIdx) {
+			else if (currentFont != gFontIdx) {
 				// Font change → emit chunk
 				if (chunkStart < seekLast) {
-					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, G->fontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
+					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, gFontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
 					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 					}
-				currentFont = G->fontIdx;
+				currentFont = gFontIdx;
 				chunkStart = seekLast;
 				}
 
@@ -2536,7 +2592,8 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 			}
 
 		
-		#else		
+		#else
+		// Codepoint based shaping
 		while (uChar && seek <= maxLen) {
 			//if (mHint)
 			//	std::cout << "Processing: (" << seekLast << "," << (seek-seekLast) << ") " << std::string(&c[seekLast], seek-seekLast) << ", codePoint " << uChar << ", suibstring: [" << std::string(&c[seekLast]) << "], fullstring:["<<maxLen<<"] " << c << std::endl;
@@ -2587,7 +2644,7 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				}
 			uCharLast = uChar;
 			seekLast = seek;
-			uChar = utf8_read(c + seek, seek, maxLen);
+			uChar = sttfont_utf8::utf8_read(c + seek, seek, maxLen);
 			if (maxWidth) {
 				if (xx > *maxWidth) break;
 				}
@@ -2681,21 +2738,23 @@ int sttfont_font_cache::getCaretPos (sttfont_formatted_text const & str, int con
 		processFormatted(str, 0,0, false, NULL, NULL, NULL, mHint, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
-sttfont_glyph * sttfont_font_cache::getGlyphOrTofu (uint32_t const codepoint, uint8_t const format)
-                                                                                        {
+sttfont_glyph * sttfont_font_cache::getCodepointGlyphOrTofu (uint32_t const codepoint, uint8_t const format)
+                                                                                                 {
 		const uint8_t format_wo_underline_or_strike = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
-		sttfont_glyph * G = getGenGlyph(codepoint, format_wo_underline_or_strike);
+		sttfont_glyph * G = getGenGlyph(codepoint, format_wo_underline_or_strike, 0, 0);
 		
 		if (!isTofu(G)) return G;
 		
-		G = getGenGlyph((uint32_t) 0xFFFD, format_wo_underline_or_strike); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
+		printf("failed to find %#04x\n", codepoint);
+		
+		G = getGenGlyph((uint32_t) 0xFFFD, format_wo_underline_or_strike, 0, 0); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character
 		if (!isTofu(G)) return G;
 			
-		G = getGenGlyph((uint32_t) '?', format_wo_underline_or_strike);
+		G = getGenGlyph((uint32_t) '?', format_wo_underline_or_strike, 0, 0);
 		if (!isTofu(G)) return G;
 		
 		if (format_wo_underline_or_strike)
-			return getGlyphOrTofu(codepoint, 0);
+			return getCodepointGlyphOrTofu(codepoint, 0);
 		
 		return NULL;
 		}
@@ -2704,7 +2763,7 @@ sttfont_glyph * sttfont_font_cache::getCodepointGlyph (uint32_t const codepoint,
 		uint8_t formatCode = 0;
 		if (format)
 			formatCode = format->format;
-		return getGlyphOrTofu(codepoint, formatCode);
+		return getCodepointGlyphOrTofu(codepoint, formatCode);
 		}
 sttfont_glyph * sttfont_font_cache::processCodepoint (sttfont_glyph * GLast, uint32_t const codepointLast, int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint)
                                                                                                                                                                                                                                              {
@@ -2713,7 +2772,7 @@ sttfont_glyph * sttfont_font_cache::processCodepoint (sttfont_glyph * GLast, uin
 		if (format)
 			formatCode = format->format;
 			
-		sttfont_glyph * G = getGlyphOrTofu(codepoint, formatCode);
+		sttfont_glyph * G = getCodepointGlyphOrTofu(codepoint, formatCode);
 		if (!G) {
 			x += faceSize/2;
 			return NULL;
@@ -2725,17 +2784,41 @@ sttfont_glyph * sttfont_font_cache::processCodepoint (sttfont_glyph * GLast, uin
 		x += kerningAdv;
 		
 		if (isDrawing) {
-			drawCodepoint(G, x, y, codepoint, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
+			drawGlyph(G, x, y, format, formatCode, kerningAdv, overdraw); //<--- implement your custom version of this
 			}
 		x += scale*G->advance;
 		
 		return G;
 		}
-void sttfont_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
-                                                                                                                                                                                                                             {
+void sttfont_font_cache::drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                               {
 		// Draws the character
 		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
 		// Make your own implmentation for your own frontend here
+		}
+sttfont_glyph * sttfont_font_cache::hbGetGlyphOrTofu (uint16_t const fontIdx, uint16_t const intIdx, uint8_t const format)
+                                                                                                               {
+		const uint8_t format_wo_underline_or_strike = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
+		sttfont_glyph * G = getGenGlyph(0, format_wo_underline_or_strike, fontIdx, intIdx);
+		
+		if (!isTofu(G)) return G;
+		
+		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hb_unicodeReplacementCodeGlyphIndex);
+		if (!isTofu(G)) return G;
+		
+		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hb_questionMarkGlyphIndex);
+		if (!isTofu(G)) return G;
+		
+		if (format_wo_underline_or_strike)
+			return hbGetGlyphOrTofu(fontIdx, intIdx, 0);
+		
+		return NULL;
+		}
+void sttfont_font_cache::drawHbGlyph (int const x, int const y, uint16_t const fontIdx, uint16_t const intIdx, sttfont_format const * const format, uint8_t const formatCode)
+                                                                                                                                                                          {
+		// Draws the character
+		// Note that harfbuzz's hb_shape() returns index of the glyph in the font (@intIdx)
+		#warning remove me
 		}
 void sttfont_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen)
                                                                                                                          {
@@ -2838,7 +2921,7 @@ void sttfont_font_cache::breakString (sttfont_formatted_text const & stringIn, S
 					
 					while (seek < len) {
 						seekBefore = seek;
-						sttfont_font_cache::utf8_read(&s[seek], seek, len); // Look ahead and discard value
+						sttfont_utf8::utf8_read(&s[seek], seek, len); // Look ahead and discard value
 					
 						sttfont_formatted_text subToken2 =  thisTokenS.extract(seekBefore+subWorkingLen, seek-seekBefore, &mHint2);
 						subToken.append(std::move(subToken2));
@@ -2989,10 +3072,10 @@ public:
   SSF_MAP <uint64_t, sdl_stb_glyph> mGlyphs;
   void clearGlyphs ();
   void bindRenderer (SDL_Renderer * _mRenderer);
-  void genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
   sttfont_glyph * getGlyph (uint64_t const target);
-  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format);
-  void drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
+  sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
+  void drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
   SDL_Texture * renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
   SDL_Texture * renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
 protected:
@@ -3072,8 +3155,8 @@ void sdl_stb_font_cache::bindRenderer (SDL_Renderer * _mRenderer)
                                                      {
 		mRenderer = _mRenderer;
 		}
-void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
-                                                                                                                        {
+void sdl_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                                                                       {
 		sdl_stb_glyph* gOut2 = (sdl_stb_glyph*) gOut;
 		gOut2->mSdlSurface = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, bitmap2,  4*w);
 		gOut2->mSdlTexture = SDL_CreateTextureFromSurface(mRenderer, gOut2->mSdlSurface);
@@ -3085,15 +3168,15 @@ sttfont_glyph * sdl_stb_font_cache::getGlyph (uint64_t const target)
 			return NULL;
 		return &((*it).second);
 		}
-sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format)
-                                                                                                                        {
+sttfont_glyph * sdl_stb_font_cache::genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx)
+                                                                                                                                                                       {
 		sdl_stb_glyph g;
-		genGlyph(codepoint, format, &g);
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
 		}
-void sdl_stb_font_cache::drawCodepoint (sttfont_glyph const * const GS, int const x, int const y, uint32_t const codepoint, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
-                                                                                                                                                                                                                     {
+void sdl_stb_font_cache::drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                       {
 		const sdl_stb_glyph * const G = (const sdl_stb_glyph *) GS;
 		// Draws the character
 		if (G->mSdlTexture) {
