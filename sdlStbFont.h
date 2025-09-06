@@ -432,9 +432,10 @@ public:
   int tabWidthInSpaces;
   void * userData;
   SSF_HB_BUFFER_TYPE * hbShapingScratchpad;
-  SSF_MAP <uint32_t,uint16_t> hbFontLookup;
-  uint32_t hb_unicodeReplacementCodeGlyphIndex;
-  uint32_t hb_questionMarkGlyphIndex;
+  SSF_MAP <uint64_t,uint16_t> hbFontLookup;
+  uint32_t hbUnicodeReplacementCodeGlyphIndex;
+  uint32_t hbQuestionMarkGlyphIndex;
+  float hbScaleFactor;
   bool ownsHbShapingScratchPad;
   sttfont_font_cache ();
   virtual ~ sttfont_font_cache ();
@@ -504,9 +505,6 @@ public:
   virtual void startManuallyBuffering (bool const beginBuffering);
   virtual void endManuallyBuffering (bool const flush);
   int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
-  static bool does_not_change_rtl (uint32_t const c);
-  static bool aft_isrtl (uint32_t const c);
-  static hb_font_t * thaiFont;
   int processHarfbuzzChunk (char const * c, uint32_t maxLen, int & xx, int & yy, sttfont_format const * const format, bool const isDrawing, uint32_t const chunkStart, uint32_t const chunkEnd, uint16_t const fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, int const * maxWidth, bool const isLTR);
   int processString_worker (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset);
   int processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
@@ -1900,8 +1898,8 @@ uint32_t sttfont_utf8::utf8_read (char const * c, uint32_t & seek, uint32_t cons
 		return (uint32_t((uint8_t) c[0] & 0b00001111) << 18) | (uint32_t((uint8_t) c[1] & 0b00111111) << 12) | (uint32_t((uint8_t) c[2] & 0b00111111) << 6) | uint32_t((uint8_t) c[3] & 0b00111111);
 		}
 sttfont_font_cache::sttfont_font_cache ()
-  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL), hbShapingScratchpad (NULL), hb_unicodeReplacementCodeGlyphIndex (0), hb_questionMarkGlyphIndex (0), ownsHbShapingScratchPad (false)
-                                                                                                                                                                                                   {}
+  : ascent (0), descent (0), lineGap (0), baseline (0), rowSize (0), tabWidth (1), scale (1.f), underlineThickness (1.0), strikethroughThickness (1.0), underlinePosition (0.0), strikethroughPosition (0.0), faceSize (20), tabWidthInSpaces (8), userData (NULL), hbShapingScratchpad (NULL), hbUnicodeReplacementCodeGlyphIndex (0), hbQuestionMarkGlyphIndex (0), hbScaleFactor (1.0f), ownsHbShapingScratchPad (false)
+                {}
 sttfont_font_cache::~ sttfont_font_cache ()
                                        {
 		#ifdef SSF_HARFBUZZ_ENABLED
@@ -1939,8 +1937,9 @@ void sttfont_font_cache::loadFont (char const * ttf_buffer, size_t const ttf_buf
 			if (!hbShapingScratchpad)
 				generateHbScratchpad();
 			
-			hb_unicodeReplacementCodeGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, 0xFFFD);
-			hb_questionMarkGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, (uint32_t) '?');
+			hbUnicodeReplacementCodeGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, 0xFFFD);
+			hbQuestionMarkGlyphIndex = stbtt_FindGlyphIndex(&mFont.mFont, (uint32_t) '?');
+			hbScaleFactor = scale;
 		#endif
 		
 		int w,h;
@@ -2323,59 +2322,10 @@ int sttfont_font_cache::processString (int const x, int const y, char const * c,
 		onCompletedDrawing();
 		return r;
 		}
-bool sttfont_font_cache::does_not_change_rtl (uint32_t const c)
-                                                           {
-		// make sure that punctuation marks do not flip rlt/ltr order
-		#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
-		return (c >= 0x20 && c <= 0x40) || (c >= 0x5B && c <= 60) || (c >= 0x7B && c <= 0x7E);
-		#endif
-		return false;
-		}
-bool sttfont_font_cache::aft_isrtl (uint32_t const c)
-                                                 {
-		// https://stackoverflow.com/questions/5423960/how-can-i-recognize-rtl-strings-in-c
-		#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
-		return (
-			(c==0x05BE)||(c==0x05C0)||(c==0x05C3)||(c==0x05C6)||
-			((c>=0x05D0)&&(c<=0x05F4))||
-			(c==0x0608)||(c==0x060B)||(c==0x060D)||
-			((c>=0x061B)&&(c<=0x064A))||
-			((c>=0x066D)&&(c<=0x066F))||
-			((c>=0x0671)&&(c<=0x06D5))||
-			((c>=0x06E5)&&(c<=0x06E6))||
-			((c>=0x06EE)&&(c<=0x06EF))||
-			((c>=0x06FA)&&(c<=0x0710))||
-			((c>=0x0712)&&(c<=0x072F))||
-			((c>=0x074D)&&(c<=0x07A5))||
-			((c>=0x07B1)&&(c<=0x07EA))||
-			((c>=0x07F4)&&(c<=0x07F5))||
-			((c>=0x07FA)&&(c<=0x0815))||
-			(c==0x081A)||(c==0x0824)||(c==0x0828)||
-			((c>=0x0830)&&(c<=0x0858))||
-			((c>=0x085E)&&(c<=0x08AC))||
-			(c==0x200F)||(c==0xFB1D)||
-			((c>=0xFB1F)&&(c<=0xFB28))||
-			((c>=0xFB2A)&&(c<=0xFD3D))||
-			((c>=0xFD50)&&(c<=0xFDFC))||
-			((c>=0xFE70)&&(c<=0xFEFC))||
-			((c>=0x10800)&&(c<=0x1091B))||
-			((c>=0x10920)&&(c<=0x10A00))||
-			((c>=0x10A10)&&(c<=0x10A33))||
-			((c>=0x10A40)&&(c<=0x10B35))||
-			((c>=0x10B40)&&(c<=0x10C48))||
-			((c>=0x1EE00)&&(c<=0x1EEBB))
-			);
-		#endif
-		return false;
-		}
-hb_font_t * sttfont_font_cache::thaiFont = NULL;
 int sttfont_font_cache::processHarfbuzzChunk (char const * c, uint32_t maxLen, int & xx, int & yy, sttfont_format const * const format, bool const isDrawing, uint32_t const chunkStart, uint32_t const chunkEnd, uint16_t const fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, int const * maxWidth, bool const isLTR)
                                                                                                                                                                                                                                                                                                                           {
 		#ifdef SSF_HARFBUZZ_ENABLED
-			findSubfontByIndexWHint(fontIdx, fontLookupHint);
-			
-			printf("fontLookupHint.font %x, %i\n", fontLookupHint.font, fontIdx);
-			
+			findSubfontByIndexWHint(fontIdx, fontLookupHint);			
 			if (!fontLookupHint.font) return xx; // no valid font (this should never be true)
 			
 			// shaping note: harfbuzz wants to read a few characters a bit before and after to get "context"
@@ -2385,42 +2335,15 @@ int sttfont_font_cache::processHarfbuzzChunk (char const * c, uint32_t maxLen, i
 				}
 			
 			hb_buffer_reset(hbShapingScratchpad);
-    
-			#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
-			if (0 && !isLTR) {
-hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_RTL); // Arabic is RTL
-hb_buffer_set_script(hbShapingScratchpad, HB_SCRIPT_ARABIC);
-hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
-				}
-			#endif
    
 			hb_buffer_add_utf8(hbShapingScratchpad, c, maxLen, chunkStart, chunkEnd-chunkStart);
-			//hb_buffer_add_utf8(hbShapingScratchpad, "hello", -1, 0, -1);
-			//const char* text = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ";//argv[2];
-			
-			
-			//hb_buffer_add_utf8(hbShapingScratchpad, text, -1, 0, -1);
-			
-			// if (LTR... RTL) {
-				// do something?
-				// manually setting hb_buffer_... properties mangles all strings
-			//	}
-
-			hb_buffer_guess_segment_properties(hbShapingScratchpad); //<-- will mangles all string
-			
-      
- //   hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_LTR);
- //   hb_buffer_set_script(hbShapingScratchpad, HB_SCRIPT_THAI);
-    //hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("th", -1));
-    
+			hb_buffer_guess_segment_properties(hbShapingScratchpad); 
 			hb_shape(fontLookupHint.font->hbFont, hbShapingScratchpad, NULL, 0);
-			//hb_shape(thaiFont, buf, NULL, 0);
-			
 			
 			unsigned int glyph_count;
 			hb_glyph_info_t *glyph_info    = hb_buffer_get_glyph_infos(hbShapingScratchpad, &glyph_count);
 			hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hbShapingScratchpad, &glyph_count);
-			//if (!isLTR)
+			
 			printf("glyph count %i, fontIdx: %i, isLTR: %b, hb_font: %x, string: [%.*s], \n", int(glyph_count), fontIdx, isLTR, fontLookupHint.font->hbFont, chunkEnd-chunkStart, &c[chunkStart]);
 			
 			hb_position_t cursor_x = 0;
@@ -2450,7 +2373,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 						drawGlyph(G, xx, yy, format, formatCode, 0, overdraw);
 					}
 				
-				xx += 0*x_offset + x_advance*0.05;
+				xx += 0*x_offset + x_advance*hbScaleFactor;
 				//yy += y_advance;
 					
 				if (maxWidth) {
@@ -2532,38 +2455,11 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				continue;
 				}
 			
-			#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
-				{
-				if (isLTR) {
-					if (uChar == 0x200F || aft_isrtl(uChar)) {
-						xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
-						isLTR = false;
-						chunkStart = seekLast;
-						continue;
-						}
-					}
-				else {
-					bool switchToLTR = false;
-					if (uChar == 0x200E)
-						switchToLTR = true;
-					else {
-						if (!does_not_change_rtl(uChar)) {
-							if (!aft_isrtl(uChar)) {
-								switchToLTR = true;
-								}
-							}
-						}
-					if (switchToLTR) {
-						xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
-						isLTR = true;
-						chunkStart = seekLast;
-						continue;
-						}
-					}
-				}
-			#endif //SSF_HARFBUZZ_AUTO_BIDI_ENABLED
-						
-			auto it = hbFontLookup.find(uChar);
+			// note that we're looking up in codepoint mode, and then
+			// using the hbFontLookup table to get the fontIdx
+			const uint8_t formatCode = format ? format->format : 0;
+			const uint64_t target = getGlyphKey(uChar, formatCode, 0, 0);
+			auto it = hbFontLookup.find(target);
 			uint16_t gFontIdx = 0;
 			if (it == hbFontLookup.end()) {
 				// glyph not found. Generate it
@@ -2571,9 +2467,9 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				int index2;
 				stbtt_fontinfo* mFont2;
 				//			int index = stbtt_FindGlyphIndex(&(working->mFont), codepoint);
-				mFont.fetchFontForCodepoint(uChar, format ? format->format : 0, &mFont2, &index2, &fontIdx2);
+				mFont.fetchFontForCodepoint(uChar, formatCode, &mFont2, &index2, &fontIdx2);
 				if (fontIdx2 != uint16_t(-1)) {
-					hbFontLookup[uChar] = fontIdx2;
+					hbFontLookup[target] = fontIdx2;
 					gFontIdx = fontIdx2; 
 					}
 				}
@@ -2815,10 +2711,10 @@ sttfont_glyph * sttfont_font_cache::hbGetGlyphOrTofu (uint16_t const fontIdx, ui
 		
 		if (!isTofu(G)) return G;
 		
-		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hb_unicodeReplacementCodeGlyphIndex);
+		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hbUnicodeReplacementCodeGlyphIndex);
 		if (!isTofu(G)) return G;
 		
-		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hb_questionMarkGlyphIndex);
+		G = getGenGlyph(0, format_wo_underline_or_strike, 0, hbQuestionMarkGlyphIndex);
 		if (!isTofu(G)) return G;
 		
 		if (format_wo_underline_or_strike)
