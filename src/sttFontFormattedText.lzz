@@ -1053,7 +1053,7 @@ public:
 					
 					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset, &mHint);
 					segmentStart = workingPos + seekBefore;
-					offset = sttfont_font_cache::utf8_charsize(uChar); // Used to skip including the newline
+					offset = sttfont_font_cache::utf8_charsize_from_codepoint(uChar); // Used to skip including the newline
 					arrOut.push_back(std::move(d));
 					}
 				}

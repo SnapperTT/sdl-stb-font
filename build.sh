@@ -27,7 +27,12 @@ compile_producer_consumer() {
 
 compile_harfbuzz
 
-compile_example &
-compile_producer_consumer &
+compile_example & pid1=$!
+compile_producer_consumer & pid2=$!
 
-wait
+status=0
+wait $pid1 || status=$?
+wait $pid2 || status=$?
+
+
+exit $status

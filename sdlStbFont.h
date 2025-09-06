@@ -4,6 +4,8 @@
 
 #ifndef LZZ_sttFont_hh
 #define LZZ_sttFont_hh
+#warning removeme
+struct hb_font_t;
 
 #ifndef STTR_ENABLED
 namespace sttr {
@@ -401,6 +403,7 @@ struct sttfont_font_list
   sttfont_font_list ();
   ~ sttfont_font_list ();
   sttfont_font_list * getSubFont (uint16_t const idx);
+  int hasCodepoint (uint32_t const codepoint) const;
   void fetchFontForCodepoint (uint32_t const codepoint, uint8_t const format, stbtt_fontinfo * * mFontOut, int * indexOut, uint16_t * fontIdxOut);
 };
 class sttfont_font_cache
@@ -428,24 +431,25 @@ public:
   void setFaceSize (int const _faceSize);
   int getScaledRowSize () const;
   void syncFrom (sttfont_font_cache const & other);
-  void loadFont (char const * ttf_buffer, int index = 0);
+  void loadFont (char const * ttf_buffer, size_t const ttf_buffer_len, int index = 0);
   void setHbScrachpad (SSF_HB_BUFFER_TYPE * buffer);
   void generateHbScratchpad ();
 protected:
-  static void loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, int index);
+  static void loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, size_t const ttf_buffer_len, int index);
 public:
   void loadFontManaged (sttfont_memory & memory, int index = 0);
-  void addFont (char const * ttf_buffer, int index = 0);
+  void addFont (char const * ttf_buffer, size_t const ttf_buffer_len, int index = 0);
   void addFontManaged (sttfont_memory & memory, int index = 0);
-  void addFormatFont (uint8_t formatMask, char const * ttf_buffer, int index = 0);
+  void addFormatFont (uint8_t formatMask, char const * ttf_buffer, size_t const ttf_buffer_len, int index = 0);
   void addFormatFontManaged (uint8_t formatMask, sttfont_memory & memory, int index = 0);
 protected:
   struct addFontWrap
   {
     char const * ttf_buffer;
+    size_t ttf_buffer_len;
     sttfont_memory * memory;
     int index;
-    addFontWrap (char const * c);
+    addFontWrap (char const * c, size_t const _len);
   };
   void addFont_worker (addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask = 0);
 public:
@@ -465,7 +469,8 @@ public:
   sttfont_font_list * findSubfontByIndex (uint16_t const fontIdx);
   int getKerningAdvance (sttfont_glyph const * G1, sttfont_glyph const * G2, uint32_t const cp1, uint32_t const cp2, findSubfontLookupHint & mHint);
   static int utf8_charsize (char const * c);
-  static int utf8_charsize (uint32_t const codepoint);
+  static int utf8_charsize_from_codepoint (uint32_t const codepoint);
+  static int utf8_encode (uint32_t const codepoint, char * buf);
   static uint32_t utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen);
   int drawText (int const x, int const y, char const * c, uint32_t const maxLen = -1);
   int drawText (int const x, int const y, SSF_STRING const & str);
@@ -494,13 +499,14 @@ public:
   int processString (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   static bool does_not_change_rtl (uint32_t const c);
   static bool aft_isrtl (uint32_t const c);
-  int processChunk (char const * c, uint32_t maxLen, int & xx, int & yy, sttfont_format const * const format, bool const isDrawing, uint32_t const chunkStart, uint32_t const chunkEnd, uint16_t const fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, int const * maxWidth, bool const isLTR);
+  static hb_font_t * thaiFont;
+  int processHarfbuzzChunk (char const * c, uint32_t maxLen, int & xx, int & yy, sttfont_format const * const format, bool const isDrawing, uint32_t const chunkStart, uint32_t const chunkEnd, uint16_t const fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, int const * maxWidth, bool const isLTR);
   int processString_worker (int const x, int const y, char const * c, uint32_t const maxLen, sttfont_format const * const format, bool const isDrawing, int * const widthOut, int * const heightOut, int const * const maxWidth, sttfont_lookupHint * mHint, int const * const threshX, int const * const threshY, int * const caretPosition, int initialXOffset);
   int processFormatted (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int processFormatted_worker (sttfont_formatted_text const & text, int x, int y, bool const isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, int const * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, int const * const threshX = NULL, int const * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0);
   int getCaretPos (SSF_STRING const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
   int getCaretPos (sttfont_formatted_text const & str, int const relMouseX, int const relMouseY, sttfont_lookupHint * mHint = NULL);
-  bool isTofu (sttfont_glyph * G);
+  static bool isTofu (sttfont_glyph * G);
   sttfont_glyph * getGlyphOrTofu (uint32_t const codepoint, uint8_t const format);
   sttfont_glyph * getCodepointGlyph (uint32_t const codepoint, sttfont_format const * const format);
   sttfont_glyph * processCodepoint (sttfont_glyph * GLast, uint32_t const codepointLast, int & x, int & y, uint32_t const codepoint, sttfont_format const * const format, bool isDrawing, int & overdraw, findSubfontLookupHint & mHint);
@@ -574,6 +580,12 @@ LZZ_INLINE sttfont_glyph::sttfont_glyph ()
 LZZ_INLINE sttfont_font_cache::findSubfontLookupHint::findSubfontLookupHint ()
   : fontIdx (-1), font (NULL)
                                                                          {}
+LZZ_INLINE bool sttfont_font_cache::isTofu (sttfont_glyph * G)
+                                                      {
+		if (!G) return true;
+		if (G->advance == 0 && G->width == 0) return true; //unprintable characters have no width
+		return false;
+		}
 #undef LZZ_INLINE
 #endif
 
@@ -1609,7 +1621,7 @@ void sttfont_formatted_text::tokenise (SSF_VECTOR <sttfont_formatted_text> & arr
 					
 					sttfont_formatted_text d = stringIn.extract(segmentStart + offset, (workingPos + seekBefore) - segmentStart - offset, &mHint);
 					segmentStart = workingPos + seekBefore;
-					offset = sttfont_font_cache::utf8_charsize(uChar); // Used to skip including the newline
+					offset = sttfont_font_cache::utf8_charsize_from_codepoint(uChar); // Used to skip including the newline
 					arrOut.push_back(std::move(d));
 					}
 				}
@@ -1728,6 +1740,10 @@ sttfont_font_list * sttfont_font_list::getSubFont (uint16_t const idx)
 		return this;
 		
 		}
+int sttfont_font_list::hasCodepoint (uint32_t const codepoint) const
+                                                          {
+		return stbtt_FindGlyphIndex(&mFont, codepoint);
+		}
 void sttfont_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t const format, stbtt_fontinfo * * mFontOut, int * indexOut, uint16_t * fontIdxOut)
                                                                                                                                                       {
 		sttfont_font_list * working = this;
@@ -1820,9 +1836,9 @@ void sttfont_font_cache::syncFrom (sttfont_font_cache const & other)
 		faceSize = other.faceSize;
 		tabWidthInSpaces = other.tabWidthInSpaces;
 		}
-void sttfont_font_cache::loadFont (char const * ttf_buffer, int index)
-                                                               {
-		sttfont_font_cache::loadFontCommonWorker(mFont, ttf_buffer, index);
+void sttfont_font_cache::loadFont (char const * ttf_buffer, size_t const ttf_buffer_len, int index)
+                                                                                            {
+		sttfont_font_cache::loadFontCommonWorker(mFont, ttf_buffer, ttf_buffer_len, index);
 		
 		stbtt_GetFontVMetrics(&mFont.mFont, &ascent, &descent, &lineGap);
 		scale = stbtt_ScaleForPixelHeight(&mFont.mFont, faceSize);
@@ -1865,52 +1881,57 @@ void sttfont_font_cache::generateHbScratchpad ()
 		ownsHbShapingScratchPad = true;
 		#endif
 		}
-void sttfont_font_cache::loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, int index)
-                                                                                                         {
+void sttfont_font_cache::loadFontCommonWorker (sttfont_font_list & target, char const * ttf_buffer, size_t const ttf_buffer_len, int index)
+                                                                                                                                      {
 		// used by loadFont, addFont
 		const int offset = stbtt_GetFontOffsetForIndex((const unsigned char *) ttf_buffer, index);
 		stbtt_InitFont(&target.mFont, (const unsigned char *) ttf_buffer, offset);
 	
 		#ifdef SSF_HARFBUZZ_ENABLED
-			target.hbFontBlob = hb_blob_create(ttf_buffer + offset, strlen(ttf_buffer + offset), HB_MEMORY_MODE_READONLY, NULL, NULL);
-			target.hbFace = hb_face_create(target.hbFontBlob, 0);
+			target.hbFontBlob = hb_blob_create(ttf_buffer, ttf_buffer_len, HB_MEMORY_MODE_READONLY, NULL, NULL);
+			
+    printf("blob: %i (len: %i), index %i\n", hb_blob_get_length(target.hbFontBlob), ttf_buffer_len, index );
+    
+			target.hbFace = hb_face_create(target.hbFontBlob, index);
 			target.hbFont = hb_font_create(target.hbFace);
+			
+			
 		#endif
 		}
 void sttfont_font_cache::loadFontManaged (sttfont_memory & memory, int index)
                                                                       {
 		memory.transferTo(mFont.mMemory);
-		loadFont(mFont.mMemory.data, index);
+		loadFont(mFont.mMemory.data, mFont.mMemory.size, index);
 		}
-void sttfont_font_cache::addFont (char const * ttf_buffer, int index)
-                                                              {
-		addFontWrap afw(ttf_buffer);
+void sttfont_font_cache::addFont (char const * ttf_buffer, size_t const ttf_buffer_len, int index)
+                                                                                           {
+		addFontWrap afw(ttf_buffer, ttf_buffer_len);
 		afw.index = index;
 		addFont_worker(afw, false);
 		}
 void sttfont_font_cache::addFontManaged (sttfont_memory & memory, int index)
                                                                      {
-		addFontWrap afw(NULL);
+		addFontWrap afw(NULL, 0);
 		afw.memory = &memory;
 		afw.index = index;
 		addFont_worker(afw, false);
 		}
-void sttfont_font_cache::addFormatFont (uint8_t formatMask, char const * ttf_buffer, int index)
-                                                                                        {
-		addFontWrap afw(ttf_buffer);
+void sttfont_font_cache::addFormatFont (uint8_t formatMask, char const * ttf_buffer, size_t const ttf_buffer_len, int index)
+                                                                                                                     {
+		addFontWrap afw(ttf_buffer, ttf_buffer_len);
 		afw.index = index;
 		addFont_worker(afw, true, formatMask);
 		}
 void sttfont_font_cache::addFormatFontManaged (uint8_t formatMask, sttfont_memory & memory, int index)
                                                                                                {
-		addFontWrap afw(NULL);
+		addFontWrap afw(NULL, 0);
 		afw.memory = &memory;
 		afw.index = index;
 		addFont_worker(afw, true, formatMask);
 		}
-sttfont_font_cache::addFontWrap::addFontWrap (char const * c)
-  : ttf_buffer (c), memory (NULL), index (0)
-                                                                                     {}
+sttfont_font_cache::addFontWrap::addFontWrap (char const * c, size_t const _len)
+  : ttf_buffer (c), ttf_buffer_len (_len), memory (NULL), index (0)
+                                                                                                                              {}
 void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant, uint8_t formatMask)
                                                                                              { 
 		sttfont_font_list * n = SSF_NEW(sttfont_font_list);
@@ -1922,10 +1943,10 @@ void sttfont_font_cache::addFont_worker (addFontWrap & fwm, bool isFormatVariant
 		if (fwm.memory) {
 			sttfont_memory & memory = *(fwm.memory);
 			memory.transferTo(n->mMemory);
-			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) n->mMemory.data, fwm.index);
+			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) n->mMemory.data, n->mMemory.size, fwm.index);
 			}
 		else {
-			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) fwm.ttf_buffer, fwm.index);
+			sttfont_font_cache::loadFontCommonWorker(*n, (const char *) fwm.ttf_buffer, fwm.ttf_buffer_len, fwm.index);
 			}
 		if (isFormatVariant) {
 			w->mFormatedVariants.push_back(n);
@@ -2074,17 +2095,51 @@ int sttfont_font_cache::utf8_charsize (char const * c)
                                                 {
 		if (!c) return 0;
 		if ((uint8_t)*c <= 0x7F) return 1;
-		else if ((uint8_t)*c <= 0xE0) return 2;
-		else if ((uint8_t)*c <= 0xF0) return 3;
+		else if ((uint8_t)*c <= 0xDF) return 2;
+		else if ((uint8_t)*c <= 0xEF) return 3;
+		else if ((uint8_t)*c <= 0xF7) return 4;
 		else
 			return 4;
 		}
-int sttfont_font_cache::utf8_charsize (uint32_t const codepoint)
-                                                           {
+int sttfont_font_cache::utf8_charsize_from_codepoint (uint32_t const codepoint)
+                                                                          {
 		if ((codepoint & 0x000000ff) == codepoint) return 1;
 		if ((codepoint & 0x0000ffff) == codepoint) return 2;
 		if ((codepoint & 0x00ffffff) == codepoint) return 3;
 		return 4;
+		}
+int sttfont_font_cache::utf8_encode (uint32_t const codepoint, char * buf)
+                                                                    {
+		if (codepoint <= 0x7F) {
+			buf[0] = (char)codepoint;
+			buf[1] = '\0';
+			return 1;
+			}
+		else if (codepoint <= 0x7FF) {
+			buf[0] = (char)(0xC0 | (codepoint >> 6));
+			buf[1] = (char)(0x80 | (codepoint & 0x3F));
+			buf[2] = '\0';
+			return 2;
+			}
+		else if (codepoint <= 0xFFFF) {
+			buf[0] = (char)(0xE0 | (codepoint >> 12));
+			buf[1] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+			buf[2] = (char)(0x80 | (codepoint & 0x3F));
+			buf[3] = '\0';
+			return 3;
+			}
+		else if (codepoint <= 0x10FFFF) {
+			buf[0] = (char)(0xF0 | (codepoint >> 18));
+			buf[1] = (char)(0x80 | ((codepoint >> 12) & 0x3F));
+			buf[2] = (char)(0x80 | ((codepoint >> 6) & 0x3F));
+			buf[3] = (char)(0x80 | (codepoint & 0x3F));
+			buf[4] = '\0';
+			return 4;
+			}
+		else {
+			buf[0] = '\0';
+			return 0;
+			}
 		}
 uint32_t sttfont_font_cache::utf8_read (char const * c, uint32_t & seek, uint32_t const maxLen)
                                                                                          {
@@ -2219,11 +2274,15 @@ int sttfont_font_cache::processString (int const x, int const y, char const * c,
 bool sttfont_font_cache::does_not_change_rtl (uint32_t const c)
                                                            {
 		// make sure that punctuation marks do not flip rlt/ltr order
+		#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 		return (c >= 0x20 && c <= 0x40) || (c >= 0x5B && c <= 60) || (c >= 0x7B && c <= 0x7E);
+		#endif
+		return false;
 		}
 bool sttfont_font_cache::aft_isrtl (uint32_t const c)
                                                  {
 		// https://stackoverflow.com/questions/5423960/how-can-i-recognize-rtl-strings-in-c
+		#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 		return (
 			(c==0x05BE)||(c==0x05C0)||(c==0x05C3)||(c==0x05C6)||
 			((c>=0x05D0)&&(c<=0x05F4))||
@@ -2254,10 +2313,12 @@ bool sttfont_font_cache::aft_isrtl (uint32_t const c)
 			((c>=0x10B40)&&(c<=0x10C48))||
 			((c>=0x1EE00)&&(c<=0x1EEBB))
 			);
+		#endif
 		return false;
 		}
-int sttfont_font_cache::processChunk (char const * c, uint32_t maxLen, int & xx, int & yy, sttfont_format const * const format, bool const isDrawing, uint32_t const chunkStart, uint32_t const chunkEnd, uint16_t const fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, int const * maxWidth, bool const isLTR)
-                                                                                                                                                                                                                                                                                                                  {
+hb_font_t * sttfont_font_cache::thaiFont = NULL;
+int sttfont_font_cache::processHarfbuzzChunk (char const * c, uint32_t maxLen, int & xx, int & yy, sttfont_format const * const format, bool const isDrawing, uint32_t const chunkStart, uint32_t const chunkEnd, uint16_t const fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, int const * maxWidth, bool const isLTR)
+                                                                                                                                                                                                                                                                                                                          {
 		#ifdef SSF_HARFBUZZ_ENABLED
 			findSubfontByIndexWHint(fontIdx, fontLookupHint);
 			if (!fontLookupHint.font) return xx; // no valid font (this should never be true)
@@ -2267,41 +2328,84 @@ int sttfont_font_cache::processChunk (char const * c, uint32_t maxLen, int & xx,
 			if (!hbShapingScratchpad) {
 				SSF_ERROR("No harfbuzz scratchpad");
 				}
+			
 			hb_buffer_reset(hbShapingScratchpad);
+    
+			#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
+			if (0 && !isLTR) {
+hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_RTL); // Arabic is RTL
+hb_buffer_set_script(hbShapingScratchpad, HB_SCRIPT_ARABIC);
+hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
+				}
+			#endif
+   
+			//hb_buffer_add_utf8(hbShapingScratchpad, c, maxLen, chunkStart, chunkEnd-chunkStart);
+			//hb_buffer_add_utf8(hbShapingScratchpad, "hello", -1, 0, -1);
+			const char* text = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ";//argv[2];
 			
-			if (isLTR)
-				hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_LTR);
-			else
-				hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_RTL);
 			
-			hb_buffer_add_utf8(hbShapingScratchpad, c, maxLen, chunkStart, chunkEnd-chunkStart);
+			uint32_t codepoints[200];
+			
+			hb_buffer_add_utf8(hbShapingScratchpad, text, -1, 0, -1);
+
+			{
+				
+			unsigned int glyph_count;
+			hb_glyph_info_t *glyph_info    = hb_buffer_get_glyph_infos(hbShapingScratchpad, &glyph_count);
+			
+			for (unsigned int i = 0; i < glyph_count; i++) {
+				codepoints[i] = glyph_info[i].codepoint;;
+				}
+			}
+			// if (LTR... RTL) {
+				// do something?
+				// manually setting hb_buffer_... properties mangles all strings
+			//	}
+
+			//hb_buffer_guess_segment_properties(hbShapingScratchpad); //<-- will mangles all string
+			
+      
+    hb_buffer_set_direction(hbShapingScratchpad, HB_DIRECTION_LTR);
+    hb_buffer_set_script(hbShapingScratchpad, HB_SCRIPT_THAI);
+    hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("th", -1));
+    
 			hb_shape(fontLookupHint.font->hbFont, hbShapingScratchpad, NULL, 0);
+			//hb_shape(thaiFont, buf, NULL, 0);
+			
 			
 			unsigned int glyph_count;
 			hb_glyph_info_t *glyph_info    = hb_buffer_get_glyph_infos(hbShapingScratchpad, &glyph_count);
 			hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hbShapingScratchpad, &glyph_count);
-			
-			printf("glyph count %i, string: [%.*s]\n", int(glyph_count), chunkEnd-chunkStart, &c[chunkStart]);
+			//if (!isLTR)
+			printf("glyph count %i, fontIdx: %i, isLTR: %b, hb_font: %x, string: [%.*s], \n", int(glyph_count), fontIdx, isLTR, fontLookupHint.font->hbFont, chunkEnd-chunkStart, &c[chunkStart]);
 			
 			hb_position_t cursor_x = 0;
 			hb_position_t cursor_y = 0;
+			
 			for (unsigned int i = 0; i < glyph_count; i++) {
-				hb_codepoint_t glyphid  = glyph_info[i].codepoint;
+				hb_codepoint_t glyphid  = codepoints[i];//glyph_info[i].codepoint;
 				hb_position_t x_offset  = glyph_pos[i].x_offset;
 				hb_position_t y_offset  = glyph_pos[i].y_offset;
 				hb_position_t x_advance = glyph_pos[i].x_advance;
 				hb_position_t y_advance = glyph_pos[i].y_advance;
 				
-				processCodepoint(NULL, 0, xx, yy, glyphid, format, isDrawing, overdraw, fontLookupHint);
+				char cbuff[5];
+				utf8_encode(glyphid, &cbuff[0]);
+				printf("(%#04x, %s) ", glyphid, cbuff);
 				
-				xx += x_offset + x_advance;
+				int xx2 = xx;
+				int yy2 = yy;
+				processCodepoint(NULL, 0, xx2, yy2, glyphid, format, isDrawing, overdraw, fontLookupHint);
+				
+				
+				xx += 0*x_offset + x_advance*0.05;
 				//yy += y_advance;
-				
 					
 				if (maxWidth) {
 					if (xx > *maxWidth) break;
 					}
 				}
+			printf("\n");
 		#endif //SSF_HARFBUZZ_ENABLED
 		return xx;
 		}
@@ -2356,13 +2460,13 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				len = seek;
 				break;
 				}
-			if (uChar == 0x20) continue; // do not break on whitespace
+			if (uChar == 0x20) continue;// && uChar <= 0x40) continue; // do not break on whitespace
 
 			if (uChar == '\n') {
 				// End current chunk before newline
 				if (chunkStart < seekLast) {
 					printf("chunkEnd 1\n");
-					xx = processChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 					}
 
 				// Move to next line
@@ -2375,37 +2479,36 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				continue;
 				}
 			
-			if (0) {
-			if (isLTR) {
-				if (uChar == 0x200F || aft_isrtl(uChar)) {
-					xx = processChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
-					isLTR = false;
-					chunkStart = seekLast;
-					continue;
-					}
-				}
-			else {
-				bool switchToLTR = false;
-				if (uChar == 0x200E)
-					switchToLTR = true;
-				else {
-					if (!does_not_change_rtl(uChar)) {
-						if (!aft_isrtl(uChar)) {
-							switchToLTR = true;
-							}
+			#ifdef SSF_HARFBUZZ_AUTO_BIDI_ENABLED
+				{
+				if (isLTR) {
+					if (uChar == 0x200F || aft_isrtl(uChar)) {
+						xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+						isLTR = false;
+						chunkStart = seekLast;
+						continue;
 						}
 					}
-				if (switchToLTR) {
-					xx = processChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
-					isLTR = true;
-					chunkStart = seekLast;
-					continue;
+				else {
+					bool switchToLTR = false;
+					if (uChar == 0x200E)
+						switchToLTR = true;
+					else {
+						if (!does_not_change_rtl(uChar)) {
+							if (!aft_isrtl(uChar)) {
+								switchToLTR = true;
+								}
+							}
+						}
+					if (switchToLTR) {
+						xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+						isLTR = true;
+						chunkStart = seekLast;
+						continue;
+						}
 					}
 				}
-			}
-			
-			//if (uChar == 0x20 || uCharLast == 0x20) continue;
-			//if (uChar == '\t') continue;
+			#endif //SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 			
 			sttfont_glyph* G = getCodepointGlyph(uChar, format);
 			if (!G) continue;
@@ -2415,11 +2518,11 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 				}
 			else if (currentFont != G->fontIdx) {
 				// Font change → emit chunk
-				currentFont = G->fontIdx;
 				if (chunkStart < seekLast) {
-					printf("chunkEnd 2. CurrentFort %i, G->fontIdx %i, uCharLast: %i, uChar: %i, working string: [%.*s]\n", currentFont, G->fontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
-					xx = processChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, G->fontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
+					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 					}
+				currentFont = G->fontIdx;
 				chunkStart = seekLast;
 				}
 
@@ -2429,7 +2532,7 @@ int sttfont_font_cache::processString_worker (int const x, int const y, char con
 		// Flush final chunk
 		if (chunkStart < len) {
 			printf("chunkEnd 3\n");
-			xx = processChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+			xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 			}
 
 		
@@ -2578,16 +2681,11 @@ int sttfont_font_cache::getCaretPos (sttfont_formatted_text const & str, int con
 		processFormatted(str, 0,0, false, NULL, NULL, NULL, mHint, &relMouseX, &relMouseY, &caretPosition);
 		return caretPosition;
 		}
-bool sttfont_font_cache::isTofu (sttfont_glyph * G)
-                                        {
-		if (!G) return true;
-		if (!G->advance) return true; //unprintable characters have no width
-		return false;
-		}
 sttfont_glyph * sttfont_font_cache::getGlyphOrTofu (uint32_t const codepoint, uint8_t const format)
                                                                                         {
 		const uint8_t format_wo_underline_or_strike = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
 		sttfont_glyph * G = getGenGlyph(codepoint, format_wo_underline_or_strike);
+		
 		if (!isTofu(G)) return G;
 		
 		G = getGenGlyph((uint32_t) 0xFFFD, format_wo_underline_or_strike); // https://en.wikipedia.org/wiki/Specials_(Unicode_block)#Replacement_character

@@ -10,8 +10,9 @@
 #define SDL_STB_FONT_IMPL
 
 #define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
-//#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
-#define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc
+//#define SSF_HARFBUZZ_AUTO_BIDI_ENABLED
+////#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
+#define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc, instead use the precompiled .o object file
 #define LZZ_INLINE inline
 #undef LZZ_INLINE
 #endif
@@ -61,7 +62,12 @@ int main(int argc, char**argv) {
 // and are therefore not supported
 // This does not support HarfBuzz or FriBidi
 // 
-const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol: €.\nGreek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\nÍslenska / Icelandic: Ég get etið gler án þess að meiða mig.\nPolish: Mogę jeść szkło, i mi nie szkodzi.\nRomanian: Pot să mănânc sticlă și ea nu mă rănește.\nUkrainian: Я можу їсти шкло, й воно мені не пошкодить.\nArmenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\nGeorgian: მინას ვჭამ და არა მტკივა.\nHebrew: אני יכול לאכול זכוכית וזה לא מזיק לי.\nArabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\nThai: ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ \nChinese: 我能吞下玻璃而不伤身体。\nChinese (Traditional): 我能吞下玻璃而不傷身體。 \nJapanese: 私はガラスを食べられます。それは私を傷つけません。\nKorean: 률로 정한다. 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다\nCJK Variants: 判 与 海 直 約 返 次 今 ";
+
+const std::string loremIpsum  = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ ";
+
+//const std::string loremIpsum  = "أنا قادر على أكل الزجاج و هذا لا يؤلمن";
+    
+//const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol: €.\nGreek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\nÍslenska / Icelandic: Ég get etið gler án þess að meiða mig.\nPolish: Mogę jeść szkło, i mi nie szkodzi.\nRomanian: Pot să mănânc sticlă și ea nu mă rănește.\nUkrainian: Я можу їсти шкло, й воно мені не пошкодить.\nArmenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\nGeorgian: მინას ვჭამ და არა მტკივა.\nHindi: मैं काँच खा सकता हूँ, मुझे उस से कोई पीडा नहीं होती.\nHebrew: אני יכול לאכול זכוכית וזה לא מזיק לי.\nArabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\nThai: ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ \nChinese: 我能吞下玻璃而不伤身体。\nChinese (Traditional): 我能吞下玻璃而不傷身體。 \nJapanese: 私はガラスを食べられます。それは私を傷つけません。\nKorean: 률로 정한다. 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다\nCJK Variants: 判 与 海 直 約 返 次 今 ";
 
 // Formatted text example
 // set (test = 5) to see
@@ -112,7 +118,7 @@ formattedText << sttfont_format::black << "Plain text "
 		sttfont_memory notoSansArmenian;
 		sttfont_memory notoSansGeorgian;
 		sttfont_memory notoSansHebrew;
-		//sttfont_memory notoSansHindi;
+		sttfont_memory notoSansHindi;
 		sttfont_memory notoSansArabic;
 		sttfont_memory notoSansThai;
 		sttfont_memory notoSansCJK;
@@ -124,11 +130,17 @@ formattedText << sttfont_format::black << "Plain text "
 		readFileRaw_toMemory("fonts/NotoSansArmenian-Regular.ttf", notoSansArmenian);
 		readFileRaw_toMemory("fonts/NotoSansGeorgian-Regular.ttf", notoSansGeorgian);
 		readFileRaw_toMemory("fonts/NotoSansHebrew-Regular.ttf", notoSansHebrew);
-		//readFileRaw_toMemory("fonts/NotoSansDevanagari-Regular.ttf", notoSansHindi);
+		readFileRaw_toMemory("fonts/NotoSansDevanagari-Regular.ttf", notoSansHindi);
 		readFileRaw_toMemory("fonts/NotoSansArabic-Regular.ttf", notoSansArabic);
 		readFileRaw_toMemory("fonts/NotoSansThai-Regular.ttf", notoSansThai);
 		readFileRaw_toMemory("fonts/NotoSansCJKjp-Regular.otf", notoSansCJK);
 		
+		#warning remove me
+		
+		//fc.loadFontManaged(notoSansArabic);
+		fc.loadFontManaged(notoSansThai);
+		
+		/*
 		fc.loadFontManaged(notoSans);
 			fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansBold);
 			fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansItalic);
@@ -136,10 +148,10 @@ formattedText << sttfont_format::black << "Plain text "
 		fc.addFontManaged(notoSansArmenian);
 		fc.addFontManaged(notoSansGeorgian);
 		fc.addFontManaged(notoSansHebrew);
-		//fc.addFontManaged(notoSansHindi);
+		fc.addFontManaged(notoSansHindi);
 		fc.addFontManaged(notoSansArabic);
 		fc.addFontManaged(notoSansThai);
-		fc.addFontManaged(notoSansCJK);
+		fc.addFontManaged(notoSansCJK);*/
 	}
 	
 		
@@ -183,11 +195,14 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255); // Grey background to test glyph artefacts
 			SDL_RenderClear(mSdlRenderer);
 			
-			fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum); // Renders the loremIpsum string and stores the glyphs in textures
+			//fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum);
+			fc.drawText(5, 5, "Direct Rendering Test");
+			fc.drawText(5, 25, loremIpsum); // Renders the loremIpsum string and stores the glyphs in textures
    
 			SDL_RenderPresent(mSdlRenderer);
 			SDL_UpdateWindowSurface(mWindow);
 			
+			SDL_Delay(200);
 			if (i % 100 == 0) {
 				LAST = NOW;
 				NOW = SDL_GetPerformanceCounter();
