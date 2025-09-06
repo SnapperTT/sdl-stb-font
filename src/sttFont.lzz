@@ -404,6 +404,7 @@ public:
 	void* userData;			// Pointer for whatever purpose you see fit
 
 	SSF_HB_BUFFER_TYPE* hbShapingScratchpad;
+	SSF_MAP<uint32_t,uint16_t> hbFontLookup;
 	bool ownsHbShapingScratchPad;
 	
 	sttfont_font_cache () : ascent(0), descent(0), lineGap(0), baseline(0), rowSize(0), tabWidth(1), scale(1.f),
@@ -599,21 +600,28 @@ public:
 	/// For a given codepoint, generate a texture (if required) and populate the
 	/// details of the glyph (width, height, etc) in gOut	
 	/// if bitmapOut is set then the bitmap data will by copied there and the glyph not stored, you must store it yourself
-	void genGlyph (const uint32_t codepoint, const uint8_t format, sttfont_glyph * gOut, unsigned char ** bitmapOut = NULL) {
+	void genGlyph (const uint32_t codepoint, const uint8_t format, uint16_t fontIdx, uint32_t intIdx, sttfont_glyph * gOut, unsigned char ** bitmapOut = NULL) {
 		// Fetch font and index - existance check for glyph in font
 		// format is a number representing regular, bold, itallic, bold itallic
 		stbtt_fontinfo * mFontContaining;
-		int mIndex;
-		uint16_t fontIdx;
-		mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex, &fontIdx);
 		
-		if (!mIndex)
-			return;
+		if (codepoint != 0) {
+			// Lookup font and index for codepoint
+			int mIndex;
+			mFont.fetchFontForCodepoint(codepoint, format, &mFontContaining, &mIndex, &fontIdx);
+			if (!mIndex)
+				return;
+			intIdx = mIndex;
+			}		
 		
 		// found the font! generate the glyph
 	   	int w,h,woff,hoff;
 	   	int x0,x1,y0,y1;
-	   	stbtt_GetCodepointBitmapBox(mFontContaining, codepoint, scale, scale, &x0, &y0, &x1, &y1);
+	   	
+	   	if (codepoint == 0) {
+			stbtt_GetGlyphBitmapBox(mFontContaining, intIdx, scale, scale, &x0, &y0, &x1, &y1);
+	   	else
+			stbtt_GetCodepointBitmapBox(mFontContaining, codepoint, scale, scale, &x0, &y0, &x1, &y1);
 	   	w = x1-x0;
 	   	h = y1-y0;
 	   	woff = x0;
@@ -623,7 +631,11 @@ public:
 		if (sz) {
 			sttfont_tmpArr4096 bitmapStore(sz);
 			unsigned char* bitmap = (unsigned char*) bitmapStore.arr;
-			stbtt_MakeCodepointBitmap(mFontContaining, bitmap, w, h, w, scale, scale, codepoint);
+			
+			if (codepoint == 0)
+				stbtt_MakeGlyphBitmap(mFontContaining, bitmap, w, h, w, scale, scale, intIdx);
+			else
+				stbtt_MakeCodepointBitmap(mFontContaining, bitmap, w, h, w, scale, scale, codepoint);
 			
 			// Convert bitmap to RGBA8888
 			// Todo - change RBGA8888 to R8
@@ -650,14 +662,18 @@ public:
 					bitmap2[i*4+2] = 255;
 					bitmap2[i*4+3] = bitmap[i];
 					}
-				genGlyph_writeData(codepoint, gOut, bitmap2, w, h);
+				genGlyph_writeData(codepoint, fontIdx, intIdx, gOut, bitmap2, w, h);
 				}
 		}
 		
 		gOut->width = w;
 		gOut->height = h;
 		int advance, leftSideBearing;
-		stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		if (codepoint == 0)
+			stbtt_GetGlyphHMetrics(mFontContaining, intIdx, &advance, &leftSideBearing);
+		else
+			stbtt_GetCodepointHMetrics(mFontContaining, codepoint, &advance, &leftSideBearing);
+		
 		if (abs(advance) >= 0x7fff || abs(leftSideBearing) >= 0x7fff) {
 			SSF_ERROR("Invalid glyph metrics! Advance: %i, leftSideBearing %i", advance, leftSideBearing );
 			}
@@ -675,14 +691,15 @@ public:
 		// Make your own implmentation for your own frontend here
 		for (const sttfont_uint32_t_range & r : mRanges) {
 			for (uint32_t codepoint = r.start; codepoint <= r.end; ++codepoint) {
-				uint64_t target = codepoint | (uint64_t(format) << 32);
+				uint64_t target = getGlyphKey(codepoint, format, 0, 0);
 				genGlyph_createAndInsert(target, codepoint, format);
 				}
 			}
 		}
 	
-	virtual void genGlyph_writeData (const uint32_t codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
+	virtual void genGlyph_writeData (const uint32_t codepoint, const uint16_t fontIdx, const uint32_t intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
 		// Make your own implmentation for your own frontend here
+		// If codepoint == 0, then use fontIdx and fontGlypthIdx to encode your key
 		}
 	
 	virtual sttfont_glyph * getGlyph(const uint64_t target) {
@@ -691,15 +708,26 @@ public:
 		return NULL;
 		}
 	
+	// Provides a key to look-up a glyph. Can be used in CODEPOINT mode or HARFBUZZ mode
+	// Codepoint mode -> fontIdx = 0, intIdx = 0
+	// Harfbuzz mode -> codepoint = 0 
+	inline static uint64_t getGlyphKey(const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
+		if (codepoint) {
+			if (fontIdx || intIdx)
+				abort(); // invalid lookup
+			}
+		return codepoint | (uint64_t(format) << 48) | (uint64_t(fontIdx) << 32) | intIdx;
+		}
+	
 	/// Looks up a glyph, generating it if it does not exist yet
-	sttfont_glyph * getGenGlyph(const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t fontGlyphIdx) {
-		uint64_t target = codepoint | (uint64_t(format) << 32);
+	sttfont_glyph * getGenGlyph(const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
+		const uint64_t target = getGlyphKey(codepoint, format, fontIdx, intIdx);
 		sttfont_glyph * r = getGlyph(target);
 		if (r) return r;
-		return genGlyph_createAndInsert(target, codepoint, format);
+		return genGlyph_createAndInsert(target, codepoint, format, fontIdx, intIdx);
 		}
 		
-	virtual sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format) {
+	virtual sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
 		// Make your own implmentation for your own frontend here
 		abort();
 		return NULL;
@@ -1109,6 +1137,7 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		findSubfontLookupHint fontLookupHint;
 		
 		#ifdef SSF_HARFBUZZ_ENABLED
+		// Harfbuzz based shaping
 		// scan for chunk, shape chunk, process chunk, move to next chunk
 		
 		uint32_t chunkStart = 0;
@@ -1175,19 +1204,23 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 				}
 			#endif //SSF_HARFBUZZ_AUTO_BIDI_ENABLED
 			
-			sttfont_glyph* G = getCodepointGlyph(uChar, format);
-			if (!G) continue;
+			auto it = hbFontLookup.find(uChar);
+			if (it == hbFontLookup.end()) {
+				// glyph not found
+				continue;
+				}
+			uint16_t gFontIdx = *it;
 			
 			if (currentFont == uint16_t(-1)) {
-				currentFont = G->fontIdx;
+				currentFont = gFontIdx;
 				}
-			else if (currentFont != G->fontIdx) {
+			else if (currentFont != gFontIdx) {
 				// Font change → emit chunk
 				if (chunkStart < seekLast) {
-					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, G->fontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
+					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, gFontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
 					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 					}
-				currentFont = G->fontIdx;
+				currentFont = gFontIdx;
 				chunkStart = seekLast;
 				}
 
@@ -1201,7 +1234,8 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 			}
 
 		
-		#else		
+		#else
+		// Codepoint based shaping
 		while (uChar && seek <= maxLen) {
 			//if (mHint)
 			//	std::cout << "Processing: (" << seekLast << "," << (seek-seekLast) << ") " << std::string(&c[seekLast], seek-seekLast) << ", codePoint " << uChar << ", suibstring: [" << std::string(&c[seekLast]) << "], fullstring:["<<maxLen<<"] " << c << std::endl;
@@ -1350,6 +1384,9 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		return caretPosition;
 		}
 	
+	///////////////////////////////////////////////////////////////////
+	// Codepoint based glyph processing
+	
 	inline static bool isTofu (sttfont_glyph * G) {
 		if (!G) return true;
 		if (G->advance == 0 && G->width == 0) return true; //unprintable characters have no width
@@ -1412,6 +1449,19 @@ hb_buffer_set_language(hbShapingScratchpad, hb_language_from_string("ar", -1));
 		// Draws the character
 		// @overdraw: This is used for fixing pixel bleed on some backends (such as SDL). If your backend doesn't bleed then you can ignore it
 		// Make your own implmentation for your own frontend here
+		}
+		
+	///////////////////////////////////////////////////////////////////
+	// HarfBuzz based glyph processing
+	
+	sttfont_glyph * hbGetGlyphOrTofu (const uint16_t fontIdx, const uint16_t intIdx, const uint8_t format) {
+		
+		}
+		
+	virtual void drawHbGlyph (const int x, const int y, const uint16_t fontIdx, const uint16_t intIdx, const sttfont_format * const format, const uint8_t formatCode) {
+		// Draws the character
+		// Note that harfbuzz's hb_shape() returns index of the glyph in the font (@intIdx)
+		#warning remove me
 		}
 		
 	/// Creates a SDL_Texture of a suitable size and renders an entire string to it
