@@ -2,7 +2,7 @@ SDL STB Font Renderer
 =====================
 A header-only library for rendering text in pure [SDL3](https://www.libsdl.org/) with [STB_Truetype](https://github.com/nothings/stb). This caches glyphs as they are drawn allowing for fast text rendering. It also provides a couple of easy ways to render a string to texture for even faster text rendering.
 
-New (2025)! HarfBuzz Support! Just add `#define SSF_HARFBUZZ_ENABLED` and go!
+New (2025)! [HarfBuzz](https://github.com/harfbuzz/harfbuzz) Support! Just add `#define SSF_HARFBUZZ_ENABLED` and go!
 
 New (2025)! Upgraded to SDL3! You can still use SDL2 by accessing the SDL2 branch
 
@@ -368,12 +368,13 @@ while (mPcCache.receiveFromProducer()) {
 ```
 
 ## Use Harfbuzz
-This library supports [harbfuzz](https://github.com/harfbuzz/harfbuzz) shaping. To enable it simply define the macro `#define SSF_HARFBUZZ_ENABLED` before including the header. This library can automatically split utf-8 strings by font and parse the sub-strings to harfbuzz for shaping. Punctuation is not split, so sections of RTL scripts (such as Arabic or Hebrew) should render correctly inline with LTR text.
+This library supports [HarfBuzz](https://github.com/harfbuzz/harfbuzz) shaping. To enable it simply define the macro `#define SSF_HARFBUZZ_ENABLED` before including the header. This library can automatically split utf-8 strings by font and parse the sub-strings to harfbuzz for shaping. Punctuation is not split, so sections of RTL scripts (such as Arabic or Hebrew) should render correctly inline with LTR text.
 
 If harfbuzz mode is enabled the library will try to include `harfbuzz.h` and `harfbuzz.cc`. You can disable this behaviour with the macros `#define SSF_HARFBUZZ_INCLUDE_HANDLED` and `#define SSF_HARFBUZZ_IMPL_HANDLED` to disable including `harfbuzz.h` and `harfbuzz.cc` respectively.
 
 If you do not use harfbuzz then this library will use its own shaping system that only supports LTR text.
 
+If you do not *need* harfbuzz shaping then I recommend that you do not enable harfbuzz support. This library's in-built shaping system is much faster. 
 
 Formatted Text
 ==============
