@@ -19,7 +19,7 @@ compile_example() {
 	}
 
 hb_compile_example() {
-	echo "Building example.cpp => ./example ..."
+	echo "Building example.cpp => ./hb_example ..."
 	g++ example.cpp harfbuzz.o -DSSF_HARFBUZZ_ENABLED -DSSF_HARFBUZZ_IMPL_HANDLED -std=c++17 $OPT -g  -o hb_example -fmax-errors=5 `pkg-config --cflags --libs sdl3` && \
 	echo "Done building hb_example"
 	}
@@ -32,7 +32,7 @@ compile_producer_consumer() {
 	}
 
 hb_compile_producer_consumer() {
-	echo "Building producerConsumerExample.cpp => ./producerConsumerExample..."
+	echo "Building producerConsumerExample.cpp => ./hb_producerConsumerExample..."
 	g++ producerConsumerExample.cpp harfbuzz.o -DSSF_HARFBUZZ_ENABLED -DSSF_HARFBUZZ_IMPL_HANDLED -std=c++17 $OPT -g  -o hb_producerConsumerExample -fmax-errors=5 `pkg-config --cflags --libs sdl3` && \
 	echo "Done building hb_producerConsumer!"
 	}
