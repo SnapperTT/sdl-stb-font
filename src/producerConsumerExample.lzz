@@ -2,6 +2,10 @@
 // SdlStbFont example
 // By Liam Twigger - 2020
 // Public Domain
+
+//#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
+////#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
+//#define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc, instead use the precompiled .o object file
 #define SDL_STB_FONT_IMPL
 #end
 
@@ -248,7 +252,12 @@ int main(int argc, char**argv) {
 	int windowHeight = 1000;
 
 	SDL_Init(0);
-	SDL_Window * mWindow = SDL_CreateWindow("Producer Consumer Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
+	
+	#ifdef SSF_HARFBUZZ_ENABLED
+		SDL_Window * mWindow = SDL_CreateWindow("(Harfbuzz) Producer Consumer Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
+	#else
+		SDL_Window * mWindow = SDL_CreateWindow("Producer Consumer Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
+	#endif
 	
 	SDL_Renderer * mSdlRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
 	

@@ -730,9 +730,27 @@ public:
 		tempGlyphs.reserve(size);
 		rects.reserve(size);
 		
+		#ifdef SSF_HARFBUZZ_ENABLED
+			sttfont_font_cache::findSubfontLookupHint mHint;
+		#endif
+		
+		const uint8_t formatCode = format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE);
+		
 		for (sttfont_uint32_t_range & sur : mRanges) {
-			for (uint32_t codepoint = sur.start; codepoint <= sur.end; ++codepoint) {
-				uint64_t target = getGlyphKey(codepoint, format & ~(sttfont_format::FORMAT_STRIKETHROUGH | sttfont_format::FORMAT_UNDERLINE));
+			for (uint32_t codepoint2 = sur.start; codepoint2 <= sur.end; ++codepoint2) {
+				uint32_t codepoint = codepoint2;
+				uint16_t fontIdx = 0;
+				int intIdx = 0;
+				#ifdef SSF_HARFBUZZ_ENABLED
+					// harfbuzz mode
+					fontIdx = hbFindFontForCodepoint(codepoint, formatCode, &intIdx, mHint);
+					if (!intIdx)
+						continue; // glyph not found
+					codepoint = 0; // don't use the codepoint anymore, use fontIdx and intIdx
+				#else
+					// codepoint mode
+				#endif
+				uint64_t target = getGlyphKey(codepoint, formatCode, fontIdx, intIdx);
 				
 				// does the codepoint exist already?
 				auto check = mGlyphs.find(target);
@@ -744,13 +762,10 @@ public:
 				
 				t.bitmapData = NULL;
 				
-				#ifdef SSF_HARFBUZZ_ENABLED
-					abort(); //codepoint mode with harfbuzz not allowed
-				#endif
-				genGlyph(codepoint, format, 0, 0, &g, &t.bitmapData);
+				genGlyph(codepoint, formatCode, fontIdx, intIdx, &g, &t.bitmapData);
 				
 				if (t.bitmapData) {
-					r.id = *((int*) &codepoint);
+					r.id = *((int*) &codepoint2);
 					r.x = 0;
 					r.y = 0;
 					r.w = g.width;
@@ -811,7 +826,7 @@ public:
 		
 	// Override - write 
 	void genGlyph_writeData (const uint32_t codepoint, const uint16_t fontIdx, const uint32_t intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
-		genGlyph_writeData2(codepoint, gOut, bitmap2, w, h, true);
+		genGlyph_writeData2(codepoint | (uint32_t(fontIdx) << 16 | intIdx), gOut, bitmap2, w, h, true);
 		}
 	
 	void populateGlyphData(bgfx_stb_glyph* bOut, unsigned char* bitmap2, int w, int h) {
@@ -823,7 +838,7 @@ public:
 			}
 		}
 		
-	void genGlyph_writeData2 (const uint32_t codepoint, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall) {
+	void genGlyph_writeData2 (const uint32_t codepointHash, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall) {
 		// fetch or create atlas
 		bgfx_stb_glyph * bOut = (bgfx_stb_glyph*) gOut;
 		bgfx_stb_glyph_atlas * activeAtlas = getGenAtlasPage();
@@ -832,7 +847,7 @@ public:
 		
 		// try to pack
 		stbrp_rect r;
-		r.id = *((int*) &codepoint);
+		r.id = *((int*) &codepointHash);
 		r.x = 0;
 		r.y = 0;
 		r.w = w;
@@ -865,7 +880,7 @@ public:
 		
 		// failed to pack, generate a new atlas
 		if (firstCall)
-			genGlyph_writeData2(codepoint, gOut, bitmap2, w, h, false);
+			genGlyph_writeData2(codepointHash, gOut, bitmap2, w, h, false);
 		}
 	
 	sttfont_glyph * getGlyph(const uint64_t target) {
@@ -877,7 +892,6 @@ public:
 		
 	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
 		bgfx_stb_glyph g;
-		if (fontIdx || intIdx) abort();
 		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);

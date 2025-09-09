@@ -4,9 +4,9 @@
 // Public Domain
 #define SDL_STB_FONT_IMPL
 
-#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
+//#define SSF_HARFBUZZ_ENABLED			// enable harfbuzz support
 ////#define SSF_HARFBUZZ_INCLUDE_HANDLED	// include harfbuzz.hh. Uncomment this line if you want to manually include harfbuzz.hh
-#define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc, instead use the precompiled .o object file
+//#define SSF_HARFBUZZ_IMPL_HANDLED		// do not compile and embed harfbuzz.cc, instead use the precompiled .o object file
 #end
 
 #src
@@ -163,9 +163,12 @@ formattedText << sttfont_format::black << "Plain text "
 	int windowHeight = 1000;
 
 	SDL_Init(0);
-	SDL_Window * mWindow = SDL_CreateWindow("Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
+	#ifdef SSF_HARFBUZZ_ENABLED
+		SDL_Window * mWindow = SDL_CreateWindow("(Harfbuzz) Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
+	#else
+		SDL_Window * mWindow = SDL_CreateWindow("Example Test", windowWidth, windowHeight, SDL_WINDOW_RESIZABLE);
+	#endif
 	
-	//SDL_Renderer * mSdlRenderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(mWindow));
 	SDL_Renderer * mSdlRenderer = SDL_CreateRenderer(mWindow, NULL); // Test opengl. Note that for the sdl frontend
 	std::cout << "SDL_Renderer Type: " << SDL_GetRendererName(mSdlRenderer) << std::endl;
 	fc.bindRenderer(mSdlRenderer); // Must bind a renderer before generating any glyphs
@@ -198,14 +201,13 @@ formattedText << sttfont_format::black << "Plain text "
 			SDL_SetRenderDrawColor(mSdlRenderer, 125, 125, 125, 255); // Grey background to test glyph artefacts
 			SDL_RenderClear(mSdlRenderer);
 			
-			//fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum);
-			fc.drawText(5, 5, "Direct Rendering Test");
-			fc.drawText(5, 25, loremIpsum); // Renders the loremIpsum string and stores the glyphs in textures
+			fc.drawText(5, 5, "Direct Rendering Test - " + loremIpsum);
+			//fc.drawText(5, 5, "Direct Rendering Test");
+			//fc.drawText(5, 25, loremIpsum); // Renders the loremIpsum string and stores the glyphs in textures
    
 			SDL_RenderPresent(mSdlRenderer);
 			SDL_UpdateWindowSurface(mWindow);
 			
-			SDL_Delay(200);
 			if (i % 100 == 0) {
 				LAST = NOW;
 				NOW = SDL_GetPerformanceCounter();

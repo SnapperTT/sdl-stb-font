@@ -14,9 +14,16 @@ compile_harfbuzz() {
 
 compile_example() {
 	echo "Building example.cpp => ./example ..."
-	g++ example.cpp harfbuzz.o -std=c++17 $OPT -g  -o example -fmax-errors=5 `pkg-config --cflags --libs sdl3` && \
+	g++ example.cpp -std=c++17 $OPT -g  -o example -fmax-errors=5 `pkg-config --cflags --libs sdl3` && \
 	echo "Done building example"
 	}
+
+hb_compile_example() {
+	echo "Building example.cpp => ./example ..."
+	g++ example.cpp harfbuzz.o -DSSF_HARFBUZZ_ENABLED -DSSF_HARFBUZZ_IMPL_HANDLED -std=c++17 $OPT -g  -o hb_example -fmax-errors=5 `pkg-config --cflags --libs sdl3` && \
+	echo "Done building hb_example"
+	}
+
 
 compile_producer_consumer() {
 	echo "Building producerConsumerExample.cpp => ./producerConsumerExample..."
@@ -24,15 +31,25 @@ compile_producer_consumer() {
 	echo "Done building producerConsumer!"
 	}
 
+hb_compile_producer_consumer() {
+	echo "Building producerConsumerExample.cpp => ./producerConsumerExample..."
+	g++ producerConsumerExample.cpp harfbuzz.o -DSSF_HARFBUZZ_ENABLED -DSSF_HARFBUZZ_IMPL_HANDLED -std=c++17 $OPT -g  -o hb_producerConsumerExample -fmax-errors=5 `pkg-config --cflags --libs sdl3` && \
+	echo "Done building hb_producerConsumer!"
+	}
+
 
 compile_harfbuzz
 
 compile_example & pid1=$!
 compile_producer_consumer & pid2=$!
+hb_compile_example & pid3=$!
+hb_compile_producer_consumer & pid4=$!
 
 status=0
 wait $pid1 || status=$?
 wait $pid2 || status=$?
+wait $pid3 || status=$?
+wait $pid4 || status=$?
 
 
 exit $status
