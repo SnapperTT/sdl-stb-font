@@ -63,7 +63,7 @@ Ukrainian: Я можу їсти шкло, й воно мені не пошкод
 Armenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\n\
 Georgian: მინას ვჭამ და არა მტკივა.\n\
 Hindi: मैं काँच खा सकता हूँ, मुझे उस से कोई पीडा नहीं होती.\n\
-Hebrew: אני יכול לאכול זכוכית וזה לא מזיק לי.\n\
+Hebrew: אני יכול לאכול זכוכית וזה לא מזיק לי. \n\
 Arabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\n\
 Thai: ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ \n\
 Chinese: 我能吞下玻璃而不伤身体。\n\
@@ -78,7 +78,7 @@ sttfont_formatted_text formattedText;
 formattedText << sttfont_format::black << "Plain text "
 	<< sttfont_format::bold << "bold text "
 	<< sttfont_format::italic << "italic text\n"
-	<< sttfont_format::underline << sttfont_format::green << "underline text\t"
+	<< sttfont_format::underline << sttfont_format::green << "underline\t|\t|\ttext\t"
 	<< sttfont_format::strikethrough << "strikethrough text\n"
 	<< sttfont_format::red << sttfont_format::bold << "red bold\t"
 	<< sttfont_format::bold << "not red bold\t"

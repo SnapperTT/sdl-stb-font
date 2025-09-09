@@ -66,7 +66,7 @@ int main(int argc, char**argv) {
 
 //const std::string loremIpsum  = "أنا قادر على أكل الزجاج و هذا لا يؤلمن";
     
-const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol: €.\nGreek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\nÍslenska / Icelandic: Ég get etið gler án þess að meiða mig.\nPolish: Mogę jeść szkło, i mi nie szkodzi.\nRomanian: Pot să mănânc sticlă și ea nu mă rănește.\nUkrainian: Я можу їсти шкло, й воно мені не пошкодить.\nArmenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\nGeorgian: მინას ვჭამ და არა მტკივა.\nHindi: मैं काँच खा सकता हूँ, मुझे उस से कोई पीडा नहीं होती.\nHebrew: אני יכול לאכול זכוכית וזה לא מזיק לי.\nArabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\nThai: ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ \nChinese: 我能吞下玻璃而不伤身体。\nChinese (Traditional): 我能吞下玻璃而不傷身體。 \nJapanese: 私はガラスを食べられます。それは私を傷つけません。\nKorean: 률로 정한다. 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다\nCJK Variants: 判 与 海 直 約 返 次 今 ";
+const std::string loremIpsum = "\"I can eat glass\" sample text:\n\nEuro Symbol: €.\nGreek: Μπορώ να φάω σπασμένα γυαλιά χωρίς να πάθω τίποτα.\nÍslenska / Icelandic: Ég get etið gler án þess að meiða mig.\nPolish: Mogę jeść szkło, i mi nie szkodzi.\nRomanian: Pot să mănânc sticlă și ea nu mă rănește.\nUkrainian: Я можу їсти шкло, й воно мені не пошкодить.\nArmenian: Կրնամ ապակի ուտել և ինծի անհանգիստ չըներ։\nGeorgian: მინას ვჭამ და არა მტკივა.\nHindi: मैं काँच खा सकता हूँ, मुझे उस से कोई पीडा नहीं होती.\nHebrew: אני יכול לאכול זכוכית וזה לא מזיק לי. \nArabic: أنا قادر على أكل الزجاج و هذا لا يؤلمني.\nThai: ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ \nChinese: 我能吞下玻璃而不伤身体。\nChinese (Traditional): 我能吞下玻璃而不傷身體。 \nJapanese: 私はガラスを食べられます。それは私を傷つけません。\nKorean: 률로 정한다. 군사법원의 조직·권한 및 재판관의 자격은 법률로 정한다\nCJK Variants: 判 与 海 直 約 返 次 今 ";
 
 // Formatted text example
 // set (test = 5) to see
@@ -74,7 +74,7 @@ sttfont_formatted_text formattedText;
 formattedText << sttfont_format::black << "Plain text "
 	<< sttfont_format::bold << "bold text "
 	<< sttfont_format::italic << "italic text\n"
-	<< sttfont_format::underline << sttfont_format::green << "underline text\t"
+	<< sttfont_format::underline << sttfont_format::green << "underline\t|\t|\ttext\t"
 	<< sttfont_format::strikethrough << "strikethrough text\n"
 	<< sttfont_format::red << sttfont_format::bold << "red bold\t"
 	<< sttfont_format::bold << "not red bold\t"

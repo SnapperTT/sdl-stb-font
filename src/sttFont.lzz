@@ -433,6 +433,7 @@ struct sttfont_utf8 {
 		}
 	
 	/// Reads a utf8 codepoint from a string
+	/// c is &string[seek]
 	static uint32_t utf8_read(const char* c, uint32_t & seek, const uint32_t maxLen) {
 		if (!c) return 0;
 		int chsz = utf8_charsize(c);
@@ -836,12 +837,28 @@ public:
 		uint16_t fontIdx;
 		sttfont_font_list * font;
 		
-		inline findSubfontLookupHint() : fontIdx(-1), font(NULL) {}
+		uint16_t lastFontIdx;
+		sttfont_font_list * lastFont;
+		
+		inline findSubfontLookupHint() : fontIdx(-1), font(NULL), lastFontIdx(-1), lastFont(NULL) {}
 		};
 		
 	void findSubfontByIndexWHint(const uint16_t fontIdx, findSubfontLookupHint& mHint) {
 		// Checks if re-lookup is required. Result is stored in hint structure
 		if (fontIdx != mHint.fontIdx) {
+			if (fontIdx == mHint.lastFontIdx) {
+				// swap
+				printf("findSubfontByIndexWHint - SWAP!\n");
+				uint16_t fiTemp = mHint.fontIdx;
+				sttfont_font_list * fpTemp = mHint.font;
+				mHint.fontIdx = mHint.lastFontIdx;
+				mHint.font = mHint.lastFont;
+				mHint.lastFontIdx = fiTemp;
+				mHint.lastFont = fpTemp;
+				return;
+				}
+			mHint.lastFontIdx = mHint.fontIdx;
+			mHint.lastFont = mHint.font;
 			mHint.font = findSubfontByIndex(fontIdx);
 			mHint.fontIdx = fontIdx;
 			}
@@ -857,10 +874,14 @@ public:
 			w = w->next;
 			currentDepth++;
 			}
-		if (formatIdx)
-			return w->mFormatedVariants[formatIdx-1];
-		else
-			return w;
+		
+		printf("findSubfontByIndex %#04x, %i %i\n", w, formatIdx,  w ? w->mFormatedVariants.size() : -1);
+		
+		if (formatIdx) {
+			if (formatIdx-1 < w->mFormatedVariants.size())
+				return w->mFormatedVariants[formatIdx-1];
+			}
+		return w;
 		}
 	
 	int getKerningAdvance(const sttfont_glyph* G1, const sttfont_glyph* G2, const uint32_t cp1, const uint32_t cp2, findSubfontLookupHint& mHint) {
@@ -983,17 +1004,42 @@ public:
 	virtual void startManuallyBuffering(const bool beginBuffering) {}
 	virtual void endManuallyBuffering(const bool flush) {}
 	
-	
 	int processString (const int x, const int y, const char* c, const uint32_t maxLen, const sttfont_format * const format, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxWidth = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		onStartDrawing();
 		int r = processString_worker(x, y, c, maxLen, format, isDrawing, widthOut, heightOut, maxWidth, mHint, threshX, threshY, caretPosition, initialXOffset);
 		onCompletedDrawing();
 		return r;
 		}
-		
-	int processHarfbuzzChunk(const char* c, uint32_t maxLen, int& xx, int& yy, const sttfont_format * const format, const bool isDrawing, const uint32_t chunkStart, const uint32_t chunkEnd, const uint16_t fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, const int * maxWidth, const bool isLTR) {
+
+protected:
+	/// Finds the first fontIdx containing codepoint
+	/// Does a quick lookup of the hbFontLookup map first
+	uint16_t hbFindFontForCodepoint (const uint32_t codepoint, const uint8_t formatCode) {
+		const uint64_t target = getGlyphKey(codepoint, formatCode, 0, 0);
+	
+		auto it = hbFontLookup.find(target);
+		uint16_t gFontIdx = -1;
+		if (it == hbFontLookup.end()) {
+			// glyph not found. Find it and generate a mapping 
+			uint16_t fontIdx2;
+			int index2;
+			stbtt_fontinfo* mFont2;
+			mFont.fetchFontForCodepoint(codepoint, formatCode, &mFont2, &index2, &fontIdx2);
+			if (fontIdx2 != uint16_t(-1)) {
+				hbFontLookup[target] = fontIdx2;
+				gFontIdx = fontIdx2; 
+				}
+			}
+		else {
+			gFontIdx = it->second;
+			}
+		return gFontIdx;
+		}
+	
+	int processHarfbuzzChunk(const char* c, uint32_t maxLen, const int x0, int& xx, int& yy, const sttfont_format * const format, const bool isDrawing, const uint32_t chunkStart, const uint32_t chunkEnd, const uint16_t fontIdx, findSubfontLookupHint & fontLookupHint, int & overdraw, const int * maxWidth, const bool isLTR) {
 		#ifdef SSF_HARFBUZZ_ENABLED
-			findSubfontByIndexWHint(fontIdx, fontLookupHint);			
+			findSubfontByIndexWHint(fontIdx, fontLookupHint);
+			printf("findSubfontByIndexWHint %i %#04x\n", fontIdx, fontLookupHint.font);
 			if (!fontLookupHint.font) return xx; // no valid font (this should never be true)
 			
 			// shaping note: harfbuzz wants to read a few characters a bit before and after to get "context"
@@ -1012,12 +1058,13 @@ public:
 			hb_glyph_info_t *glyph_info    = hb_buffer_get_glyph_infos(hbShapingScratchpad, &glyph_count);
 			hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(hbShapingScratchpad, &glyph_count);
 			
-			printf("glyph count %i, fontIdx: %i, isLTR: %b, hb_font: %x, string: [%.*s], \n", int(glyph_count), fontIdx, isLTR, fontLookupHint.font->hbFont, chunkEnd-chunkStart, &c[chunkStart]);
+			printf("glyph count %i (%i), fontIdx: %i, isLTR: %b, hb_font: %x, string: [%.*s], \n", int(glyph_count), chunkEnd-chunkStart, fontIdx, isLTR, fontLookupHint.font->hbFont, chunkEnd-chunkStart, &c[chunkStart]);
 			
 			hb_position_t cursor_x = 0;
 			hb_position_t cursor_y = 0;
 			
 			for (unsigned int i = 0; i < glyph_count; i++) {
+				const uint32_t cluster = glyph_info[i].cluster;
 				hb_codepoint_t glyphid  = glyph_info[i].codepoint;
 				hb_position_t x_offset  = glyph_pos[i].x_offset;
 				hb_position_t y_offset  = glyph_pos[i].y_offset;
@@ -1028,10 +1075,61 @@ public:
 				//sttfont_utf8::utf8_encode(glyphid, &cbuff[0]);
 				//printf("(%#04x, %s) ", glyphid, cbuff);
 				
+				if (maxWidth) {
+					if (xx > *maxWidth) break;
+					}
+					
+				if (c[cluster] == '\t') {
+					// Tab
+					printf("Tab %i %i!\n", ((xx - x0)/tabWidth), x0 + (int((xx - x0)/tabWidth)+1)*tabWidth );
+					int nTabsSoFar = (xx - x0)/tabWidth;
+					xx = x0 + (nTabsSoFar+1)*tabWidth;
+					continue;
+					}
+				
+				uint8_t formatCode = 0;
+				if (format)
+					formatCode = format->format;
+				if (glyphid == 0) {
+					// We have to look up the glyph directly
+					uint32_t cluster2 = cluster;
+					uint32_t codepoint = sttfont_utf8::utf8_read(c + cluster2, cluster2, maxLen);
+					
+					printf("missing glypth %i %#04x [%c] %#04x [%c]\n", cluster - chunkStart, codepoint, codepoint, c[cluster], c[cluster]);
+					uint16_t newFontIdx = hbFindFontForCodepoint(codepoint, formatCode);
+					printf( " new font idx %i\n", newFontIdx ); 
+					if (newFontIdx == (uint16_t(-1)))
+						continue;
+					
+					// convert code point to glyph idx
+					findSubfontByIndexWHint(newFontIdx, fontLookupHint);
+					printf( " new font %#04x\n", fontLookupHint.font );
+					if (!fontLookupHint.font)
+						continue;
+					
+					int index2 = stbtt_FindGlyphIndex(&fontLookupHint.font->mFont, codepoint);
+					
+					printf( " index2 %i\n", index2 );
+					
+					if (!index2)
+						continue;
+					
+					
+					if (isDrawing) {
+						sttfont_glyph* G = hbGetGlyphOrTofu(newFontIdx, index2, formatCode);
+						
+						printf( " G %#04x, %i, %i \n", G, x_offset, y_offset );
+						
+						if (G) {
+							// Harfbuzz doesn't know the glyph size because its not in the font used for shaping
+							// We'll use the stb font metrics here
+							drawGlyph(G, xx, yy, format, formatCode, 0, overdraw);
+							xx += scale*G->advance;
+							}
+						}
+					continue;
+					}
 				if (isDrawing) {
-					uint8_t formatCode = 0;
-					if (format)
-						formatCode = format->format;
 					sttfont_glyph* G = hbGetGlyphOrTofu(fontIdx, glyphid, formatCode);
 					if (G)
 						drawGlyph(G, xx + x_offset*hbScaleFactor, yy + y_offset*hbScaleFactor, format, formatCode, 0, overdraw);
@@ -1039,10 +1137,6 @@ public:
 				
 				xx += x_advance*hbScaleFactor;
 				//yy += y_advance;
-					
-				if (maxWidth) {
-					if (xx > *maxWidth) break;
-					}
 				}
 			//printf("\n");
 		#endif //SSF_HARFBUZZ_ENABLED
@@ -1087,7 +1181,7 @@ public:
 		// scan for chunk, shape chunk, process chunk, move to next chunk
 		
 		uint32_t chunkStart = 0;
-		uint16_t currentFont = -1;
+		uint16_t currentFont = -1; 
 		uint32_t len = maxLen;
 		
 		bool isLTR = true;
@@ -1097,23 +1191,25 @@ public:
 			uCharLast = uChar;
 			uChar = sttfont_utf8::utf8_read(c+seekLast, seek, maxLen); // seek is now at the character *after* uChar
 			if (uChar == 0) {
-				len = seek;
+				len = seek - 1;
 				break;
 				}
 			if (uChar == 0x20) continue;// && uChar <= 0x40) continue; // do not break on whitespace
-
+					
 			if (uChar == '\n') {
 				// End current chunk before newline
 				if (chunkStart < seekLast) {
-					printf("chunkEnd 1\n");
-					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+					if (currentFont == uint16_t(-1))
+						currentFont = 0; // assume that we're using the first font. (needed for processing punctiation/whitespace only strings
+					printf("chunkEnd 1: working string: [%.*s]\n", seekLast-chunkStart, c + chunkStart);
+					xx = processHarfbuzzChunk(c, maxLen, x, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 					}
 
 				// Move to next line
 				yy += scale*rowSize;
 				if (widthOut)
 					if (*widthOut < xx) *widthOut = xx;
-				xx = xxl;
+				xx = x;
 
 				// Skip the newline and start new chunk
 				chunkStart = seek; // seek is after uChar
@@ -1124,34 +1220,29 @@ public:
 			// note that we're looking up in codepoint mode, and then
 			// using the hbFontLookup table to get the fontIdx
 			const uint8_t formatCode = format ? format->format : 0;
-			const uint64_t target = getGlyphKey(uChar, formatCode, 0, 0);
-			auto it = hbFontLookup.find(target);
-			uint16_t gFontIdx = 0;
-			if (it == hbFontLookup.end()) {
-				// glyph not found. Generate it
-				uint16_t fontIdx2;
-				int index2;
-				stbtt_fontinfo* mFont2;
-				//			int index = stbtt_FindGlyphIndex(&(working->mFont), codepoint);
-				mFont.fetchFontForCodepoint(uChar, formatCode, &mFont2, &index2, &fontIdx2);
-				if (fontIdx2 != uint16_t(-1)) {
-					hbFontLookup[target] = fontIdx2;
-					gFontIdx = fontIdx2; 
-					}
-				}
-			else {
-				gFontIdx = it->second;
-				}
+			uint16_t gFontIdx = hbFindFontForCodepoint(uChar, formatCode);
 			
 			if (currentFont == uint16_t(-1)) {
 				currentFont = gFontIdx;
 				}
 			else if (currentFont != gFontIdx) {
 				// Font change → emit chunk
-				#warning ToDo: Do not break fonts based on punctuation, if the punctuation mark exists in currentFont
+				
+				// Do not chunk based on punctation if the target punct exsits in the current font
+				// This is important for RTL scripts such as Hebrew and Arabic
+				if ((uChar <= 0x40) || (uChar >= 0x5B && uChar <= 0x60) || (uChar >= 0x7B && uChar <= 0x7E)) {
+					findSubfontByIndexWHint(currentFont, fontLookupHint);
+					if (fontLookupHint.font) {
+						int index = stbtt_FindGlyphIndex(&(fontLookupHint.font->mFont), uChar);
+						if (index) {
+							continue;
+							}
+						}
+					}
+				
 				if (chunkStart < seekLast) {
 					printf("chunkEnd 2. CurrentFont %i, G->fontIdx %i, uCharLast: %#04x, uChar: %#04x, working string: [%.*s]\n", currentFont, gFontIdx, uCharLast, uChar, seekLast-chunkStart, c + chunkStart);
-					xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+					xx = processHarfbuzzChunk(c, maxLen, x, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 					}
 				currentFont = gFontIdx;
 				chunkStart = seekLast;
@@ -1162,8 +1253,11 @@ public:
 
 		// Flush final chunk
 		if (chunkStart < len) {
-			printf("chunkEnd 3\n");
-			xx = processHarfbuzzChunk(c, maxLen, xx, yy, format, isDrawing, chunkStart, seekLast, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
+			//if (!c[len]) len--;
+			if (currentFont == uint16_t(-1))
+				currentFont = 0; // assume that we're using the first font. (needed for processing punctiation/whitespace only strings
+			printf("chunkEnd 3: working string: [%.*s]\n", len-chunkStart, c + chunkStart);
+			xx = processHarfbuzzChunk(c, maxLen, x, xx, yy, format, isDrawing, chunkStart, len, currentFont, fontLookupHint, overdraw, maxWidth, isLTR);
 			}
 
 		
@@ -1236,7 +1330,8 @@ public:
 			}
 		return xx;
 		}
-
+		
+public:
 	int processFormatted(const sttfont_formatted_text & text, int x, int y, const bool isDrawing, int * const widthOut = NULL, int * const heightOut = NULL, const int * const maxHeight = NULL, sttfont_lookupHint * mHint = NULL, const int * const threshX = NULL, const int * const threshY = NULL, int * const caretPosition = NULL, int initialXOffset = 0) {
 		onStartDrawing();
 		int ret = processFormatted_worker(text, x, y, isDrawing, widthOut, heightOut, maxHeight, mHint, threshX, threshY, caretPosition, initialXOffset);
@@ -1406,12 +1501,6 @@ public:
 			return hbGetGlyphOrTofu(fontIdx, intIdx, 0);
 		
 		return NULL;
-		}
-		
-	virtual void drawHbGlyph (const int x, const int y, const uint16_t fontIdx, const uint16_t intIdx, const sttfont_format * const format, const uint8_t formatCode) {
-		// Draws the character
-		// Note that harfbuzz's hb_shape() returns index of the glyph in the font (@intIdx)
-		#warning remove me
 		}
 		
 	/// Creates a SDL_Texture of a suitable size and renders an entire string to it
