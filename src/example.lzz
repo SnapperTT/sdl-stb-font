@@ -74,7 +74,7 @@ sttfont_formatted_text formattedText;
 formattedText << sttfont_format::black << "Plain text "
 	<< sttfont_format::bold << "bold text "
 	<< sttfont_format::italic << "italic text\n"
-	<< sttfont_format::underline << sttfont_format::green << "underline\t|\t|\ttext\t"
+	<< sttfont_format::underline << sttfont_format::green << "underline text\t"
 	<< sttfont_format::strikethrough << "strikethrough text\n"
 	<< sttfont_format::red << sttfont_format::bold << "red bold\t"
 	<< sttfont_format::bold << "not red bold\t"
