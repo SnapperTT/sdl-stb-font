@@ -48,10 +48,6 @@ int main(int argc, char**argv) {
 // This does not support HarfBuzz or FriBidi
 // 
 
-//const std::string loremIpsum  = "ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ ";
-
-//const std::string loremIpsum  = "أنا قادر على أكل الزجاج و هذا لا يؤلمن";
-    
 const std::string loremIpsum = "\"I can eat glass\" sample text:\n\
 \n\
 Euro Symbol: €.\n\
@@ -137,13 +133,7 @@ formattedText << sttfont_format::black << "Plain text "
 		readFileRaw_toMemory("fonts/NotoSansArabic-Regular.ttf", notoSansArabic);
 		readFileRaw_toMemory("fonts/NotoSansThai-Regular.ttf", notoSansThai);
 		readFileRaw_toMemory("fonts/NotoSansCJKjp-Regular.otf", notoSansCJK);
-		
-		#warning remove me
-		
-		//fc.loadFontManaged(notoSansArabic);
-		//fc.loadFontManaged(notoSansThai);
-		
-		
+				
 		fc.loadFontManaged(notoSans);
 			fc.addFormatFontManaged(sttfont_format::FORMAT_BOLD, notoSansBold);
 			fc.addFormatFontManaged(sttfont_format::FORMAT_ITALIC, notoSansItalic);

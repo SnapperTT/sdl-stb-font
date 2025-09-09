@@ -2,6 +2,8 @@ SDL STB Font Renderer
 =====================
 A header-only library for rendering text in pure [SDL3](https://www.libsdl.org/) with [STB_Truetype](https://github.com/nothings/stb). This caches glyphs as they are drawn allowing for fast text rendering. It also provides a couple of easy ways to render a string to texture for even faster text rendering.
 
+New (2025)! HarfBuzz Support! Just add `#define SSF_HARFBUZZ_ENABLED` and go!
+
 New (2025)! Upgraded to SDL3! You can still use SDL2 by accessing the SDL2 branch
 
 New (2022)! Can prerender in multithreaded enviroments with `producerConsumerFrontend.h`!
@@ -29,6 +31,7 @@ Liam Twigger - @SnapperTheTwig
 * UTF-8 support
 * Handles newlines and tabs
 * Fallback fonts support - can support many languages at once!
+* Optional Harfbuzz shaping support
 * Only ~1000 lines of code
 * No dependencies apart from STB_Truetype, SDL and standard libraries
 * Automatic or manual memory management
@@ -63,6 +66,7 @@ How Do I?
 * [Write A Custom Frontend](#write-a-custom-backend)
 * [Generate Text From One Thread and Render In Another](#generate-text-from-one-thread-and-render-in-another)
 * [Lock Free Producer Consumer Queue](#lock-free-producer-consumer-queue)
+* [Use Harfbuzz](#use-harfbuzz)
 
 Formatted Text:
 * [Print Formatted Text?](#print-formatted-text)
@@ -362,6 +366,14 @@ while (mPcCache.receiveFromProducer()) {
 	delete mPcCache.getUserdata(); // if we're using heap allocated userdata here is how to clear it
 	}
 ```
+
+## Use Harfbuzz
+This library supports [harbfuzz](https://github.com/harfbuzz/harfbuzz) shaping. To enable it simply define the macro `#define SSF_HARFBUZZ_ENABLED` before including the header. This library can automatically split utf-8 strings by font and parse the sub-strings to harfbuzz for shaping. Punctuation is not split, so sections of RTL scripts (such as Arabic or Hebrew) should render correctly inline with LTR text.
+
+If harfbuzz mode is enabled the library will try to include `harfbuzz.h` and `harfbuzz.cc`. You can disable this behaviour with the macros `#define SSF_HARFBUZZ_INCLUDE_HANDLED` and `#define SSF_HARFBUZZ_IMPL_HANDLED` to disable including `harfbuzz.h` and `harfbuzz.cc` respectively.
+
+If you do not use harfbuzz then this library will use its own shaping system that only supports LTR text.
+
 
 Formatted Text
 ==============
