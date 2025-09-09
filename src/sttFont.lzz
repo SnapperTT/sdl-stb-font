@@ -1231,6 +1231,7 @@ protected:
 				// Do not chunk based on punctation if the target punct exsits in the current font
 				// This is important for RTL scripts such as Hebrew and Arabic
 				if ((uChar <= 0x40) || (uChar >= 0x5B && uChar <= 0x60) || (uChar >= 0x7B && uChar <= 0x7E)) {
+					continue;
 					findSubfontByIndexWHint(currentFont, fontLookupHint);
 					if (fontLookupHint.font) {
 						int index = stbtt_FindGlyphIndex(&(fontLookupHint.font->mFont), uChar);
