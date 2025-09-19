@@ -1789,7 +1789,7 @@ void sttfont_font_list::fetchFontForCodepoint (uint32_t const codepoint, uint8_t
 							int nBits = 0;
 							#if defined(_MSC_VER)
 								nBits = __popcnt(mask);
-							#elseif defined(__GNUC__) || defined(__clang__)
+							#elif defined(__GNUC__) || defined(__clang__)
 								nBits = __builtin_popcount(mask);
 							#else
 								for (int i2 = 0; i2 < 7; ++i2)
