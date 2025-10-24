@@ -140,6 +140,22 @@ namespace stt {
 #ifndef SSF_STT_STL_ALLOCATOR_ENABLED
 	#define SSF_STT_STL_ALLOCATOR_ENABLED 0
 #endif
+
+namespace sttfont {
+	template<typename T>
+	inline void allocator_aware_move_or_copy(T& dst, T& src) {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			// Same allocator? Move. Different allocator? copy
+			if (dst.getCustomAllocator() == src.getCustomAllocator())
+				dst = std::move(src);
+			else
+				dst = src;
+			return;
+		#else
+			dst = std::move(src);
+		#endif
+		}
+	}
 #define LZZ_INLINE inline
 struct sttfont_lookupHint
 {
@@ -250,6 +266,7 @@ struct sttfont_formatted_text_item
   sttfont_formatted_text_item (SSF_STRING_MS _text, sttfont_format const & _format);
   sttfont_formatted_text_item & setCallback (sttfont_format_callback * _cb);
   void setAllocator (stt::allocatorI * alloc);
+  stt::allocatorI * getCustomAllocator () const;
   static void sttr_register ();
   void * sttr_getClassSig () const;
   char const * sttr_getClassName () const;
@@ -875,6 +892,13 @@ void sttfont_formatted_text_item::setAllocator (stt::allocatorI * alloc)
 			text.setAllocator(alloc);
 		#endif
 		}
+stt::allocatorI * sttfont_formatted_text_item::getCustomAllocator () const
+                                                    {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			return text.getCustomAllocator();
+		#endif
+		return NULL;
+		}
 void sttfont_formatted_text_item::sttr_register ()
                                     {
 		#ifdef STTR_ENABLED
@@ -1002,13 +1026,7 @@ void sttfont_formatted_text::allocatorAwareAssign (sttfont_formatted_text const 
 void sttfont_formatted_text::allocatorAwareAssignMv (sttfont_formatted_text_MS other)
                                                                      {
 		// moving other -> this, keeping this' allocator
-		#if SSF_STT_STL_ALLOCATOR_ENABLED
-			if (mItems.getCustomAllocator())
-				return allocatorAwareAssign(other);
-			//if (other.mItems.getCustomAllocator())
-			//	mItems = std::move(other.items); // stt::vector(stt::vector&&) will auto-move allocator
-		#endif
-		mItems = std::move(other.mItems);
+		sttfont::allocator_aware_move_or_copy(mItems, other.mItems);
 		activeFormat = other.activeFormat;
 		}
 void sttfont_formatted_text::sttr_register ()
@@ -1239,6 +1257,7 @@ void sttfont_formatted_text::append_plaintext_BUF (char const * str, uint32_t co
 		//	if (strcmp("Render Thread", str) == 0 && !mItems.getCustomAllocator())
 		//		abort();
 		#endif
+		
 		mItems.push_back(std::move(ti));
 		}
 void sttfont_formatted_text::append (sttfont_formatted_text_MS obj)

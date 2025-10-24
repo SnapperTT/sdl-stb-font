@@ -7,6 +7,22 @@ namespace stt {
 #ifndef SSF_STT_STL_ALLOCATOR_ENABLED
 	#define SSF_STT_STL_ALLOCATOR_ENABLED 0
 #endif
+
+namespace sttfont {
+	template<typename T>
+	inline void allocator_aware_move_or_copy(T& dst, T& src) {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			// Same allocator? Move. Different allocator? copy
+			if (dst.getCustomAllocator() == src.getCustomAllocator())
+				dst = std::move(src);
+			else
+				dst = src;
+			return;
+		#else
+			dst = std::move(src);
+		#endif
+		}
+	}
 #end
 
 /// Lookup Hint
@@ -294,6 +310,14 @@ struct sttfont_formatted_text_item {
 			text.setAllocator(alloc);
 		#endif
 		}
+		
+	stt::allocatorI* getCustomAllocator() const {
+		#if SSF_STT_STL_ALLOCATOR_ENABLED
+			return text.getCustomAllocator();
+		#endif
+		return NULL;
+		}
+	//inline stt::allocatorI* __sttstl_getCustomAllocator() const { return getCustomAllocator(); } // this signutre is required for allocator aware stt::vector::push_back(t&& v)
 	
 	static void sttr_register() {
 		#ifdef STTR_ENABLED
@@ -399,13 +423,7 @@ struct sttfont_formatted_text {
 		}
 	void allocatorAwareAssignMv(sttfont_formatted_text_MS other) {
 		// moving other -> this, keeping this' allocator
-		#if SSF_STT_STL_ALLOCATOR_ENABLED
-			if (mItems.getCustomAllocator())
-				return allocatorAwareAssign(other);
-			//if (other.mItems.getCustomAllocator())
-			//	mItems = std::move(other.items); // stt::vector(stt::vector&&) will auto-move allocator
-		#endif
-		mItems = std::move(other.mItems);
+		sttfont::allocator_aware_move_or_copy(mItems, other.mItems);
 		activeFormat = other.activeFormat;
 		}
 
@@ -633,6 +651,7 @@ struct sttfont_formatted_text {
 		//	if (strcmp("Render Thread", str) == 0 && !mItems.getCustomAllocator())
 		//		abort();
 		#endif
+		
 		mItems.push_back(std::move(ti));
 		}
 		

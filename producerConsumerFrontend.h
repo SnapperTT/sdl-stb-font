@@ -416,7 +416,7 @@ pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, SS
 			sttfont_formatted_text tmp;
 		#endif
 		tmp += str;
-		
+			
 		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
 			assert(tmp.mItems.getCustomAllocator() == &alloc);
 		#endif
@@ -459,6 +459,7 @@ pcfc_handle producer_consumer_font_cache::pushText (int const x, int const y, st
 			int xx = processFormatted(str, x, y, false, widthOut, heightOut);
 			if (xOut) *xOut = xx;
 			}
+			
 		#if SSF_STACK_TEMPORATY_ALLOCATOR_ENABLED
 			SSF_STACK_TEMPORATY_ALLOCATOR alloc;
 			pcfc_formatted_text p;
