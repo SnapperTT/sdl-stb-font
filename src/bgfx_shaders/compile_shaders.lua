@@ -6,14 +6,15 @@
 -- 			-d/-debug - only compile GLSL
 --			-f - only do the frag
 --			-v - only do the vert
+--			-compute - builds as a compute shader (looks for filename.cs)
 --			-vdef - specify a varying.def Eg: -vdef foo will make this look for varying_foo.def
 -- 			-dx11 - only compile HLSL for dx11. (Warning: HLSL will not compile on non-windows machines)
 --          -c  - only build a c header file containing all the binary shaders that exist.
 --			-p	- ammends a path to the input file - use this if invoking this script from some weird directory
 --			-D VALUE - #defines VALUE in the shaders that are being compiled. Can use -D VAL1 -D VAL2 etc.. for multiple defines
+--			-THREAD_ID VALUE - For parallel builds (eg invoked by build_all.lua), this is the thread id
 --		The following are used to override defaults defined in this file
 --			-C_DO - compile c header shaders?
---			-DX9_DO - compile DX9 shaders? (NOTE: 2025 - DX9 shader compile has been disabled as it has been removed from bgfx)
 --			-DX11_DO - compile DX11/DX12 shaders?
 --			-NACL_DO - compile NACL shaders?
 --			-ANDROID_DO - compile ANDRIOD shaders?
@@ -23,14 +24,15 @@
 --			-SPRIV_DO - compile SPRIV shaders?
 -- 
 -- Here be dragons, I have no idea what I was thinking while writing this
-
 INPUT_FILE = false;
 OUTPUT_FILE = false;
 VDEF_FILE = false;
 DEFS = {}
 GLSL_ONLY = false;
 HLSL_ONLY = false;
+IS_COMPUTE= false;
 C_ONLY = false;
+THREAD_ID = nil
 
 local arg={...}
 
@@ -55,6 +57,8 @@ for i=1,#arg do
 	elseif (arg[i] == "-v") then
 		doFrag = false;
 		doVert = true;
+	elseif (arg[i] == "-compute") then
+		IS_COMPUTE = true;
 	elseif (arg[i] == "-p") then
 		INPUT_PREFIX = arg[i+1];
 		i=i+1;
@@ -72,8 +76,6 @@ for i=1,#arg do
 		i=i+1;
 	elseif (arg[i] == "-C_DO") then
 		GLOBAL_C_DO = true;
-	elseif (arg[i] == "-DX9_DO") then
-		GLOBAL_DX9_DO = true;
 	elseif (arg[i] == "-DX11_DO") then
 		GLOBAL_DX11_DO = true;
 	elseif (arg[i] == "-NACL_DO") then
@@ -90,8 +92,6 @@ for i=1,#arg do
 		GLOBAL_SPRIV_DO = true;
 	elseif (arg[i] == "-C_DONT") then
 		GLOBAL_C_DO = false;
-	elseif (arg[i] == "-DX9_DONT") then
-		GLOBAL_DX9_DO = false;
 	elseif (arg[i] == "-DX11_DONT") then
 		GLOBAL_DX11_DO = false;
 	elseif (arg[i] == "-NACL_DONT") then
@@ -106,15 +106,31 @@ for i=1,#arg do
 		GLOBAL_ORBIS_DO = false;
 	elseif (arg[i] == "-SPRIV_DONT") then
 		GLOBAL_SPRIV_DO = false;
+	elseif (arg[i] == "-THREAD_ID") then
+		THREAD_ID = tonumber(arg[i+1]);
+		i=i+1;
 	end
 end
 
-if (not INPUT_FILE) then
-	print("compile_shaders.lua: ERROR: no input files!");
+if (IS_COMPUTE) then
+	doFrag = false;
+	doVert = false;
+end
+
+local THREAD_STR=""
+if (THREAD_ID) then
+	print("ERROR: THREAD_ID!", THREAD_ID);
+	THREAD_STR=" [Thread "..THREAD_ID.."] ";
 	os.exit(false);
 end
 
-print ("INPUT_FILE", INPUT_FILE, INPUT_PREFIX)
+if (not INPUT_FILE) then
+	print(THREAD_STR.."ERROR: compile_shaders.lua: no input files!");
+	os.exit(false);
+end
+
+
+--print ("INPUT_FILE", INPUT_FILE, INPUT_PREFIX)
 
 if (INPUT_PREFIX) then
 	INPUT_FILE = INPUT_PREFIX .. INPUT_FILE;
@@ -154,20 +170,15 @@ for i=1,5 do
 	if (file_exists(CC)) then goto found_cc end
 end
 
-print ("Failed to find tools/shadercRelease!");
+print (THREAD_STR.."ERROR: Failed to find tools/shadercRelease!");
 os.exit(false);
 ::found_cc::
 --CC="wine "..CC..".exe";
-print ("Found shaderc: "..CC)
+--print (THREAD_STR.."Found shaderc: "..CC)
 
 CFLAGS=fixPath(" -i . -i include/ -i ../include/ ")
 
 -- Flags for different targets
-DX9_VS_FLAGS="--platform windows -p vs_4_0 -O 3"
-DX9_FS_FLAGS="--platform windows -p ps_4_0 -O 3"
-DX9_SHADER_PATH="dx9"
-DX9_DO = true;
-
 DX11_VS_FLAGS="--platform windows -p vs_5_0 -O 3"
 DX11_FS_FLAGS="--platform windows -p ps_5_0 -O 3"
 DX11_CS_FLAGS="--platform windows -p cs_5_0 -O 1"
@@ -176,14 +187,15 @@ DX11_DO = true;
 
 NACL_VS_FLAGS="--platform nacl"
 NACL_FS_FLAGS="--platform nacl"
+NACL_CS_FLAGS="--platform nacl"
 NACL_SHADER_PATH="esslnacl"
 NACL_DO = false;
 
-ANDROID_VS_FLAGS="--platform android"
-ANDROID_FS_FLAGS="--platform android"
-ANDROID_CS_FLAGS="--platform android"
-ANDROID_SHADER_PATH="esslandroid"
-ANDROID_DO = false;
+ANDROID_VS_FLAGS="--platform android -p 300_es"
+ANDROID_FS_FLAGS="--platform android -p 300_es"
+ANDROID_CS_FLAGS="--platform android -p 300_es"
+ANDROID_SHADER_PATH="essl"
+ANDROID_DO = true;
 
 GLSL_VS_FLAGS="--platform linux -p 120"
 GLSL_FS_FLAGS="--platform linux -p 120"
@@ -213,7 +225,6 @@ C_SHADER_PATH="c"
 C_DO = true;
 
 if (GLSL_ONLY) then
-	DX9_DO = false;
 	DX11_DO = false;
 	NACL_DO = false;
 	ANDROID_DO = false;
@@ -223,7 +234,6 @@ if (GLSL_ONLY) then
 end
 
 if (HLSL_ONLY) then
-	DX9_DO = true;
 	DX11_DO = true;
 	NACL_DO = false;
 	ANDROID_DO = false;
@@ -233,7 +243,6 @@ if (HLSL_ONLY) then
 end
 
 if (GLOBAL_C_DO ~= nil) then C_DO = GLOBAL_C_DO; end -- Used invoking this from other scripts to override value
-if (GLOBAL_DX9_DO ~= nil) then DX9_DO = GLOBAL_DX9_DO; end
 if (GLOBAL_DX11_DO ~= nil) then DX11_DO = GLOBAL_DX11_DO; end
 if (GLOBAL_NACL_DO ~= nil) then NACL_DO = GLOBAL_NACL_DO; end
 if (GLOBAL_ANDROID_DO ~= nil) then ANDROID_DO = GLOBAL_ANDROID_DO; end
@@ -253,7 +262,17 @@ function buildCommand (path, inputFile, vdefFile, shaderOutputPath, outputFile, 
 	local opPrefix = "vs_";
 	
 	if (isFragment) then vtype = "f"; opPrefix = "fs_"; end
-	local r = CC .. " -f "..path..opPrefix..inputFile..".sc --varyingdef "..path.."varying_"..vdefFile..".def.sc -o "..getBinOutput(path, shaderOutputPath, opPrefix, outputFile).." --type "..vtype.." " .. CFLAGS .. " " .. sFlags;
+	
+	local outDirPath = fixPath(path.."../"..shaderOutputPath);
+	
+	local r = "";
+	if (vdefFile) then
+		r = CC .. " -f "..path..opPrefix..inputFile..".sc --varyingdef "..path.."varying_"..vdefFile..".def.sc -o "..getBinOutput(path, shaderOutputPath, opPrefix, outputFile).." --type "..vtype.." " .. CFLAGS .. " " .. sFlags;
+	else
+		vtype = c;
+		opPrefix = "cs_";
+		r = CC .. " -f "..path..opPrefix..inputFile..".sc -o "..getBinOutput(path, shaderOutputPath, opPrefix, outputFile).." --type c " .. CFLAGS .. " " .. sFlags;
+	end
 
 	r = r .. " --define " .. inputFile:upper();
 	if (defs and #defs > 0) then
@@ -269,27 +288,28 @@ function buildCommand (path, inputFile, vdefFile, shaderOutputPath, outputFile, 
 		end
 	end
 
-	return fixPath(r);
+	return { fixPath(r), outDirPath };
 end
 
 
-function buildC (path, inputFile, outputFile, isFragment)
+function buildC (path, inputFile, outputFile, isFragment, isCompute)
 	local vtype = "v";
 	local opPrefix = "vs_";
 	if (isFragment) then vtype = "f"; opPrefix = "fs_"; end
+	if (isCompute) then vtype = "c"; opPrefix = ""; end
 	
-	local wo = getBinOutput(path, C_SHADER_PATH, opPrefix, outputFile, ".bin.h");
+	local wo = fixPath(getBinOutput(path, C_SHADER_PATH, opPrefix, outputFile, ".bin.h"));
+	local wd = getPath(wo);
 	
 	local r = ""
 	r = r .. xxd(getBinOutput(path, GLSL_SHADER_PATH, opPrefix, outputFile), "_"..GLSL_SHADER_PATH, not GLSL_DO);
-	r = r .. xxd(getBinOutput(path, DX9_SHADER_PATH, opPrefix, outputFile), "_"..DX9_SHADER_PATH, not DX9_DO);
 	r = r .. xxd(getBinOutput(path, DX11_SHADER_PATH, opPrefix, outputFile), "_"..DX11_SHADER_PATH, not DX11_DO);
 	r = r .. xxd(getBinOutput(path, METAL_SHADER_PATH, opPrefix, outputFile), "_"..METAL_SHADER_PATH, not METAL_DO);
 	r = r .. xxd(getBinOutput(path, SPRIV_SHADER_PATH, opPrefix, outputFile), "_"..SPRIV_SHADER_PATH, not SPRIV_DO); 
 	r = r .. xxd(getBinOutput(path, ANDROID_SHADER_PATH, opPrefix, outputFile), "_"..ANDROID_SHADER_PATH, not ANDROID_DO); 
 	r = r .. xxd(getBinOutput(path, ORBIS_SHADER_PATH, opPrefix, outputFile), "_"..ORBIS_SHADER_PATH, not ORBIS_DO); 
 	r = r .. xxd(getBinOutput(path, NACL_SHADER_PATH, opPrefix, outputFile), "_"..NACL_SHADER_PATH, not NACL_DO); 
-	return r, wo;
+	return r, wo, wd;
 end
 
 function buildShader (inputFile, outputFile, vdefFile, defs)
@@ -309,16 +329,15 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 		vdefFile = inputFile;
 	end
 	
-	print ("PATH:", path)
-	print ("INPUT:", inputFile)
-	print ("Varying.def: " .. path .. "varying_"..vdefFile..".def.sc")
-	print ("Compile Frag: " .. tostring(doFrag) .. ", Source: " .. path.."fs_"..inputFile..".sc")
-	print ("Compile Vert: " .. tostring(doVert) .. ", Source: " .. path.."vs_"..inputFile..".sc")
-	print ("")
-	print ("Building shader \""..path..inputFile.."\" to \""..path..outputFile.."\"")
+	--print (THREAD_STR.."PATH:", path)
+	--print (THREAD_STR.."INPUT:", inputFile)
+	--print (THREAD_STR.."Varying.def: " .. path .. "varying_"..vdefFile..".def.sc")
+	--print (THREAD_STR.."Compile Frag: " .. tostring(doFrag) .. ", Source: " .. path.."fs_"..inputFile..".sc")
+	--print (THREAD_STR.."Compile Vert: " .. tostring(doVert) .. ", Source: " .. path.."vs_"..inputFile..".sc")
+	--print ("")
+	print (THREAD_STR.."Building shader \""..path..inputFile.."\" to \""..path..outputFile.."\"")
 
 	local cf_glsl  = buildCommand (path, inputFile, vdefFile, GLSL_SHADER_PATH, outputFile, true, GLSL_FS_FLAGS, defs);
-	local cf_dx9   = buildCommand (path, inputFile, vdefFile, DX9_SHADER_PATH, outputFile, true, DX9_FS_FLAGS, defs);
 	local cf_dx11  = buildCommand (path, inputFile, vdefFile, DX11_SHADER_PATH, outputFile, true, DX11_FS_FLAGS, defs);
 	local cf_metal = buildCommand (path, inputFile, vdefFile, METAL_SHADER_PATH, outputFile, true, METAL_FS_FLAGS, defs);
 	local cf_vk    = buildCommand (path, inputFile, vdefFile, SPRIV_SHADER_PATH, outputFile, true, SPRIV_FS_FLAGS, defs);
@@ -327,7 +346,6 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 	local cf_nacl  = buildCommand (path, inputFile, vdefFile, NACL_SHADER_PATH, outputFile, true, NACL_FS_FLAGS, defs);
 
 	local cv_glsl  = buildCommand (path, inputFile, vdefFile, GLSL_SHADER_PATH, outputFile, false, GLSL_VS_FLAGS, defs);
-	local cv_dx9   = buildCommand (path, inputFile, vdefFile, DX9_SHADER_PATH, outputFile, false, DX9_VS_FLAGS, defs);
 	local cv_dx11  = buildCommand (path, inputFile, vdefFile, DX11_SHADER_PATH, outputFile, false, DX11_VS_FLAGS, defs);
 	local cv_metal = buildCommand (path, inputFile, vdefFile, METAL_SHADER_PATH, outputFile, false, METAL_VS_FLAGS, defs);
 	local cv_vk    = buildCommand (path, inputFile, vdefFile, SPRIV_SHADER_PATH, outputFile, false, SPRIV_VS_FLAGS, defs);
@@ -335,16 +353,33 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 	local cv_pssl  = buildCommand (path, inputFile, vdefFile, ORBIS_SHADER_PATH, outputFile, false, ORBIS_VS_FLAGS, defs);
 	local cv_nacl  = buildCommand (path, inputFile, vdefFile, NACL_SHADER_PATH, outputFile, false, NACL_VS_FLAGS, defs);
 
+	local cc_glsl  = buildCommand (path, inputFile, nil, GLSL_SHADER_PATH, outputFile, false, GLSL_CS_FLAGS, defs);
+	local cc_dx11  = buildCommand (path, inputFile, nil, DX11_SHADER_PATH, outputFile, false, DX11_CS_FLAGS, defs);
+	local cc_metal = buildCommand (path, inputFile, nil, METAL_SHADER_PATH, outputFile, false, METAL_CS_FLAGS, defs);
+	local cc_vk    = buildCommand (path, inputFile, nil, SPRIV_SHADER_PATH, outputFile, false, SPRIV_CS_FLAGS, defs);
+	local cc_an    = buildCommand (path, inputFile, nil, ANDROID_SHADER_PATH, outputFile, false, ANDROID_CS_FLAGS, defs);
+	local cc_pssl  = buildCommand (path, inputFile, nil, ORBIS_SHADER_PATH, outputFile, false, ORBIS_CS_FLAGS, defs);
+	local cc_nacl  = buildCommand (path, inputFile, nil, NACL_SHADER_PATH, outputFile, false, NACL_CS_FLAGS, defs);
+
+	if (IS_COMPUTE) then
+		execc (cc_glsl, GLSL_DO)
+		execc (cc_dx11, DX11_DO)
+		execc (cc_metal, METAL_DO)
+		execc (cc_vk, SPRIV_DO)
+		execc (cc_an, ANDROID_DO)
+		execc (cc_pssl, ORBIS_DO)
+		execc (cc_nacl, NACL_DO)
+	end
+
 	if (not C_ONLY) then
-		if (GLSL_ONLY) then
+		if (false and GLSL_ONLY) then
 			execc (cv_glsl , doit and doVert)
 			execc (cf_glsl, doFrag)
-		elseif (HLSL_ONLY) then
+		elseif (false and HLSL_ONLY) then
 			execc (cv_dx11, doVert)
 			execc (cf_dx11, doFrag)
 		else
 			execc (cf_glsl, GLSL_DO and doFrag)
-			--execc (cf_dx9, DX9_DO and doFrag)
 			execc (cf_dx11, DX11_DO and doFrag)
 			execc (cf_metal, METAL_DO and doFrag)
 			execc (cf_vk, SPRIV_DO and doFrag)
@@ -353,7 +388,6 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 			execc (cf_nacl, NACL_DO and doFrag)
 			
 			execc (cv_glsl, GLSL_DO and doVert)
-			--execc (cv_dx9, DX9_DO and doVert)
 			execc (cv_dx11, DX11_DO and doVert)
 			execc (cv_metal, METAL_DO and doVert)
 			execc (cv_vk, SPRIV_DO and doVert)
@@ -365,17 +399,23 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 	
 	--if ((C_DO and not (GLSL_ONLY or HLSL_ONLY)) or C_ONLY) then
 	if (C_DO or C_ONLY) then
-		print ("Building c header file:");
+		print (THREAD_STR.."Building c header file:");
 		if (doVert) then
-			local c,cp = buildC (path, inputFile, outputFile, false);
+			local c,cp,cd = buildC (path, inputFile, outputFile, false);
 			print ("",cp);
+			if (cd:len() > 0) then
+				mkdirp(cd);
+			end
 			local fh = io.open (cp, "w+");
 			fh:write(c);
 			fh:close();
 		end
 		if (doFrag) then
-			local c,cp = buildC (path, inputFile, outputFile, true);
+			local c,cp,cd = buildC (path, inputFile, outputFile, true);
 			print ("",cp);
+			if (cd:len() > 0) then
+				mkdirp(cd);
+			end
 			local fh = io.open (cp, "w+");
 			fh:write(c);
 			fh:close();
@@ -383,12 +423,24 @@ function buildShader (inputFile, outputFile, vdefFile, defs)
 	end
 end
 
+function mkdirp (p)
+	if (isWindows) then
+		print(THREAD_STR..">> mkdir "..p);
+		os.execute("mkdir "..p);
+	else
+		print(THREAD_STR..">> mkdir -p "..p);
+		os.execute("mkdir -p "..p);
+	end
+end
+
 function execc (c, doit)
 	-- Calls "c" and kills this script if the command results in an error
 	if (doit == false) then return; end
-	print (">> "..c);
-	stat = os.execute(c);
-	if (not stat) then print ("Failed to compile!"); os.exit(false); end
+	
+	mkdirp(c[2]);
+	print (">> "..c[1]);
+	stat = os.execute(c[1]);
+	if (not stat) then print (THREAD_STR.."ERROR: Failed to compile!"); os.exit(false); end
 end
 
 function btyeToPrintable (b)
@@ -398,10 +450,11 @@ function btyeToPrintable (b)
 	return '.';
 end
 
-function xxd(fname, variableSuffix, dummy)
+function xxd(fname_a, variableSuffix, dummy)
 	-- Implements xxd -i
 	-- Forked from https://gist.github.com/cuhsat/cfa118f4398cae9e543b25cb5e19ecb6
 	-- By Christian Uhsat
+	local fname = fixPath(fname_a);
 	variableSuffix = variableSuffix or "";
 	local path = getPath(fname) or "";
 	local fnameWoPath = fname;
@@ -430,8 +483,8 @@ function xxd(fname, variableSuffix, dummy)
 	if (dummy) then
 		r = r .. (HEADER2:format(cSafeFname..variableSuffix));
 		r = r .. (LENGTH:format(cSafeFname..variableSuffix, #buf));
-		r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix)..")\n";
-		r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix).."_size)\n";
+		r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix).;;.")\n";
+		r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix).;;."_size)\n";
 		return r;
 	end
 	r = r .. (HEADER:format(cSafeFname..variableSuffix));
@@ -469,8 +522,8 @@ function xxd(fname, variableSuffix, dummy)
 	end
 
 	r = r .. (LENGTH:format(cSafeFname..variableSuffix, #buf));
-	r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix)..")\n";
-	r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix).."_size)\n";
+	r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix).;;.");\n";
+	r = r .. "BX_UNUSED("..(cSafeFname..variableSuffix).;;."_size);\n";
 	return r;
 end
 
