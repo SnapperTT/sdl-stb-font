@@ -1,0 +1,39 @@
+name: Notify Discord
+
+on:
+  push:
+    branches: 
+      - master
+      - main   # also trigger if the default branch is 'main'
+      
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      shortstat: ${{ steps.stats.outputs.shortstat }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - id: stats
+        run: |
+          # Get the stats string, e.g., "3 files changed, 15 insertions(+), 5 deletions(-)"
+          # We use xargs to trim whitespace
+          STAT=$(git diff --shortstat HEAD^ HEAD | xargs)
+          echo "shortstat=${STAT:-No changes}" >> $GITHUB_OUTPUT
+
+  call-discord:
+    needs: prepare
+    uses: SnapperTT/github-workflows/.github/workflows/discord-notify.yml@main
+    secrets:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+    with:
+      commit_msg: ${{ github.event.head_commit.message }}
+      branch: ${{ github.ref_name }}
+      sha: ${{ github.sha }}
+      author: ${{ github.event.head_commit.author.username }}
+      repo: ${{ github.repository }}
+      is_private: ${{ github.event.repository.private }}
+      # Passing the raw string as an input
+      stats_summary: ${{ needs.prepare.outputs.shortstat }}
