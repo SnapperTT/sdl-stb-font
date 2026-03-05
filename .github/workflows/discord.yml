@@ -20,7 +20,7 @@ jobs:
         run: |
           # Get the stats string, e.g., "3 files changed, 15 insertions(+), 5 deletions(-)"
           # We use xargs to trim whitespace
-          STAT=$(git diff --shortstat HEAD^ HEAD | xargs)
+          STAT=$(git diff --shortstat ${{ github.event.before }} ${{ github.sha }} | xargs)
           echo "shortstat=${STAT:-No changes}" >> $GITHUB_OUTPUT
 
   call-discord:
