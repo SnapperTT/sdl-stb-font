@@ -209,8 +209,8 @@ struct sttfont_format
   void combineWithColour (sttfont_format const & other);
   static sttfont_format color (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
   static sttfont_format colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a = 255);
-  static sttfont_format color_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b);
-  static sttfont_format colour_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b);
+  static sttfont_format color_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a);
+  static sttfont_format colour_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a);
   static sttfont_format const bold;
   static sttfont_format const italic;
   static sttfont_format const underline;
@@ -650,6 +650,10 @@ LZZ_INLINE bool sttfont_font_cache::isTofu (sttfont_glyph * G)
 	#endif
 #endif
 
+#ifndef STTR_REGF_ALIAS
+	#define REG_STTR_REGF_ALIAS 
+	#define STTR_REGF_ALIAS(C,X,A,F) regField<C,decltype(&C::X),F>(&C::X,#A).setUserFlags(F)
+#endif
 #define LZZ_INLINE inline
 sttfont_lookupHint::sttfont_lookupHint ()
   : index (0), workingLen (0), workingX (0), workingY (0), uCharLast (0), writeOut (false)
@@ -689,10 +693,10 @@ sttfont_format sttfont_format::color (uint8_t const _r, uint8_t const _g, uint8_
                                                                                                                    { sttfont_format ret(FORMAT_NONE,_r,_g,_b,_a); ret.flags |= FORMAT_FLAGS_COLOUR_SET; return ret; }
 sttfont_format sttfont_format::colour (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
                                                                                                                    { sttfont_format ret(FORMAT_NONE,_r,_g,_b,_a); ret.flags |= FORMAT_FLAGS_COLOUR_SET; return ret; }
-sttfont_format sttfont_format::color_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b)
-                                                                                                   { return color(_r,_g,_b,255); }
-sttfont_format sttfont_format::colour_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b)
-                                                                                                   { return colour(_r,_g,_b,255); }
+sttfont_format sttfont_format::color_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
+                                                                                                                     { return color(_r,_g,_b,_a); }
+sttfont_format sttfont_format::colour_luasafe (uint8_t const _r, uint8_t const _g, uint8_t const _b, uint8_t const _a)
+                                                                                                                     { return colour(_r,_g,_b,_a); }
 sttfont_format const sttfont_format::bold = sttfont_format(FORMAT_BOLD);
 sttfont_format const sttfont_format::italic = sttfont_format(FORMAT_ITALIC);
 sttfont_format const sttfont_format::underline = sttfont_format(FORMAT_UNDERLINE);
@@ -794,81 +798,80 @@ SSF_STRING sttfont_format::debugDump () const
 void sttfont_format::sttr_register ()
                                     {
 		#ifdef STTR_ENABLED
-		#define STTR_REGF_ALIAS(C,X,A,F) regField<C,decltype(&C::X),F>(&C::X,#A).setUserFlags(F)
 		// Reflection stuff - see snappertt/sttr on github for more info. You don't need STTR to use this library
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
 		R.beginClass<sttfont_format>("sttfont_format")
-			.STTR_REGF(sttfont_format,r,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_format,g,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_format,b,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_format,a,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_format,format,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_format,flags,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_format,r,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_format,g,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_format,b,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_format,a,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_format,format,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_format,flags,STTR_JSON_ENABLED)
 			
-			.STTR_REG(sttfont_format,clone)
-			.STTR_REG(sttfont_format,combine)
-			.STTR_REG(sttfont_format,combineWithColour)
+			.STTR_REG_METH(sttfont_format,clone,0)
+			.STTR_REG_METH(sttfont_format,combine,0)
+			.STTR_REG_METH(sttfont_format,combineWithColour,0)
 			
-			.STTR_REG(sttfont_format,setBold)
-			.STTR_REG(sttfont_format,setItalic)
-			.STTR_REG(sttfont_format,setUnderline)
-			.STTR_REG(sttfont_format,setStrikethrough)
-			.STTR_REG(sttfont_format,isBold)
-			.STTR_REG(sttfont_format,isItaic)
-			.STTR_REG(sttfont_format,isUnderline)
-			.STTR_REG(sttfont_format,isStrikethrough)
-			.STTR_REG(sttfont_format,hasFormats)
-			.STTR_REG(sttfont_format,resetColour)
+			.STTR_REG_METH(sttfont_format,setBold,0)
+			.STTR_REG_METH(sttfont_format,setItalic,0)
+			.STTR_REG_METH(sttfont_format,setUnderline,0)
+			.STTR_REG_METH(sttfont_format,setStrikethrough,0)
+			.STTR_REG_METH(sttfont_format,isBold,0)
+			.STTR_REG_METH(sttfont_format,isItaic,0)
+			.STTR_REG_METH(sttfont_format,isUnderline,0)
+			.STTR_REG_METH(sttfont_format,isStrikethrough,0)
+			.STTR_REG_METH(sttfont_format,hasFormats,0)
+			.STTR_REG_METH(sttfont_format,resetColour,0)
 			
 			.STTR_REGF_ALIAS(sttfont_format,colour_luasafe,colour,0)
 			.STTR_REGF_ALIAS(sttfont_format,color_luasafe,color,0)
-			.STTR_REG(sttfont_format,bold)
-			.STTR_REG(sttfont_format,italic)
-			.STTR_REG(sttfont_format,underline)
-			.STTR_REG(sttfont_format,strikethrough)
 			
-			.STTR_REG(sttfont_format,red)
-			.STTR_REG(sttfont_format,green)
-			.STTR_REG(sttfont_format,blue)
-			.STTR_REG(sttfont_format,yellow)
-			.STTR_REG(sttfont_format,black)
-			.STTR_REG(sttfont_format,white)
-			.STTR_REG(sttfont_format,magenta)
-			.STTR_REG(sttfont_format,cyan)
-			.STTR_REG(sttfont_format,grey)
+			.STTR_REG_PROP(sttfont_format,bold,0)
+			.STTR_REG_PROP(sttfont_format,italic,0)
+			.STTR_REG_PROP(sttfont_format,underline,0)
+			.STTR_REG_PROP(sttfont_format,strikethrough,0)
 			
-			.STTR_REG(sttfont_format,light_red)
-			.STTR_REG(sttfont_format,light_green)
-			.STTR_REG(sttfont_format,light_blue)
-			.STTR_REG(sttfont_format,light_yellow)
-			.STTR_REG(sttfont_format,light_black)
-			.STTR_REG(sttfont_format,light_white)
-			.STTR_REG(sttfont_format,light_magenta)
-			.STTR_REG(sttfont_format,light_cyan)
-			.STTR_REG(sttfont_format,light_grey)
+			.STTR_REG_PROP(sttfont_format,red,0)
+			.STTR_REG_PROP(sttfont_format,green,0)
+			.STTR_REG_PROP(sttfont_format,blue,0)
+			.STTR_REG_PROP(sttfont_format,yellow,0)
+			.STTR_REG_PROP(sttfont_format,black,0)
+			.STTR_REG_PROP(sttfont_format,white,0)
+			.STTR_REG_PROP(sttfont_format,magenta,0)
+			.STTR_REG_PROP(sttfont_format,cyan,0)
+			.STTR_REG_PROP(sttfont_format,grey,0)
 			
-			.STTR_REG(sttfont_format,dark_red)
-			.STTR_REG(sttfont_format,dark_green)
-			.STTR_REG(sttfont_format,dark_blue)
-			.STTR_REG(sttfont_format,dark_yellow)
-			.STTR_REG(sttfont_format,dark_black)
-			.STTR_REG(sttfont_format,dark_white)
-			.STTR_REG(sttfont_format,dark_magenta)
-			.STTR_REG(sttfont_format,dark_cyan)
-			.STTR_REG(sttfont_format,dark_grey)
+			.STTR_REG_PROP(sttfont_format,light_red,0)
+			.STTR_REG_PROP(sttfont_format,light_green,0)
+			.STTR_REG_PROP(sttfont_format,light_blue,0)
+			.STTR_REG_PROP(sttfont_format,light_yellow,0)
+			.STTR_REG_PROP(sttfont_format,light_black,0)
+			.STTR_REG_PROP(sttfont_format,light_white,0)
+			.STTR_REG_PROP(sttfont_format,light_magenta,0)
+			.STTR_REG_PROP(sttfont_format,light_cyan,0)
+			.STTR_REG_PROP(sttfont_format,light_grey,0)
 			
-			.STTR_REG(sttfont_format,COLOUR_MODE_NORMAL)
-			.STTR_REG(sttfont_format,COLOUR_MODE_DARKEN)
-			.STTR_REG(sttfont_format,COLOUR_MODE_LIGHTEN)
-			.STTR_REG(sttfont_format,selectColour)
+			.STTR_REG_PROP(sttfont_format,dark_red,0)
+			.STTR_REG_PROP(sttfont_format,dark_green,0)
+			.STTR_REG_PROP(sttfont_format,dark_blue,0)
+			.STTR_REG_PROP(sttfont_format,dark_yellow,0)
+			.STTR_REG_PROP(sttfont_format,dark_black,0)
+			.STTR_REG_PROP(sttfont_format,dark_white,0)
+			.STTR_REG_PROP(sttfont_format,dark_magenta,0)
+			.STTR_REG_PROP(sttfont_format,dark_cyan,0)
+			.STTR_REG_PROP(sttfont_format,dark_grey,0)
 			
-			.STTR_REG(sttfont_format,reset)
+			.STTR_REG_PROP(sttfont_format,COLOUR_MODE_NORMAL,0)
+			.STTR_REG_PROP(sttfont_format,COLOUR_MODE_DARKEN,0)
+			.STTR_REG_PROP(sttfont_format,COLOUR_MODE_LIGHTEN,0)
+			.STTR_REG_METH(sttfont_format,selectColour,0)
 			
-			.STTR_REG(sttfont_format,getTtyFormatCodeBegin)
-			.STTR_REG(sttfont_format,getTtyFormatCodeEnd)
-			.STTR_REG(sttfont_format,debugDump)
+			.STTR_REG_PROP(sttfont_format,reset,0)
+			
+			.STTR_REG_METH(sttfont_format,getTtyFormatCodeBegin,0)
+			.STTR_REG_METH(sttfont_format,getTtyFormatCodeEnd,0)
+			.STTR_REG_METH(sttfont_format,debugDump,0)
 		.endClass();
-		#undef STTR_REGF_ALIAS
 		#endif
 		}
 void * sttfont_format::sttr_getClassSig () const
@@ -904,8 +907,8 @@ void sttfont_formatted_text_item::sttr_register ()
 		#ifdef STTR_ENABLED
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
 		R.beginClass<sttfont_formatted_text_item>("sttfont_formatted_text_item")
-			.STTR_REGF(sttfont_formatted_text_item,text,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_formatted_text_item,format,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_formatted_text_item,text,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_formatted_text_item,format,STTR_JSON_ENABLED)
 		.endClass();
 		#endif
 		}
@@ -918,8 +921,8 @@ void sttfont_formatted_uipair::sttr_register ()
 		#ifdef STTR_ENABLED
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
 		R.beginClass<sttfont_formatted_uipair>("sttfont_formatted_uipair")
-			.STTR_REGF(sttfont_formatted_uipair,a,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_formatted_uipair,b,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_formatted_uipair,a,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_formatted_uipair,b,STTR_JSON_ENABLED)
 		.endClass();
 		#endif
 		}
@@ -1032,26 +1035,24 @@ void sttfont_formatted_text::allocatorAwareAssignMv (sttfont_formatted_text_MS o
 void sttfont_formatted_text::sttr_register ()
                                     {
 		#ifdef STTR_ENABLED
-		#define STTR_REGF_ALIAS(C,X,A,F) regField<C,decltype(&C::X),F>(&C::X,#A).setUserFlags(F)
-		
 		sttr::RegNamespace & R = *sttr::getGlobalNamespace();
 		R.beginClass<sttfont_formatted_text>("sttfont_formatted_text")
-			.STTR_REGF(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_formatted_text,activeFormat,STTR_JSON_ENABLED)
-			.STTR_REGF(sttfont_formatted_text,swap,0)
-			.STTR_REGF(sttfont_formatted_text,copy,0)
-			.STTR_REGF(sttfont_formatted_text,size,0)
-			.STTR_REGF(sttfont_formatted_text,length,0)
-			.STTR_REGF(sttfont_formatted_text,isEmpty,0)
-			.STTR_REGF(sttfont_formatted_text,getString,0)
-			.STTR_REGF(sttfont_formatted_text,getTtyString,0)
-			.STTR_REGF(sttfont_formatted_text,getStringTruncated,0)
-			.STTR_REGF(sttfont_formatted_text,append_luasafe,0)
-			.STTR_REGF(sttfont_formatted_text,append_plaintext_str,0)
-			.STTR_REGF(sttfont_formatted_text,clear,0)
-			.STTR_REGF(sttfont_formatted_text,overrideColour,0)
-			.STTR_REGF(sttfont_formatted_text,consolidateSegments,0)
-			.STTR_REGF(sttfont_formatted_text,back,0)
+			.STTR_REG_PROP(sttfont_formatted_text,mItems,STTR_JSON_ENABLED)
+			.STTR_REG_PROP(sttfont_formatted_text,activeFormat,STTR_JSON_ENABLED)
+			.STTR_REG_METH(sttfont_formatted_text,swap,0)
+			.STTR_REG_METH(sttfont_formatted_text,copy,0)
+			.STTR_REG_METH(sttfont_formatted_text,size,0)
+			.STTR_REG_METH(sttfont_formatted_text,length,0)
+			.STTR_REG_METH(sttfont_formatted_text,isEmpty,0)
+			.STTR_REG_METH(sttfont_formatted_text,getString,0)
+			.STTR_REG_METH(sttfont_formatted_text,getTtyString,0)
+			.STTR_REG_METH(sttfont_formatted_text,getStringTruncated,0)
+			.STTR_REG_METH(sttfont_formatted_text,append_luasafe,0)
+			.STTR_REG_METH(sttfont_formatted_text,append_plaintext_str,0)
+			.STTR_REG_METH(sttfont_formatted_text,clear,0)
+			.STTR_REG_METH(sttfont_formatted_text,overrideColour,0)
+			.STTR_REG_METH(sttfont_formatted_text,consolidateSegments,0)
+			.STTR_REG_METH(sttfont_formatted_text,back,0)
 			.STTR_REGF_ALIAS(sttfont_formatted_text,getIndexAt_luasafe,getIndexAt,0)
 			.STTR_REGF_ALIAS(sttfont_formatted_text,utf8_charsizeAt_luasafe,utf8_charsizeAt,0)
 			.STTR_REGF_ALIAS(sttfont_formatted_text,insert_luasafe,insert,0)
@@ -1062,7 +1063,6 @@ void sttfont_formatted_text::sttr_register ()
 			
 			
 		.endClass();
-		#undef STTR_REGF_ALIAS
 		#endif
 		}
 void * sttfont_formatted_text::sttr_getClassSig () const
