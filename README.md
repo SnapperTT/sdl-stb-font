@@ -11,11 +11,11 @@ New (2022)! Can prerender in multithreaded enviroments with `producerConsumerFro
 New (2021)! Can also render in [bgfx](https://github.com/bkaradzic/bgfx) with `bgfxFrontend.h`!
 
 ## Example Image:
-![Example text test](example.png)
+![Example text test](images/example.png)
 
 Sample text from http://www.columbia.edu/~fdc/utf8/index.html
 
-![Example formatting](example2.png)
+![Example formatting](images/example2.png)
 
 ## Contact:
 Liam Twigger - @SnapperTheTwig
