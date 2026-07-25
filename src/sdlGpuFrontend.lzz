@@ -1,0 +1,309 @@
+// The frontend for SDL_Gpu
+// if you are using SDL_Renderer then just use sdl_stb_font_cache from sdlStbFont.h
+
+#hdr
+#end
+
+#src
+#end
+
+struct sdlgpu_helpers {
+	struct vertex {
+		float x, y, u, v;
+		uint32_t rgba;
+		};
+	struct solidVertex {
+		float x, y;
+		uint32_t rgba;
+		};
+	struct textured_batch {
+		SDL_GPUTexture* texture;
+		SSF_VECTOR<vertex> vertices;
+		SSF_VECTOR<uint16_t> indices;
+		};
+	struct solid_batch {
+		SSF_VECTOR<solidVertex> vertices;
+		SSF_VECTOR<uint16_t> indices;
+		};
+		
+	static textured_batch* getBatch(SSF_VECTOR<textured_batch>& drawBuffer, SDL_GPUTexture* texture) {
+		for (auto& b : drawBuffer) {
+			if (b.texture == texture)
+				return &b;
+			}
+		textured_batch b;
+		b.texture = texture;
+		drawBuffer.push_back(std::move(b));
+		return &drawBuffer.back();
+		}
+
+	static void emitGlyphQuad(textured_batch& batch, float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, uint32_t rgba) {
+		const uint16_t first = (uint16_t)batch.vertices.size();
+		batch.vertices.push_back({x0,y0,u0,v0,rgba});
+		batch.vertices.push_back({x1,y0,u1,v0,rgba});
+		batch.vertices.push_back({x1,y1,u1,v1,rgba});
+		batch.vertices.push_back({x0,y1,u0,v1,rgba});
+		batch.indices.push_back(first+0);
+		batch.indices.push_back(first+1);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+3);
+		batch.indices.push_back(first+0);
+		}
+
+	static void emitSolidQuad(solid_batch& batch, float x0, float y0, float x1, float y1, uint32_t rgba) {
+		const uint16_t first = (uint16_t)batch.vertices.size();
+		batch.vertices.push_back({x0,y0,rgba});
+		batch.vertices.push_back({x1,y0,rgba});
+		batch.vertices.push_back({x1,y1,rgba});
+		batch.vertices.push_back({x0,y1,rgba});
+		batch.indices.push_back(first+0);
+		batch.indices.push_back(first+1);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+3);
+		batch.indices.push_back(first+0);
+		}
+	};
+
+struct sdlgpu_stb_prerendered_text : public sttfont_prerendered_text {
+	SDL_GPUTexture* mTexture;
+	sdlgpu_stb_prerendered_text() : mTexture(nullptr) {}
+
+	void freeTexture();
+	int draw(int x, int y);
+	int drawWithColorMod(int x, int y,uint8_t r,uint8_t g,uint8_t b,uint8_t a=255);
+	};
+
+struct sdlgpu_stb_glyph : public sttfont_glyph {
+	SDL_GPUTexture* atlas;
+	float u,v;
+	float uw,vh;
+	SSF_STRING glypthData; // pixel data
+	};
+	
+struct sdlgpu_stb_glyph_atlas {
+    SDL_GPUTexture* texture;
+    stbrp_context* rectPack;
+    stbrp_node* nodes;
+    bool full;
+	};
+
+class sdlgpu_stb_font_cache : public sttfont_font_cache {
+public:
+	SDL_GPUDevice* device;
+	SDL_GPUCommandBuffer* commandBuffer;
+	SDL_GPURenderPass* renderPass;
+	SDL_GPUGraphicsPipeline* glyphPipeline;
+	SDL_GPUGraphicsPipeline* solidPipeline;
+	SDL_GPUSampler* sampler;
+	SDL_GPUTransferBuffer* textureUploadBuffer;
+	SDL_GPUTransferBuffer* vertexUploadBuffer;
+	SDL_GPUTransferBuffer* indexUploadBuffer;
+	SDL_GPUBuffer* vertexBuffer;
+	SDL_GPUBuffer* indexBuffer;
+	SDL_GPUCopyPass* activeCopyPass;
+	int mAtlasSize;
+	SSF_VECTOR<sdlgpu_stb_glyph_atlas> mAtlases;
+	SSF_MAP<uint64_t,sdlgpu_stb_glyph> mGlyphs;
+
+	SSF_VECTOR<sdlgpu_helpers::textured_batch> drawBuffer;
+	sdlgpu_helpers::solid_batch solidBuffer;
+	uint32_t textureUploadBufferOffset, textureUploadBufferSize; // used for updating atlases
+	void* transiantBufferPtr; // used for updating atlases
+	bool isBufferingNewGlyphs; // == true, then batch buffer to update atlas, false, upload for each glypth
+
+	bool doBufferDraws;
+	bool isManuallyBuffering;
+	
+	sdlgpu_stb_font_cache() : sttfont_font_cache() {
+		device = NULL;
+		commandBuffer = NULL;
+		renderPass = NULL;
+		glyphPipeline = NULL;
+		solidPipeline = NULL;
+		sampler = NULL;
+		textureUploadBuffer = NULL;
+		vertexUploadBuffer = NULL;
+		indexUploadBuffer = NULL;
+		vertexBuffer = NULL;
+		indexBuffer = NULL;
+		activeCopyPass = NULL;
+		mAtlasSize = 1024;
+		textureUploadBufferOffset = 0;
+		textureUploadBufferSize = 0;
+		transiantBufferPtr = NULL;
+		isBufferingNewGlyphs = false;
+		doBufferDraws = false;
+		isManuallyBuffering = false;
+		}
+
+	void bindRenderer(SDL_GPUDevice* device, SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* renderPass) {
+		
+		}
+	
+	sdlgpu_stb_glyph_atlas* getGenAtlasPage() {
+		if (mAtlases.empty()) {
+			return createAtlasPage();
+			}
+		sdlgpu_stb_glyph_atlas * r = &mAtlases.back();
+		if (r->isFull)
+			return createAtlasPage();
+		return r;
+		}
+
+	sdlgpu_stb_glyph_atlas* createAtlasPage() {
+		sdlgpu_stb_glyph_atlas a;
+		SDL_GPUTextureCreateInfo ci;
+		ci.type = SDL_GPUTextureType::SDL_GPU_TEXTURETYPE_2D;
+		ci.format = SDL_GPUTextureFormat::SDL_GPU_TEXTUREFORMAT_R8_UINT
+		ci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		ci.width = mAtlasSize;
+		ci.height = mAtlasSize;
+		ci.layer_count_or_depth = 1;
+		ci.num_levels = 0;
+		a.mAtlasTexture = SDL_CreateGPUTexture(device, &ci);
+		
+		int nNodes = mAtlasSize;
+		a.mStbRectPackCtx = SSF_NEW(stbrp_context);
+		a.mNodes = SSF_NEW_ARR(stbrp_node, nNodes);
+		
+		for (int i = 0; i < nNodes; ++i) {
+			a.mNodes[i].x = 0;
+			a.mNodes[i].y = 0;
+			a.mNodes[i].next = NULL;
+			}
+		stbrp_init_target(a.mStbRectPackCtx, mAtlasSize, mAtlasSize, a.mNodes, nNodes);
+		
+		mAtlases.push_back(a);
+		return &mAtlases.back();
+		}
+		
+	void startUpdatingAtlases() {
+		textureUploadBufferOffset = 0;
+		activeCopyPass = SDL_BeginGPUCopyPass(commandBuffer);
+		transiantBufferPtr = SDL_MapGPUTransferBuffer(device, textureUploadBuffer, false);
+		}
+
+	void uploadAtlasRegion(SDL_GPUTexture* atlas, int x, int y, int w, int h, const void* pixels) {
+		const uint32_t size = w * h;	// R8
+
+		// Buffer full? Flush current uploads first.
+		if (textureUploadBufferOffset + size > textureUploadBufferSize)
+			flushUpdatingAtlases();
+
+		memcpy( (uint8_t*)transiantBufferPtr + textureUploadBufferOffset, pixels, size);
+		SDL_GPUTextureTransferInfo src{};
+		src.transfer_buffer = textureUploadBuffer;
+		src.offset = textureUploadBufferOffset;
+		src.pixels_per_row = w;
+		src.rows_per_layer = h;
+
+		SDL_GPUTextureRegion dstRegion{};
+		dstRegion.texture = atlas;
+		dstRegion.x = x;
+		dstRegion.y = y;
+		dstRegion.z = 0;
+		dstRegion.w = w;
+		dstRegion.h = h;
+		dstRegion.d = 1;
+		dstRegion.layer = 0;
+		dstRegion.mip_level = 0;
+
+		SDL_UploadToGPUTexture(activeCopyPass, &src, &dstRegion, false);
+		textureUploadBufferOffset += size;
+		}
+
+	void flushUpdatingAtlases() {
+		if (textureUploadBufferOffset == 0)
+			return;
+
+		SDL_UnmapGPUTransferBuffer(device, textureUploadBuffer);
+		SDL_EndGPUCopyPass(activeCopyPass);
+		textureUploadBufferOffset = 0;
+		activeCopyPass = SDL_BeginGPUCopyPass(commandBuffer);
+		transiantBufferPtr = SDL_MapGPUTransferBuffer(device, textureUploadBuffer, false);
+		}
+
+	void finishUpdatingAtlases() {
+		if (!activeCopyPass)
+			return;
+		SDL_UnmapGPUTransferBuffer(device, textureUploadBuffer);
+		SDL_EndGPUCopyPass(activeCopyPass);
+		activeCopyPass = NULL;
+		transiantBufferPtr = NULL;
+		textureUploadBufferOffset = 0;
+		}
+
+	sttfont_glyph* getGlyph(const uint64_t target) {
+		auto it = mGlyphs.find(target);
+		if (it == mGlyphs.end())
+			return NULL;
+		return &((*it).second);
+		}
+
+	sttfont_glyph * genGlyph_createAndInsert(const uint64_t target, const uint32_t codepoint, const uint8_t format, const uint16_t fontIdx, const uint32_t intIdx) {
+		sdlgpu_stb_glyph g;
+		genGlyph(codepoint, format, fontIdx, intIdx, &g);
+		mGlyphs[target] = g;
+		return getGlyph(target);
+		}
+	
+	void genGlyph_writeData (const uint32_t codepoint, const uint16_t fontIdx, const uint32_t intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h) {
+		genGlyph_writeData2(codepoint | (uint32_t(fontIdx) << 16 | intIdx), gOut, bitmap2, w, h, true);
+		}
+	
+	void populateGlyphData(sdlgpu_stb_glyph* bOut, unsigned char* bitmap2, int w, int h) {
+		int sz = w*h;
+		bOut->glypthData.resize(sz);
+		for (int i = 0; i < sz; ++i) {
+			bOut->glypthData[i] = bitmap2[i*4+3];
+			}
+		}
+		
+	void genGlyph_writeData2 (const uint32_t codepointHash, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall) {
+		// fetch or create atlas
+		sdlgpu_stb_glyph * bOut = (sdlgpu_stb_glyph*) gOut;
+		sdlgpu_stb_glyph_atlas * activeAtlas = getGenAtlasPage();
+		
+		// try to pack
+		stbrp_rect r;
+		r.id = *((int*) &codepointHash);
+		r.x = 0;
+		r.y = 0;
+		r.w = w;
+		r.h = h;
+		r.was_packed = 0;
+		
+		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, &r, 1);
+		if (r.was_packed) {
+			// Convert from RGBA8 -> R8 and retain a software copy.
+			populateGlyphData(bOut, bitmap2, r.w, r.h);
+
+			// Store atlas information.
+			bOut->atlas = activeAtlas->texture;
+			bOut->u  = r.x / float(mAtlasSize);
+			bOut->v  = r.y / float(mAtlasSize);
+			bOut->uw = r.w / float(mAtlasSize);
+			bOut->vh = r.h / float(mAtlasSize);
+
+			// Upload the R8 glyph into the atlas.
+			if (!isBufferingNewGlyphs)
+				startUpdatingAtlases();
+
+			uploadAtlasRegion(activeAtlas->texture, r.x, r.y, r.w, r.h, bOut->glyphData.data());
+
+			if (!isBufferingNewGlyphs)
+				finishUpdatingAtlases();
+			return;
+			}
+		else {
+			activeAtlas->isFull = true;
+			}
+		
+		// failed to pack, generate a new atlas
+		if (firstCall)
+			genGlyph_writeData2(codepointHash, gOut, bitmap2, w, h, false);
+		}
+
+	};

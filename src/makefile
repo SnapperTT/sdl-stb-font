@@ -1,6 +1,6 @@
 # This makefile creates the .h files in the parent directory from .lzz files here
 LAZY=../tools/lzz -hx hh
-RAWSOURCES=bgfxFrontend.lzz sdlFrontend.lzz sttFont.lzz producerConsumerFrontend.lzz example.lzz producerConsumerExample.lzz
+RAWSOURCES=bgfxFrontend.lzz sdlGpuFrontend.lzz sdlFrontend.lzz sttFont.lzz producerConsumerFrontend.lzz example.lzz producerConsumerExample.lzz
 SUBSOURCES=sttFontFormattedText.lzz
 OUTPUTDIR=../
 TEMPDIR=temp/
@@ -17,6 +17,7 @@ all: $(SOURCES) $(SFI)
 		bgfx_shaders/c/fs_untextured_passthrough.bin.h \
 		bgfx_shaders/c/vs_untextured_passthrough.bin.h \
 		> ../bgfxFrontendShaders.h
+	rm -f ../sdlFrontend.h ../sttFont.h
 
 .PHONEY clean:
 	rm -rf $(TEMPDIR)*
