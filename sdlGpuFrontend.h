@@ -5,6 +5,23 @@
 #ifndef LZZ_sdlGpuFrontend_hh
 #define LZZ_sdlGpuFrontend_hh
 #define LZZ_INLINE inline
+namespace sdlgpu_shaders
+{
+  enum Backend
+  {
+    BACKEND_SPIRV,
+    BACKEND_DXIL,
+    BACKEND_MSL
+  };
+}
+namespace sdlgpu_shaders
+{
+  struct ShaderBinary
+  {
+    void const * data;
+    size_t size;
+  };
+}
 struct sdlgpu_helpers
 {
   struct vertex
@@ -89,10 +106,6 @@ public:
   sdlgpu_helpers::solid_batch solidBuffer;
   SDL_GPUTransferBuffer * vertexUploadBuffer;
   SDL_GPUTransferBuffer * indexUploadBuffer;
-  uint32_t vertexUploadBufferOffset;
-  uint32_t indexUploadBufferOffset;
-  void * mappedVertexBuffer;
-  void * mappedIndexBuffer;
   uint32_t vertexUploadBufferSize;
   uint32_t indexUploadBufferSize;
   uint16_t wantsVertexUploadBufferNumVerts;
@@ -159,6 +172,53 @@ LZZ_INLINE bool sdlgpu_stb_font_cache::doScissorTest () const
 //
 
 #define LZZ_INLINE inline
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getGlyphVS (SDL_GPUDevice * device);
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getGlyphFS (SDL_GPUDevice * device);
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getSolidVS (SDL_GPUDevice * device);
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getSolidFS (SDL_GPUDevice * device);
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getGlyphVS (SDL_GPUDevice * device)
+                                                              {
+		switch (SDL_GetGPUShaderFormats(device)) {
+			case SDL_GPU_SHADERFORMAT_SPIRV:
+				return { glyph_vs_spv, sizeof(glyph_vs_spv) };
+			case SDL_GPU_SHADERFORMAT_DXIL:
+				return { glyph_vs_dxil, sizeof(glyph_vs_dxil) };
+			case SDL_GPU_SHADERFORMAT_MSL:
+				return { glyph_vs_msl, sizeof(glyph_vs_msl) };
+			default:
+				return { nullptr, 0 };
+			}
+		}
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getGlyphFS (SDL_GPUDevice * device)
+                                                          {}
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getSolidVS (SDL_GPUDevice * device)
+                                                          {}
+}
+namespace sdlgpu_shaders
+{
+  static ShaderBinary getSolidFS (SDL_GPUDevice * device)
+                                                          {}
+}
 sdlgpu_helpers::textured_batch * sdlgpu_helpers::getBatch (SSF_VECTOR <textured_batch> & drawBuffer, SDL_GPUTexture * texture)
                                                                                                          {
 		for (auto& b : drawBuffer) {
@@ -244,10 +304,6 @@ sdlgpu_stb_font_cache::sdlgpu_stb_font_cache ()
 		// Used for buffering render calls
 		vertexUploadBuffer = NULL;
 		indexUploadBuffer = NULL;
-		vertexUploadBufferOffset = 0;
-		indexUploadBufferOffset = 0;
-		mappedVertexBuffer = NULL;
-		mappedIndexBuffer = NULL;
 		vertexUploadBufferSize = 0;
 		indexUploadBufferSize = 0;
 		wantsVertexUploadBufferNumVerts = 16000;

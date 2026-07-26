@@ -2,8 +2,12 @@
 // if you are using SDL_Renderer then just use sdl_stb_font_cache from sdlStbFont.h
 //
 // HELP NEEDED:
-// Need shaders to be compiled. The shader loader needs to be handled 
-// This hasn't been tested yet
+// - Need shaders to be compiled. The shader loader needs to be handled 
+//
+// TODO: 
+// - Shader compilation and wrangling
+// - pregenGlyphs. A copy paste from bgfxFrontend will probably work
+// - an example for debugging, testing, validation
 
 #hdr
 #include "cpuBuffer.hh"
@@ -112,9 +116,9 @@ namespace sdlgpu_shaders {
 			}
 		}
 	// implement the following
-    ShaderBinary getGlyphFS(SDL_GPUDevice*) {}
-    ShaderBinary getSolidVS(SDL_GPUDevice*) {}
-    ShaderBinary getSolidFS(SDL_GPUDevice*) {}
+    static ShaderBinary getGlyphFS(SDL_GPUDevice* device) {}
+    static ShaderBinary getSolidVS(SDL_GPUDevice* device) {}
+    static ShaderBinary getSolidFS(SDL_GPUDevice* device) {}
 }
 	
 struct sdlgpu_helpers {

@@ -10,6 +10,8 @@ New (2022)! Can prerender in multithreaded enviroments with `producerConsumerFro
 
 New (2021)! Can also render in [bgfx](https://github.com/bkaradzic/bgfx) with `bgfxFrontend.h`!
 
+HELP WANTED (2026) - SGL_Gpu support. See src/sglGpuFrontend.lzz for details. There is a mostly complete implementation. We just need to compile shaders and debug the implementation
+
 ## Example Image:
 ![Example text test](images/example.png)
 
