@@ -1,0 +1,81 @@
+// Purpose: software rendering textures in bgfxFrontend and sdlGpuFrontend
+// buff is an an RGBA8 array of pixels
+
+struct sdlStbFontCpuBuffer {
+	uint8_t * buff;
+	int w, h;
+	uint32_t sz;
+	bool flipY;
+	
+	sdlStbFontCpuBuffer() : buff(NULL), w(0), h(0), sz(0), flipY(false) {}
+	~sdlStbFontCpuBuffer() {
+		if (buff)
+			SSF_DEL_ARR(buff);
+		}
+	
+	void allocate() {
+		sz = w*h*4;
+		buff = SSF_NEW_ARR(uint8_t, sz);
+		}
+		
+	void clearBuff() {
+		memset(buff, 0, sz);
+		}
+		
+	void blend(uint8_t* dst, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
+		float srcf = 255.f/a;
+		if (a == 255 || dst[3] == 0) { 
+			dst[0] = SSF_MIN(255.f, float(dst[0]) + r*srcf);
+			dst[1] = SSF_MIN(255.f, float(dst[1]) + g*srcf);
+			dst[2] = SSF_MIN(255.f, float(dst[2]) + b*srcf);
+			dst[3] = SSF_MAX(dst[3], a);
+			}
+			
+		}
+	
+	void writeRGBA(const int x, const int y, const uint8_t*const src, const int bw, const int bh) {
+		for (int i = 0; i < bw; ++i) {
+			for (int j = 0; j < bh; ++j) {
+				int lx = x + i;
+				int ly = y + j;
+				if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+					uint32_t idst = (lx+ly*w)*4;
+					if (flipY) idst = (lx+(h-ly-1)*w)*4;
+					uint32_t isrc = (i+j*bw)*4;
+					blend(&buff[idst], src[isrc+0], src[isrc+1], src[isrc+2], src[isrc+3]);
+					}
+				}
+			}
+		}
+	
+	void writeA(const int x, const int y, const uint8_t*const src, const int bw, const int bh, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
+		if (!a) return;
+		float f = 255.f/a;
+		for (int i = 0; i < bw; ++i) {
+			for (int j = 0; j < bh; ++j) {
+				int lx = x + i;
+				int ly = y + j;
+				if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+					uint32_t idst = (lx+ly*w)*4;
+					if (flipY) idst = (lx+(h-ly-1)*w)*4;
+					uint32_t isrc = (i+j*bw);
+					blend(&buff[idst], r, g, b, f*src[isrc]);
+					}
+				}
+			}
+		}
+	
+	void writeFill(const int x, const int y, const int bw, const int bh, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
+		for (int i = 0; i < bw; ++i) {
+			for (int j = 0; j < bh; ++j) {
+				int lx = x + i;
+				int ly = y + j;
+				if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+					uint32_t idst = (lx+ly*w)*4;
+					if (flipY) idst = (lx+(h-ly-1)*w)*4;
+					blend(&buff[idst], r, g, b, a);
+					}
+				}
+			}
+		}
+	};

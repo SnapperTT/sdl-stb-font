@@ -1,6 +1,6 @@
 # This makefile creates the .h files in the parent directory from .lzz files here
 LAZY=../tools/lzz -hx hh
-RAWSOURCES=bgfxFrontend.lzz sdlGpuFrontend.lzz sdlFrontend.lzz sttFont.lzz producerConsumerFrontend.lzz example.lzz producerConsumerExample.lzz
+RAWSOURCES=bgfxFrontend.lzz sdlGpuFrontend.lzz cpuBuffer.lzz sdlFrontend.lzz sttFont.lzz producerConsumerFrontend.lzz example.lzz producerConsumerExample.lzz
 SUBSOURCES=sttFontFormattedText.lzz
 OUTPUTDIR=../
 TEMPDIR=temp/

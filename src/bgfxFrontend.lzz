@@ -20,6 +20,8 @@
 		#define SSF_BGFX_STACK_TEMPORATY_ALLOCATOR_ENABLED 1
 	#endif
 #endif
+
+#include "cpuBuffer.h"
 #end
 
 #src
@@ -412,85 +414,6 @@ public:
 			bgfx::setVertexBuffer(0, &vb);
 			}
 		}
-		
-	struct cpuBuffer {
-		uint8_t * buff;
-		int w, h;
-		uint32_t sz;
-		bool flipY;
-		
-		cpuBuffer() : buff(NULL), w(0), h(0), sz(0), flipY(false) {}
-		~cpuBuffer() {
-			if (buff)
-				SSF_DEL_ARR(buff);
-			}
-		
-		void allocate() {
-			sz = w*h*4;
-			buff = SSF_NEW_ARR(uint8_t, sz);
-			}
-			
-		void clearBuff() {
-			memset(buff, 0, sz);
-			}
-			
-		void blend(uint8_t* dst, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
-			float srcf = 255.f/a;
-			if (a == 255 || dst[3] == 0) { 
-				dst[0] = SSF_MIN(255.f, float(dst[0]) + r*srcf);
-				dst[1] = SSF_MIN(255.f, float(dst[1]) + g*srcf);
-				dst[2] = SSF_MIN(255.f, float(dst[2]) + b*srcf);
-				dst[3] = SSF_MAX(dst[3], a);
-				}
-				
-			}
-		
-		void writeRGBA(const int x, const int y, const uint8_t*const src, const int bw, const int bh) {
-			for (int i = 0; i < bw; ++i) {
-				for (int j = 0; j < bh; ++j) {
-					int lx = x + i;
-					int ly = y + j;
-					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
-						uint32_t idst = (lx+ly*w)*4;
-						if (flipY) idst = (lx+(h-ly-1)*w)*4;
-						uint32_t isrc = (i+j*bw)*4;
-						blend(&buff[idst], src[isrc+0], src[isrc+1], src[isrc+2], src[isrc+3]);
-						}
-					}
-				}
-			}
-		
-		void writeA(const int x, const int y, const uint8_t*const src, const int bw, const int bh, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
-			if (!a) return;
-			float f = 255.f/a;
-			for (int i = 0; i < bw; ++i) {
-				for (int j = 0; j < bh; ++j) {
-					int lx = x + i;
-					int ly = y + j;
-					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
-						uint32_t idst = (lx+ly*w)*4;
-						if (flipY) idst = (lx+(h-ly-1)*w)*4;
-						uint32_t isrc = (i+j*bw);
-						blend(&buff[idst], r, g, b, f*src[isrc]);
-						}
-					}
-				}
-			}
-		
-		void writeFill(const int x, const int y, const int bw, const int bh, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a) {
-			for (int i = 0; i < bw; ++i) {
-				for (int j = 0; j < bh; ++j) {
-					int lx = x + i;
-					int ly = y + j;
-					if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
-						uint32_t idst = (lx+ly*w)*4;
-						if (flipY) idst = (lx+(h-ly-1)*w)*4;
-						blend(&buff[idst], r, g, b, a);
-						}
-					}
-				}
-			}
-		};
 	};
 
 
@@ -598,7 +521,7 @@ public:
 	int mAtlasSize;			// Set this to a different value if you want a different atlas size
 	SSF_VECTOR<bgfx_stb_glyph_atlas> mAtlases;
 	bgfxsfh::rect scissor; // Set to (0, 0, 0, 0) to disable
-	bgfxsfh::cpuBuffer* renderTarget;
+	sdlStbFontCpuBuffer* cpuRenderTargetBuffer;
 			
 	SSF_MAP<uint64_t, bgfx_stb_glyph> mGlyphs;
 	
@@ -615,7 +538,7 @@ public:
 	bool doBufferDraws;	// If true draw commands will be batched into the buffer vectors above and exectured as groups
 	bool isManuallyBuffering; // If true then bufferDraws is being controlled outside of this lib (use this to auto-merge texts on submit)
 	
-	bgfx_stb_font_cache () : sttfont_font_cache(), mViewId(0), mAtlasSize(1024), renderTarget(NULL), doBufferDraws(false) {
+	bgfx_stb_font_cache () : sttfont_font_cache(), mViewId(0), mAtlasSize(1024), cpuRenderTargetBuffer(NULL), doBufferDraws(false) {
 		resetScissor();
 		isManuallyBuffering = false;
 		drawBufferAlloctor = 0;
@@ -899,12 +822,12 @@ public:
 		
 		
 	void onStartDrawing() {
-		if (renderTarget || isManuallyBuffering) return;
+		if (cpuRenderTargetBuffer || isManuallyBuffering) return;
 		onStartBuffering();
 		}
 		
 	void onCompletedDrawing() {
-		if (renderTarget || isManuallyBuffering) return;
+		if (cpuRenderTargetBuffer || isManuallyBuffering) return;
 		onCompletedBuffering();
 		}
 	
@@ -924,7 +847,7 @@ public:
 	void onStartBuffering() {
 		//std::cout << "START DRAWING" << std::endl;
 		//Logger_ldbg("SSF: START DRAWING");
-		if (renderTarget) return;
+		if (cpuRenderTargetBuffer) return;
 		if (doBufferDraws) return;
 		doBufferDraws = true;
 		
@@ -945,7 +868,7 @@ public:
 	void onCompletedBuffering() {
 		//std::cout << "END DRAWING" << std::endl;
 		//Logger_ldbg("SSF: END DRAWING");
-		if (renderTarget) return;
+		if (cpuRenderTargetBuffer) return;
 		if (!doBufferDraws) return;
 		doBufferDraws = false;
 		
@@ -1059,8 +982,8 @@ public:
 	void drawGlyph (const sttfont_glyph * const GS, const int x, const int y, const sttfont_format * const format, const uint8_t formatCode, const int kerningAdv, int & overdraw) {
 		const bgfx_stb_glyph * const G = (const bgfx_stb_glyph *) GS;
 		// Draws the character
-		const uint64_t RSTATE = renderTarget ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
-		const bgfx::ViewId _viewId = renderTarget ? 0 : mViewId; 
+		const uint64_t RSTATE = cpuRenderTargetBuffer ? bgfxsfh::RENDER_STATE_PRERENDER : bgfxsfh::RENDER_STATE;
+		const bgfx::ViewId _viewId = cpuRenderTargetBuffer ? 0 : mViewId; 
 		
 		if (format->a == 0) return; // do not draw 0 alpha glyps, also "insertBoundBucketUt" is initially null for colour = 0,0,0,0 
 		
@@ -1078,7 +1001,7 @@ public:
 		
 		bool st = true;
 		bool useScissor = false;
-		if (!renderTarget) {
+		if (!cpuRenderTargetBuffer) {
 			if (doScissorTest()) {
 				st = scissorTest(r);
 				useScissor = true;
@@ -1092,7 +1015,7 @@ public:
 				
 				
 				// Draw the glypth
-				if (!renderTarget) {
+				if (!cpuRenderTargetBuffer) {
 					if (bgfx::isValid(G->mAtlasTexture)) {
 						if (doBufferDraws) {
 							bgfxsfh::draw_quad dc;
@@ -1124,7 +1047,7 @@ public:
 						}
 					}
 				else {
-					renderTarget->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, format->r, format->g, format->b, format->a);
+					cpuRenderTargetBuffer->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, format->r, format->g, format->b, format->a);
 					}
 				
 				if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
@@ -1132,7 +1055,7 @@ public:
 					r2.w = G->width+strikethroughThickness + charAdv; r2.h = strikethroughThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-strikethroughThickness/2 - charAdv; r2.y = y + strikethroughPosition;
-					if (!renderTarget) {
+					if (!cpuRenderTargetBuffer) {
 						if (doBufferDraws) {
 							bgfxsfh::untextured_draw_quad dc;
 							if (useScissor)
@@ -1155,7 +1078,7 @@ public:
 							}
 						}
 					else {
-						renderTarget->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
+						cpuRenderTargetBuffer->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
 						}
 					}
 				if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
@@ -1163,7 +1086,7 @@ public:
 					r2.w = G->width+underlineThickness + charAdv; r2.h = underlineThickness;
 					if (r2.h < 1) r2.h = 1;
 					r2.x = r.x-underlineThickness/2 - charAdv; r2.y = y + underlinePosition;
-					if (!renderTarget) {
+					if (!cpuRenderTargetBuffer) {
 						if (doBufferDraws) {
 							bgfxsfh::untextured_draw_quad dc;
 							dc.drawRect = r2;
@@ -1187,12 +1110,12 @@ public:
 							}
 						}
 					else {
-						renderTarget->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
+						cpuRenderTargetBuffer->writeFill(r2.x, r2.y, r2.w, r2.h, format->r, format->g, format->b, format->a);
 						}
 					}
 				}
 			else {
-				if (!renderTarget) {
+				if (!cpuRenderTargetBuffer) {
 					overdraw = SSF_INT_MIN;
 					
 					if (doBufferDraws) {
@@ -1226,7 +1149,7 @@ public:
 						}
 					}
 				else {
-					renderTarget->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, 255, 255, 255, 255);
+					cpuRenderTargetBuffer->writeA(r.x, r.y, (const uint8_t*const)G->glypthData.data(), r.w, r.h, 255, 255, 255, 255);
 					}
 				}
 			}
@@ -1257,7 +1180,7 @@ protected:
 		// 2. Have an atlas-page system for prerenders. The object created will have to keep track of bits of the atlas being used and clear pages not used anymore
 		// 3. Accumulate view slots + call frame() automatically when some limit is reached. Have some kind of dispatchRenderToTexture() to call frame() and reset the view counter when done
 		// 4. Reusue the damn framebuffer. Only regenerate it if we need a bigger one on at least one axis
-		bgfxsfh::cpuBuffer buff;
+		sdlStbFontCpuBuffer buff;
 		buff.w = width;
 		buff.h = height;
 		buff.sz = buff.w*buff.h*4;
@@ -1268,7 +1191,7 @@ protected:
 		buff.buff = &chr[0];
 		buff.clearBuff();
 		buff.flipY = bgfx::getCaps()->originBottomLeft;
-		renderTarget = &buff;
+		cpuRenderTargetBuffer = &buff;
 		if (formatted)
 			drawText(0, 0, *formatted);
 		else
@@ -1280,7 +1203,7 @@ protected:
 		bgfx::setName(RT, "ssf_prt");
 		
 		buff.buff = NULL;
-		renderTarget = NULL;
+		cpuRenderTargetBuffer = NULL;
 		
 		if (widthOut)  *widthOut = width;
 		if (heightOut) *heightOut = height;
@@ -1292,7 +1215,7 @@ public:
 		return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
 		}
 	
-	/// Same as renderTextToTexture, but stores the result in an object that has a convienent 
+	/// Same as renderTextToTexture, but stores the result in a convienent object 
 	void renderTextToObject (sttfont_prerendered_text * textOut, const char * c, const uint32_t maxLen = -1) {
 		bgfx_stb_prerendered_text * textOut2 = (bgfx_stb_prerendered_text*) textOut;
 		textOut2->mBgfxTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));

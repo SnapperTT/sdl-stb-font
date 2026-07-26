@@ -21,6 +21,13 @@ struct sdlgpu_helpers
     float y;
     uint32_t rgba;
   };
+  struct rect
+  {
+    float x;
+    float y;
+    float w;
+    float h;
+  };
   struct textured_batch
   {
     SDL_GPUTexture * texture;
@@ -32,6 +39,11 @@ struct sdlgpu_helpers
     SSF_VECTOR <solidVertex> vertices;
     SSF_VECTOR <uint16_t> indices;
   };
+  static textured_batch * getBatch (SSF_VECTOR <textured_batch> & drawBuffer, SDL_GPUTexture * texture);
+  static void emitGlyphQuad (textured_batch & batch, float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, uint32_t rgba);
+  static void emitSolidQuad (solid_batch & batch, float x0, float y0, float x1, float y1, uint32_t rgba);
+  static rect scissorIntersect (rect const & r, rect const & scissor);
+  static rect scissorIntersectTexCoord (rect const & r, rect const & uv, rect const & rIntersect);
 };
 struct sdlgpu_stb_prerendered_text : public sttfont_prerendered_text
 {
@@ -48,6 +60,7 @@ struct sdlgpu_stb_glyph : public sttfont_glyph
   float v;
   float uw;
   float vh;
+  SSF_STRING glypthData;
 };
 struct sdlgpu_stb_glyph_atlas
 {
@@ -61,28 +74,42 @@ class sdlgpu_stb_font_cache : public sttfont_font_cache
 public:
   SDL_GPUDevice * device;
   SDL_GPUCommandBuffer * commandBuffer;
-  SDL_GPURenderPass * renderPass;
   SDL_GPUGraphicsPipeline * glyphPipeline;
   SDL_GPUGraphicsPipeline * solidPipeline;
-  SDL_GPUSampler * sampler;
-  SDL_GPUTransferBuffer * textureUploadBuffer;
-  SDL_GPUTransferBuffer * vertexUploadBuffer;
-  SDL_GPUTransferBuffer * indexUploadBuffer;
-  SDL_GPUBuffer * vertexBuffer;
-  SDL_GPUBuffer * indexBuffer;
   SDL_GPUCopyPass * activeCopyPass;
   int mAtlasSize;
   SSF_VECTOR <sdlgpu_stb_glyph_atlas> mAtlases;
   SSF_MAP <uint64_t,sdlgpu_stb_glyph> mGlyphs;
+  SDL_GPUTransferBuffer * atlasTextureUploadBuffer;
+  uint32_t atlasTextureUploadBufferOffset;
+  uint32_t atlasTextureUploadBufferSize;
+  void * transiantBufferPtr;
+  bool isBufferingNewGlyphs;
   SSF_VECTOR <sdlgpu_helpers::textured_batch> drawBuffer;
   sdlgpu_helpers::solid_batch solidBuffer;
-  uint32_t textureUploadBufferOffset;
-  uint32_t textureUploadBufferSize;
-  void * transiantBufferPtr;
+  SDL_GPUTransferBuffer * vertexUploadBuffer;
+  SDL_GPUTransferBuffer * indexUploadBuffer;
+  uint32_t vertexUploadBufferOffset;
+  uint32_t indexUploadBufferOffset;
+  void * mappedVertexBuffer;
+  void * mappedIndexBuffer;
+  uint32_t vertexUploadBufferSize;
+  uint32_t indexUploadBufferSize;
+  uint16_t wantsVertexUploadBufferNumVerts;
+  uint16_t wantsIndexUploadBufferNumIndices;
+  sdlgpu_helpers::rect scissor;
+  SDL_GPUTransferBuffer * prerenderedTextUploadBuffer;
+  uint32_t prerenderedTextUploadBufferSize;
+  sdlStbFontCpuBuffer * cpuRenderTargetBuffer;
   bool doBufferDraws;
   bool isManuallyBuffering;
   sdlgpu_stb_font_cache ();
-  void bindRenderer (SDL_GPUDevice * device, SDL_GPUCommandBuffer * commandBuffer, SDL_GPURenderPass * renderPass);
+  void bindRenderer (SDL_GPUDevice * _device, SDL_GPUCommandBuffer * _commandBuffer, SDL_GPUGraphicsPipeline * _glyphPipeline, SDL_GPUGraphicsPipeline * _solidPipeline);
+  static bool ensureTransiantBufferCapacity (SDL_GPUDevice * device, SDL_GPUTransferBuffer * * targetBuff, uint32_t * bufferSize, uint32_t const wantsSize);
+  void setScissor (float const x, float const y, float const w, float const h);
+  void resetScissor ();
+  bool doScissorTest () const;
+  bool scissorTest (sdlgpu_helpers::rect const & t);
   sdlgpu_stb_glyph_atlas * getGenAtlasPage ();
   sdlgpu_stb_glyph_atlas * createAtlasPage ();
   void startUpdatingAtlases ();
@@ -91,7 +118,35 @@ public:
   void finishUpdatingAtlases ();
   sttfont_glyph * getGlyph (uint64_t const target);
   sttfont_glyph * genGlyph_createAndInsert (uint64_t const target, uint32_t const codepoint, uint8_t const format, uint16_t const fontIdx, uint32_t const intIdx);
+  void genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h);
+  void populateGlyphData (sdlgpu_stb_glyph * bOut, unsigned char * bitmap2, int w, int h);
+  void genGlyph_writeData2 (uint32_t const codepointHash, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall);
+  void onStartDrawing ();
+  void onCompletedDrawing ();
+  void startManuallyBuffering (bool const beginBuffering);
+  void endManuallyBuffering (bool const flush);
+  void onStartBuffering ();
+  void onCompletedBuffering ();
+  void flushBufferingDraws ();
+  void flushBatch (sdlgpu_helpers::textured_batch & b);
+  void flushSolidBatch ();
+  void uploadGeometry (void const * vertexData, void const * indexData, uint32_t const vertexBytes, uint32_t const indexBytes);
+  void drawGeometry (SDL_GPUGraphicsPipeline * pipeline, SDL_GPUTexture * texture, uint32_t numIndices);
+  void drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw);
+  SDL_GpuTexture * renderTextToTexture (char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
+  SDL_GpuTexture * renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut = NULL, int * heightOut = NULL);
+protected:
+  SDL_GpuTexture * renderTextToTexture_worker (sttfont_formatted_text const * formatted, char const * c, uint32_t const maxLen = -1, int * widthOut = NULL, int * heightOut = NULL);
+public:
+  SDL_GpuTexture * renderTextToTexture (SSF_STRING const & str, int * widthOut = NULL, int * heightOut = NULL);
+  void renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen = -1);
+  void renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str);
+  void renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str);
 };
+LZZ_INLINE bool sdlgpu_stb_font_cache::doScissorTest () const
+                                          {
+		return !(scissor.x == 0 && scissor.y == 0 && scissor.w == 0 && scissor.h == 0);
+		}
 #undef LZZ_INLINE
 #endif
 
@@ -104,34 +159,160 @@ public:
 //
 
 #define LZZ_INLINE inline
+sdlgpu_helpers::textured_batch * sdlgpu_helpers::getBatch (SSF_VECTOR <textured_batch> & drawBuffer, SDL_GPUTexture * texture)
+                                                                                                         {
+		for (auto& b : drawBuffer) {
+			if (b.texture == texture)
+				return &b;
+			}
+		textured_batch b;
+		b.texture = texture;
+		drawBuffer.push_back(std::move(b));
+		return &drawBuffer.back();
+		}
+void sdlgpu_helpers::emitGlyphQuad (textured_batch & batch, float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, uint32_t rgba)
+                                                                                                                                                        {
+		const uint16_t first = (uint16_t)batch.vertices.size();
+		batch.vertices.push_back({x0,y0,u0,v0,rgba});
+		batch.vertices.push_back({x1,y0,u1,v0,rgba});
+		batch.vertices.push_back({x1,y1,u1,v1,rgba});
+		batch.vertices.push_back({x0,y1,u0,v1,rgba});
+		batch.indices.push_back(first+0);
+		batch.indices.push_back(first+1);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+3);
+		batch.indices.push_back(first+0);
+		}
+void sdlgpu_helpers::emitSolidQuad (solid_batch & batch, float x0, float y0, float x1, float y1, uint32_t rgba)
+                                                                                                             {
+		const uint16_t first = (uint16_t)batch.vertices.size();
+		batch.vertices.push_back({x0,y0,rgba});
+		batch.vertices.push_back({x1,y0,rgba});
+		batch.vertices.push_back({x1,y1,rgba});
+		batch.vertices.push_back({x0,y1,rgba});
+		batch.indices.push_back(first+0);
+		batch.indices.push_back(first+1);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+2);
+		batch.indices.push_back(first+3);
+		batch.indices.push_back(first+0);
+		}
+sdlgpu_helpers::rect sdlgpu_helpers::scissorIntersect (rect const & r, rect const & scissor)
+                                                                          {
+		rect rIntersect;
+		rIntersect.x = SSF_MAX(r.x, scissor.x);
+		rIntersect.y = SSF_MAX(r.y, scissor.y);
+		rIntersect.w = SSF_MAX(0.f, bx::min(r.x + r.w, scissor.x + scissor.w) - rIntersect.x);
+		rIntersect.h = SSF_MAX(0.f, bx::min(r.y + r.h, scissor.y + scissor.h) - rIntersect.y);
+		return rIntersect;
+		}
+sdlgpu_helpers::rect sdlgpu_helpers::scissorIntersectTexCoord (rect const & r, rect const & uv, rect const & rIntersect)
+                                                                                                    {
+		rect uvi = uv;
+		if (r.w < 0.000001f || r.h < 0.000001f)
+			return uvi;
+
+		uvi.w *= (rIntersect.w / r.w);
+		uvi.h *= (rIntersect.h / r.h);
+
+		const float offx = (rIntersect.x - r.x) / r.w;
+		const float offy = (rIntersect.y - r.y) / r.h;
+		uvi.x += uv.w * offx;
+		uvi.y += uv.h * offy;
+		return uvi;
+		}
 sdlgpu_stb_prerendered_text::sdlgpu_stb_prerendered_text ()
   : mTexture (nullptr)
-                                                      {}
+                                                          {}
 sdlgpu_stb_font_cache::sdlgpu_stb_font_cache ()
   : sttfont_font_cache ()
                                                        {
+		// Pipeine
 		device = NULL;
 		commandBuffer = NULL;
-		renderPass = NULL;
 		glyphPipeline = NULL;
 		solidPipeline = NULL;
-		sampler = NULL;
-		textureUploadBuffer = NULL;
+		activeCopyPass = NULL;
+		// Storage
+		mAtlasSize = 1024;		
+		// Used for buffering atlases updates
+		atlasTextureUploadBuffer = NULL;
+		atlasTextureUploadBufferOffset = 0, atlasTextureUploadBufferSize = 0;
+		transiantBufferPtr = NULL;
+		isBufferingNewGlyphs = false;
+		// Used for buffering render calls
 		vertexUploadBuffer = NULL;
 		indexUploadBuffer = NULL;
-		vertexBuffer = NULL;
-		indexBuffer = NULL;
-		activeCopyPass = NULL;
-		mAtlasSize = 1024;
-		textureUploadBufferOffset = 0;
-		textureUploadBufferSize = 0;
-		transiantBufferPtr = NULL;
+		vertexUploadBufferOffset = 0;
+		indexUploadBufferOffset = 0;
+		mappedVertexBuffer = NULL;
+		mappedIndexBuffer = NULL;
+		vertexUploadBufferSize = 0;
+		indexUploadBufferSize = 0;
+		wantsVertexUploadBufferNumVerts = 16000;
+		wantsIndexUploadBufferNumIndices = 24000;
+		// Scissor
+		resetScissor();
+		// Software rendering
+		prerenderedTextUploadBuffer = NULL;
+		prerenderedTextUploadBufferSize = 0;
+		cpuRenderTargetBuffer = NULL;
+		// Batching flags
 		doBufferDraws = false;
 		isManuallyBuffering = false;
 		}
-void sdlgpu_stb_font_cache::bindRenderer (SDL_GPUDevice * device, SDL_GPUCommandBuffer * commandBuffer, SDL_GPURenderPass * renderPass)
-                                                                                                                     {
-		
+void sdlgpu_stb_font_cache::bindRenderer (SDL_GPUDevice * _device, SDL_GPUCommandBuffer * _commandBuffer, SDL_GPUGraphicsPipeline * _glyphPipeline, SDL_GPUGraphicsPipeline * _solidPipeline)
+                                                                                                                                                                          {
+		device = _device;
+		commandBuffer = _commandBuffer;
+		glyphPipeline = _glyphPipeline;
+		solidBuffer = _solidPipeline;
+		}
+bool sdlgpu_stb_font_cache::ensureTransiantBufferCapacity (SDL_GPUDevice * device, SDL_GPUTransferBuffer * * targetBuff, uint32_t * bufferSize, uint32_t const wantsSize)
+                                                                                                                                                             {
+		if ((wantsSize <= *bufferSize) && (*targetBuff))
+			return false;
+
+		uint32_t allocSize = 512;
+		while (allocSize < wantsSize)
+			allocSize *= 2;
+
+		if (*targetBuff)
+			SDL_ReleaseGPUTransferBuffer(device, *targetBuff);
+
+		SDL_GPUTransferBufferCreateInfo ci{};
+		ci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+		ci.size = allocSize;
+
+		*targetBuff = SDL_CreateGPUTransferBuffer(device, &ci);
+		SSF_ASSERT(*targetBuff);
+
+		*bufferSize = allocSize;
+		return true;
+		}
+void sdlgpu_stb_font_cache::setScissor (float const x, float const y, float const w, float const h)
+                                                                                    {
+		scissor.x = x;
+		scissor.y = y;
+		scissor.w = w;
+		scissor.h = h;
+		}
+void sdlgpu_stb_font_cache::resetScissor ()
+                            {
+		scissor.x = 0;
+		scissor.y = 0;
+		scissor.w = 0;
+		scissor.h = 0;
+		}
+bool sdlgpu_stb_font_cache::scissorTest (sdlgpu_helpers::rect const & t)
+                                                         {
+		// returns false if culled
+		return !(  (scissor.x > t.x + t.w)
+				|| (scissor.y > t.y + t.h)
+				|| (scissor.x + scissor.w < t.x)
+				|| (scissor.y + scissor.h < t.y)
+				);
 		}
 sdlgpu_stb_glyph_atlas * sdlgpu_stb_font_cache::getGenAtlasPage ()
                                                   {
@@ -172,22 +353,22 @@ sdlgpu_stb_glyph_atlas * sdlgpu_stb_font_cache::createAtlasPage ()
 		}
 void sdlgpu_stb_font_cache::startUpdatingAtlases ()
                                     {
-		textureUploadBufferOffset = 0;
+		atlasTextureUploadBufferOffset = 0;
 		activeCopyPass = SDL_BeginGPUCopyPass(commandBuffer);
-		transiantBufferPtr = SDL_MapGPUTransferBuffer(device, textureUploadBuffer, false);
+		transiantBufferPtr = SDL_MapGPUTransferBuffer(device, atlasTextureUploadBuffer, false);
 		}
 void sdlgpu_stb_font_cache::uploadAtlasRegion (SDL_GPUTexture * atlas, int x, int y, int w, int h, void const * pixels)
                                                                                                       {
 		const uint32_t size = w * h;	// R8
 
 		// Buffer full? Flush current uploads first.
-		if (textureUploadBufferOffset + size > textureUploadBufferSize)
+		if (atlasTextureUploadBufferOffset + size > atlasTextureUploadBufferSize)
 			flushUpdatingAtlases();
 
-		memcpy( (uint8_t*)transiantBufferPtr + textureUploadBufferOffset, pixels, size);
+		memcpy( (uint8_t*)transiantBufferPtr + atlasTextureUploadBufferOffset, pixels, size);
 		SDL_GPUTextureTransferInfo src{};
-		src.transfer_buffer = textureUploadBuffer;
-		src.offset = textureUploadBufferOffset;
+		src.transfer_buffer = atlasTextureUploadBuffer;
+		src.offset = atlasTextureUploadBufferOffset;
 		src.pixels_per_row = w;
 		src.rows_per_layer = h;
 
@@ -203,28 +384,28 @@ void sdlgpu_stb_font_cache::uploadAtlasRegion (SDL_GPUTexture * atlas, int x, in
 		dstRegion.mip_level = 0;
 
 		SDL_UploadToGPUTexture(activeCopyPass, &src, &dstRegion, false);
-		textureUploadBufferOffset += size;
+		atlasTextureUploadBufferOffset += size;
 		}
 void sdlgpu_stb_font_cache::flushUpdatingAtlases ()
                                     {
-		if (textureUploadBufferOffset == 0)
+		if (atlasTextureUploadBufferOffset == 0)
 			return;
 
-		SDL_UnmapGPUTransferBuffer(device, textureUploadBuffer);
+		SDL_UnmapGPUTransferBuffer(device, atlasTextureUploadBuffer);
 		SDL_EndGPUCopyPass(activeCopyPass);
-		textureUploadBufferOffset = 0;
+		atlasTextureUploadBufferOffset = 0;
 		activeCopyPass = SDL_BeginGPUCopyPass(commandBuffer);
-		transiantBufferPtr = SDL_MapGPUTransferBuffer(device, textureUploadBuffer, false);
+		transiantBufferPtr = SDL_MapGPUTransferBuffer(device, atlasTextureUploadBuffer, false);
 		}
 void sdlgpu_stb_font_cache::finishUpdatingAtlases ()
                                      {
 		if (!activeCopyPass)
 			return;
-		SDL_UnmapGPUTransferBuffer(device, textureUploadBuffer);
+		SDL_UnmapGPUTransferBuffer(device, atlasTextureUploadBuffer);
 		SDL_EndGPUCopyPass(activeCopyPass);
 		activeCopyPass = NULL;
 		transiantBufferPtr = NULL;
-		textureUploadBufferOffset = 0;
+		atlasTextureUploadBufferOffset = 0;
 		}
 sttfont_glyph * sdlgpu_stb_font_cache::getGlyph (uint64_t const target)
                                                        {
@@ -239,6 +420,421 @@ sttfont_glyph * sdlgpu_stb_font_cache::genGlyph_createAndInsert (uint64_t const 
 		genGlyph(codepoint, format, fontIdx, intIdx, &g);
 		mGlyphs[target] = g;
 		return getGlyph(target);
+		}
+void sdlgpu_stb_font_cache::genGlyph_writeData (uint32_t const codepoint, uint16_t const fontIdx, uint32_t const intIdx, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h)
+                                                                                                                                                                       {
+		genGlyph_writeData2(codepoint | (uint32_t(fontIdx) << 16 | intIdx), gOut, bitmap2, w, h, true);
+		}
+void sdlgpu_stb_font_cache::populateGlyphData (sdlgpu_stb_glyph * bOut, unsigned char * bitmap2, int w, int h)
+                                                                                             {
+		int sz = w*h;
+		bOut->glypthData.resize(sz);
+		for (int i = 0; i < sz; ++i) {
+			bOut->glypthData[i] = bitmap2[i*4+3];
+			}
+		}
+void sdlgpu_stb_font_cache::genGlyph_writeData2 (uint32_t const codepointHash, sttfont_glyph * gOut, unsigned char * bitmap2, int w, int h, bool firstCall)
+                                                                                                                                             {
+		// fetch or create atlas
+		sdlgpu_stb_glyph * bOut = (sdlgpu_stb_glyph*) gOut;
+		sdlgpu_stb_glyph_atlas * activeAtlas = getGenAtlasPage();
+		
+		// try to pack
+		stbrp_rect r;
+		r.id = *((int*) &codepointHash);
+		r.x = 0;
+		r.y = 0;
+		r.w = w;
+		r.h = h;
+		r.was_packed = 0;
+		
+		stbrp_pack_rects(activeAtlas->mStbRectPackCtx, &r, 1);
+		if (r.was_packed) {
+			// Convert from RGBA8 -> R8 and retain a software copy.
+			populateGlyphData(bOut, bitmap2, r.w, r.h);
+
+			// Store atlas information.
+			bOut->atlas = activeAtlas->texture;
+			bOut->u  = r.x / float(mAtlasSize);
+			bOut->v  = r.y / float(mAtlasSize);
+			bOut->uw = r.w / float(mAtlasSize);
+			bOut->vh = r.h / float(mAtlasSize);
+
+			// Upload the R8 glyph into the atlas.
+			if (!isBufferingNewGlyphs)
+				startUpdatingAtlases();
+
+			uploadAtlasRegion(activeAtlas->texture, r.x, r.y, r.w, r.h, bOut->glyphData.data());
+
+			if (!isBufferingNewGlyphs)
+				finishUpdatingAtlases();
+			return;
+			}
+		else {
+			activeAtlas->isFull = true;
+			}
+		
+		// failed to pack, generate a new atlas
+		if (firstCall)
+			genGlyph_writeData2(codepointHash, gOut, bitmap2, w, h, false);
+		}
+void sdlgpu_stb_font_cache::onStartDrawing ()
+                              {
+		if (renderTarget || isManuallyBuffering) return;
+		onStartBuffering();
+		}
+void sdlgpu_stb_font_cache::onCompletedDrawing ()
+                                  {
+		if (renderTarget || isManuallyBuffering) return;
+		onCompletedBuffering();
+		}
+void sdlgpu_stb_font_cache::startManuallyBuffering (bool const beginBuffering)
+                                                               {
+		isManuallyBuffering = true;
+		
+		if (beginBuffering)
+			onStartBuffering();
+		}
+void sdlgpu_stb_font_cache::endManuallyBuffering (bool const flush)
+                                                    {
+		isManuallyBuffering = false;
+		if (flush)
+			onCompletedBuffering();
+		}
+void sdlgpu_stb_font_cache::onStartBuffering ()
+                                {
+		if (renderTarget) return;
+		if (doBufferDraws) return;
+
+		doBufferDraws = true;
+		
+		sdlgpu_stb_font_cache::ensureTransiantBufferCapacity(device, &vertexUploadBuffer, &vertexUploadBufferSize, uint32_t(wantsVertexUploadBufferNumVerts)*sizeof(sdlgpu_helpers::vertex));
+		sdlgpu_stb_font_cache::ensureTransiantBufferCapacity(device, &indexUploadBuffer, &indexUploadBufferSize, uint32_t(wantsIndexUploadBufferSize)*sizeof(uint16_t));
+
+		drawBuffer.clear();
+		solidBuffer.vertices.clear();
+		solidBuffer.indices.clear();
+		}
+void sdlgpu_stb_font_cache::onCompletedBuffering ()
+                                    {
+		if (renderTarget) return;
+		if (!doBufferDraws) return;
+
+		doBufferDraws = false;
+		// Flush any remaining geometry.
+		flushBufferingDraws();
+		}
+void sdlgpu_stb_font_cache::flushBufferingDraws ()
+                                   {
+		if (!doBufferDraws)
+			return;
+
+		if (drawBuffer.empty() && solidBuffer.vertices.empty())
+			return;
+
+		for (auto &b : drawBuffer)
+			flushBatch(b, 0);
+
+		if (!solidBuffer.vertices.empty())
+			flushSolidBatch(0);
+
+		drawBuffer.clear();
+		solidBuffer.vertices.clear();
+		solidBuffer.indices.clear();
+		}
+void sdlgpu_stb_font_cache::flushBatch (sdlgpu_helpers::textured_batch & b)
+                                                           {
+		if (b.vertices.empty())
+			return;
+
+		const uint32_t vertexBytes = uint32_t(b.vertices.size()) * sizeof(sdlgpu_helpers::vertex);
+		const uint32_t indexBytes = uint32_t(b.indices.size()) * sizeof(uint16_t);
+
+		SSF_ASSERT(vertexBytes <= vertexUploadBufferSize);
+		SSF_ASSERT(indexBytes <= indexUploadBufferSize);
+		
+		uploadGeometry(b.vertices.data(), b.indices.data(), vertexBytes, indexBytes);
+		drawGeometry(glyphPipeline, b.texture, b.indices.size());
+		}
+void sdlgpu_stb_font_cache::flushSolidBatch ()
+                               {
+		if (solidBuffer.vertices.empty())
+			return;
+
+		const uint32_t vertexBytes = uint32_t(solidBuffer.vertices.size()) * sizeof(sdlgpu_helpers::solidVertex);
+		const uint32_t indexBytes = uint32_t(solidBuffer.indices.size()) * sizeof(uint16_t);
+
+		SSF_ASSERT(vertexBytes <= vertexUploadBufferSize);
+		SSF_ASSERT(indexBytes <= indexUploadBufferSize);
+
+		uploadGeometry(solidBuffer.vertices.data(), solidBuffer.indices.data(), vertexBytes, indexBytes);
+		drawGeometry(solidPipeline, NULL, solidBuffer.size());
+		}
+void sdlgpu_stb_font_cache::uploadGeometry (void const * vertexData, void const * indexData, uint32_t const vertexBytes, uint32_t const indexBytes)
+                                                                                                                                  {
+		// Copy into transfer buffers.
+		void* mappedVB = SDL_MapGPUTransferBuffer(device, vertexUploadBuffer, false);
+		memcpy(mappedVB, vertexData, vertexBytes);
+		SDL_UnmapGPUTransferBuffer(device, vertexUploadBuffer);
+
+		void* mappedIB = SDL_MapGPUTransferBuffer(device, indexUploadBuffer, false);
+		memcpy(mappedIB, indexData, indexBytes);
+		SDL_UnmapGPUTransferBuffer(device, indexUploadBuffer);
+
+		// Upload into GPU buffers.
+		SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+
+		SDL_GPUTransferBufferLocation vbSrc{};
+		vbSrc.transfer_buffer = vertexUploadBuffer;
+		vbSrc.offset = 0;
+
+		SDL_GPUBufferRegion vbDst{};
+		vbDst.buffer = vertexBuffer;
+		vbDst.offset = 0;
+		vbDst.size = vertexBytes;
+
+		SDL_UploadToGPUBuffer(copyPass, &vbSrc, &vbDst, false);
+
+		SDL_GPUTransferBufferLocation ibSrc{};
+		ibSrc.transfer_buffer = indexUploadBuffer;
+		ibSrc.offset = 0;
+
+		SDL_GPUBufferRegion ibDst{};
+		ibDst.buffer = indexBuffer;
+		ibDst.offset = 0;
+		ibDst.size = indexBytes;
+
+		SDL_UploadToGPUBuffer(copyPass, &ibSrc, &ibDst, false);
+
+		SDL_EndGPUCopyPass(copyPass);
+		}
+void sdlgpu_stb_font_cache::drawGeometry (SDL_GPUGraphicsPipeline * pipeline, SDL_GPUTexture * texture, uint32_t numIndices)
+                                                                                                           {
+		SDL_BindGPUGraphicsPipeline(renderPass, pipeline);
+
+		SDL_GPUBufferBinding vb{};
+		vb.buffer = vertexBuffer;
+		vb.offset = 0;
+		SDL_BindGPUVertexBuffers(renderPass, 0, &vb, 1);
+
+		SDL_GPUBufferBinding ib{};
+		ib.buffer = indexBuffer;
+		ib.offset = 0;
+		SDL_BindGPUIndexBuffer(renderPass, &ib, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+
+		if (texture) {
+			SDL_GPUTextureSamplerBinding ts{};
+			ts.texture = texture;
+			ts.sampler = sampler;
+			SDL_BindGPUFragmentSamplers(renderPass, 0, &ts, 1);
+			}
+
+		SDL_DrawGPUIndexedPrimitives(renderPass, numIndices, 1, 0, 0, 0);
+		}
+void sdlgpu_stb_font_cache::drawGlyph (sttfont_glyph const * const GS, int const x, int const y, sttfont_format const * const format, uint8_t const formatCode, int const kerningAdv, int & overdraw)
+                                                                                                                                                                                      {
+		const sdlgpu_stb_glyph * const G = (const sdlgpu_stb_glyph *)GS;
+
+		if (format && format->a == 0)
+			return;
+
+		const uint32_t rgba = (format) ? (uint32_t(format->r) ) | (uint32_t(format->g) << 8 ) | (uint32_t(format->b) << 16) | (uint32_t(format->a) << 24) : 0xFFFFFFFF;
+
+		sdlgpu_helpers::rect r;
+		r.x = x + G->xOffset;
+		r.y = y + G->yOffset + baseline;
+		r.w = G->width;
+		r.h = G->height;
+
+		sdlgpu_helpers::rect uv;
+		uv.x = G->u;
+		uv.y = G->v;
+		uv.w = G->uw;
+		uv.h = G->vh;
+		
+		// Software rendering
+		if (cpuRenderTargetBuffer) {
+			cpuRenderTargetBuffer->writeA(r.x, r.y, G->glyphData.data(), r.w, r.h, (rgba) & 0xff, (rgba >> 8) & 0xff, (rgba >>16) & 0xff, (rgba >>24) & 0xff);
+			}
+		else {
+			// GPU rendering
+			if (doScissorTest()) {
+				if (!scissorTest(r))
+					return;
+				auto ri = sdlgpu_helpers::scissorIntersect(r, scissor);
+				auto uvi = sdlgpu_helpers::scissorIntersectTexCoord(r, uv, ri);
+				r = ri;
+				uv = uvi;
+				}
+
+			sdlgpu_helpers::textured_batch* batch = sdlgpu_helpers::getBatch(drawBuffer, G->atlas);
+			sdlgpu_helpers::emitGlyphQuad(*batch, r.x, r.y, r.x + r.w, r.y + r.h, uv.x, uv.y, uv.x + uv.w, uv.y + uv.h, rgba);
+			
+			if (doBufferDraws && batch->vertices.size() >= wantsVertexUploadBufferNumVerts - 6)
+				flushBatch(*batch);
+			}
+
+		// Decorations
+		if (!format)
+			return;
+
+		auto emitLine = [&](float xpos, float ypos, float w, float h) {
+			if (h < 1)
+				h = 1;
+
+			if (cpuRenderTargetBuffer) {
+				cpuRenderTargetBuffer->writeFill(xpos, ypos, w, h, format->r, format->g, format->b, format->a);
+				}
+			else {
+				sdlgpu_helpers::rect rr;
+				rr.x = xpos;
+				rr.y = ypos;
+				rr.w = w;
+				rr.h = h;
+
+				if (doScissorTest()) {
+					if (!scissorTest(rr))
+						return;
+					rr = sdlgpu_helpers::scissorIntersect(rr, scissor);
+					}
+				sdlgpu_helpers::emitSolidQuad(solidBuffer, rr.x, rr.y, rr.x + rr.w, rr.y + rr.h, rgba);
+				}
+			};
+
+		const int charAdv = kerningAdv + G->xOffset;
+		
+		if (formatCode & sttfont_format::FORMAT_STRIKETHROUGH) {
+			emitLine(
+				r.x - strikethroughThickness/2 - charAdv,
+				y + strikethroughPosition,
+				G->width + strikethroughThickness + charAdv,
+				strikethroughThickness);
+			}
+
+		if (formatCode & sttfont_format::FORMAT_UNDERLINE) {
+			emitLine(
+				r.x - underlineThickness/2 - charAdv,
+				y + underlinePosition,
+				G->width + underlineThickness + charAdv,
+				underlineThickness);
+			}
+			
+		if ((!cpuRenderTargetBuffer) && doBufferDraws && solidBuffer.vertices.size() >= wantsVertexUploadBufferNumVerts - 6) {
+			flushSolidBatch();
+			}
+		}
+SDL_GpuTexture * sdlgpu_stb_font_cache::renderTextToTexture (char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
+                                                                                                                                        {
+		return renderTextToTexture_worker(NULL, c, maxLen, widthOut, heightOut);
+		}
+SDL_GpuTexture * sdlgpu_stb_font_cache::renderTextToTexture (sttfont_formatted_text const & formatted, int * widthOut, int * heightOut)
+                                                                                                                                      {
+		return renderTextToTexture_worker(&formatted, NULL, -1, widthOut, heightOut);
+		}
+SDL_GpuTexture * sdlgpu_stb_font_cache::renderTextToTexture_worker (sttfont_formatted_text const * formatted, char const * c, uint32_t const maxLen, int * widthOut, int * heightOut)
+                                                                                                                                                                                         {
+		int width, height;
+		if (formatted)
+			getTextSize(width, height, *formatted);
+		else
+			getTextSize(width, height, c, maxLen);
+			
+		if (width < 1) {
+			return NULL; // empty string
+			}
+			
+		sdlStbFontCpuBuffer buff;
+		buff.w = width;
+		buff.h = height;
+		buff.sz = buff.w*buff.h*4;
+		
+		sttfont_tmpArr4096 tmpArr(buff.sz);
+		uint8_t* chr = tmpArr.arr;
+		
+		buff.buff = &chr[0];
+		buff.clearBuff();
+		cpuRenderTargetBuffer = &buff;
+		
+		if (formatted)
+			drawText(0, 0, *formatted);
+		else
+			drawText(0, 0, c, maxLen);
+		
+				// Create the destination texture.
+		SDL_GPUTextureCreateInfo ci{};
+		ci.type = SDL_GPU_TEXTURETYPE_2D;
+		ci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+		ci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+		ci.width = width;
+		ci.height = height;
+		ci.layer_count_or_depth = 1;
+		ci.num_levels = 1;
+
+		SDL_GPUTexture* RT = SDL_CreateGPUTexture(device, &ci);
+
+		// Upload the software-rendered RGBA image.
+		const uint32_t uploadSize = width * height * 4;
+
+		sdlgpu_stb_font_cache::ensureTransiantBufferCapacity(device, &prerenderedTextUploadBuffer, &prerenderedTextUploadBufferSize, uploadSize);
+
+		void* uploadPtr = SDL_MapGPUTransferBuffer(device, prerenderedTextUploadBuffer, false);
+
+		memcpy(uploadPtr, buff.buff, uploadSize);
+
+		SDL_UnmapGPUTransferBuffer(device, prerenderedTextUploadBuffer);
+
+		SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+
+		SDL_GPUTextureTransferInfo src{};
+		src.transfer_buffer = prerenderedTextUploadBuffer;
+		src.offset = 0;
+		src.pixels_per_row = width;
+		src.rows_per_layer = height;
+
+		SDL_GPUTextureRegion dst{};
+		dst.texture = RT;
+		dst.x = 0;
+		dst.y = 0;
+		dst.z = 0;
+		dst.w = width;
+		dst.h = height;
+		dst.d = 1;
+		dst.layer = 0;
+		dst.mip_level = 0;
+
+		SDL_UploadToGPUTexture(copyPass, &src, &dst, false);
+
+		SDL_EndGPUCopyPass(copyPass);
+
+		buff.buff = NULL;
+		cpuRenderTargetBuffer = NULL;
+		
+		if (widthOut)  *widthOut = width;
+		if (heightOut) *heightOut = height;
+		
+		return RT;
+		}
+SDL_GpuTexture * sdlgpu_stb_font_cache::renderTextToTexture (SSF_STRING const & str, int * widthOut, int * heightOut)
+                                                                                                                    {
+		return renderTextToTexture(str.data(), str.length(), widthOut, heightOut);
+		}
+void sdlgpu_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, char const * c, uint32_t const maxLen)
+                                                                                                                 {
+		abort();
+		//sdlgpu_stb_prerendered_text * textOut2 = (sdlgpu_stb_prerendered_text*) textOut;
+		//textOut2->mSdlTexture = renderTextToTexture(c, maxLen, &(textOut->width), &(textOut->height));
+		}
+void sdlgpu_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, SSF_STRING const & str)
+                                                                                             {
+		abort();
+		//sdlgpu_stb_prerendered_text * textOut2 = (sdlgpu_stb_prerendered_text*) textOut;
+		//textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
+		}
+void sdlgpu_stb_font_cache::renderTextToObject (sttfont_prerendered_text * textOut, sttfont_formatted_text const & str)
+                                                                                                         {
+		abort();
+		//sdlgpu_stb_prerendered_text * textOut2 = (sdlgpu_stb_prerendered_text*) textOut;
+		//textOut2->mSdlTexture = renderTextToTexture(str, &(textOut->width), &(textOut->height));
 		}
 #undef LZZ_INLINE
 #endif //SDL_STB_FONT_IMPL_DOUBLE_GUARD_sdlGpuFrontend
