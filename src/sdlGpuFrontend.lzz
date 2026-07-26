@@ -6,6 +6,7 @@
 // This hasn't been tested yet
 
 #hdr
+#include "cpuBuffer.hh"
 #end
 
 #src
